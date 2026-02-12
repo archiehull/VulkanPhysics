@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\core\Application.cpp" />
+    <ClCompile Include="src\core\Config.cpp" />
+    <ClCompile Include="src\core\Window.cpp" />
+    <ClCompile Include="src\geometry\Geometry.cpp" />
+    <ClCompile Include="src\geometry\GeometryGenerator.cpp" />
+    <ClCompile Include="src\geometry\OBJLoader.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\rendering\Camera.cpp" />
+    <ClCompile Include="src\rendering\CameraController.cpp" />
+    <ClCompile Include="src\rendering\Cubemap.cpp" />
+    <ClCompile Include="src\rendering\GraphicsPipeline.cpp" />
+    <ClCompile Include="src\rendering\ParticleLibrary.cpp" />
+    <ClCompile Include="src\rendering\ParticleSystem.cpp" />
+    <ClCompile Include="src\rendering\Renderer.cpp" />
+    <ClCompile Include="src\rendering\Scene.cpp" />
+    <ClCompile Include="src\rendering\ShadowPass.cpp" />
+    <ClCompile Include="src\rendering\SkyboxPass.cpp" />
+    <ClCompile Include="src\rendering\Texture.cpp" />
+    <ClCompile Include="src\vulkan\VulkanBuffer.cpp" />
+    <ClCompile Include="src\vulkan\VulkanCommandBuffer.cpp" />
+    <ClCompile Include="src\vulkan\VulkanContext.cpp" />
+    <ClCompile Include="src\vulkan\VulkanDescriptorSet.cpp" />
+    <ClCompile Include="src\vulkan\VulkanDevice.cpp" />
+    <ClCompile Include="src\vulkan\VulkanRenderPass.cpp" />
+    <ClCompile Include="src\vulkan\VulkanShader.cpp" />
+    <ClCompile Include="src\vulkan\VulkanSwapChain.cpp" />
+    <ClCompile Include="src\vulkan\VulkanSyncObjects.cpp" />
+    <ClCompile Include="src\vulkan\VulkanUtils.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\core\Application.h" />
+    <ClInclude Include="src\core\Config.h" />
+    <ClInclude Include="src\core\Window.h" />
+    <ClInclude Include="src\geometry\Geometry.h" />
+    <ClInclude Include="src\geometry\GeometryGenerator.h" />
+    <ClInclude Include="src\geometry\OBJLoader.h" />
+    <ClInclude Include="src\rendering\Camera.h" />
+    <ClInclude Include="src\rendering\CameraController.h" />
+    <ClInclude Include="src\rendering\Cubemap.h" />
+    <ClInclude Include="src\rendering\GraphicsPipeline.h" />
+    <ClInclude Include="src\rendering\ParticleLibrary.h" />
+    <ClInclude Include="src\rendering\ParticleSystem.h" />
+    <ClInclude Include="src\rendering\Renderer.h" />
+    <ClInclude Include="src\rendering\Scene.h" />
+    <ClInclude Include="src\rendering\ShadowPass.h" />
+    <ClInclude Include="src\rendering\SkyboxPass.h" />
+    <ClInclude Include="src\rendering\Texture.h" />
+    <ClInclude Include="src\vulkan\PushConstantObject.h" />
+    <ClInclude Include="src\vulkan\UniformBufferObject.h" />
+    <ClInclude Include="src\vulkan\Vertex.h" />
+    <ClInclude Include="src\vulkan\VulkanBuffer.h" />
+    <ClInclude Include="src\vulkan\VulkanCommandBuffer.h" />
+    <ClInclude Include="src\vulkan\VulkanContext.h" />
+    <ClInclude Include="src\vulkan\VulkanDescriptorSet.h" />
+    <ClInclude Include="src\vulkan\VulkanDevice.h" />
+    <ClInclude Include="src\vulkan\VulkanRenderPass.h" />
+    <ClInclude Include="src\vulkan\VulkanShader.h" />
+    <ClInclude Include="src\vulkan\VulkanSwapChain.h" />
+    <ClInclude Include="src\vulkan\VulkanSyncObjects.h" />
+    <ClInclude Include="src\vulkan\VulkanUtils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="src\shaders\shader.frag">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">glslc ".\src\shaders\shader.frag" -o ".\src\shaders\frag.spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\src\shaders\frag.spv</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">glslc ".\src\shaders\shader.frag" -o ".\src\shaders\frag.spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\src\shaders\frag.spv</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\shader.vert">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">glslc ".\src\shaders\shader.vert" -o ".\src\shaders\vert.spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">glslc ".\src\shaders\shader.vert" -o ".\src\shaders\vert.spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\src\shaders\vert.spv</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\src\shaders\vert.spv</Outputs>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="src\shaders\shadow.frag">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">glslc ".\src\shaders\shadow.frag" -o ".\src\shaders\shadow_frag.spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">glslc ".\src\shaders\shadow.frag" -o ".\src\shaders\shadow_frag.spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\src\shaders\shadow_frag.spv</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\src\shaders\shadow_frag.spv</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\shadow.vert">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">glslc ".\src\shaders\shadow.vert" -o ".\src\shaders\shadow_vert.spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">glslc ".\src\shaders\shadow.vert" -o ".\src\shaders\shadow_vert.spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\src\shaders\shadow_vert.spv</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\src\shaders\shadow_vert.spv</Outputs>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="src\shaders\skybox.frag">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">glslc ".\src\shaders\skybox.frag" -o ".\src\shaders\skybox_frag.spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">glslc ".\src\shaders\skybox.frag" -o ".\src\shaders\skybox_frag.spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\src\shaders\skybox_frag.spv</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\src\shaders\skybox_frag.spv</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\skybox.vert">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">glslc ".\src\shaders\skybox.vert" -o ".\src\shaders\skybox_vert.spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">glslc ".\src\shaders\skybox.vert" -o ".\src\shaders\skybox_vert.spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\src\shaders\skybox_vert.spv</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\src\shaders\skybox_vert.spv</Outputs>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="src\shaders\particle.frag">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">glslc ".\src\shaders\particle.frag" -o ".\src\shaders\particle_frag.spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">glslc ".\src\shaders\particle.frag" -o ".\src\shaders\particle_frag.spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\src\shaders\particle_frag.spv</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\src\shaders\particle_frag.spv</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\particle.vert">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">glslc ".\src\shaders\particle.vert" -o ".\src\shaders\particle_vert.spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">glslc ".\src\shaders\particle.vert" -o ".\src\shaders\particle_vert.spv"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\src\shaders\particle_vert.spv</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\src\shaders\particle_vert.spv</Outputs>
+    </CustomBuild>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{2c29fca0-8138-41ff-aeab-3125173527de}</ProjectGuid>
+    <RootNamespace>TheOrb</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>VulkanPhysics</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

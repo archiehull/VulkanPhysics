@@ -1,0 +1,16 @@
+^C:\USERS\663073\WORKSPACE\VULKANPHYSICS\SRC\SHADERS\SHADER.FRAG
+glslc ".\src\shaders\shader.frag" -o ".\src\shaders\frag.spv"
+^C:\USERS\663073\WORKSPACE\VULKANPHYSICS\SRC\SHADERS\SHADER.VERT
+glslc ".\src\shaders\shader.vert" -o ".\src\shaders\vert.spv"
+^C:\USERS\663073\WORKSPACE\VULKANPHYSICS\SRC\SHADERS\SHADOW.FRAG
+glslc ".\src\shaders\shadow.frag" -o ".\src\shaders\shadow_frag.spv"
+^C:\USERS\663073\WORKSPACE\VULKANPHYSICS\SRC\SHADERS\SHADOW.VERT
+glslc ".\src\shaders\shadow.vert" -o ".\src\shaders\shadow_vert.spv"
+^C:\USERS\663073\WORKSPACE\VULKANPHYSICS\SRC\SHADERS\SKYBOX.FRAG
+glslc ".\src\shaders\skybox.frag" -o ".\src\shaders\skybox_frag.spv"
+^C:\USERS\663073\WORKSPACE\VULKANPHYSICS\SRC\SHADERS\SKYBOX.VERT
+glslc ".\src\shaders\skybox.vert" -o ".\src\shaders\skybox_vert.spv"
+^C:\USERS\663073\WORKSPACE\VULKANPHYSICS\SRC\SHADERS\PARTICLE.FRAG
+glslc ".\src\shaders\particle.frag" -o ".\src\shaders\particle_frag.spv"
+^C:\USERS\663073\WORKSPACE\VULKANPHYSICS\SRC\SHADERS\PARTICLE.VERT
+glslc ".\src\shaders\particle.vert" -o ".\src\shaders\particle_vert.spv"

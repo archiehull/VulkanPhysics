@@ -1,0 +1,44 @@
+﻿  Performing Custom Build Tools
+  Performing Custom Build Tools
+  Performing Custom Build Tools
+  Performing Custom Build Tools
+  Performing Custom Build Tools
+  Performing Custom Build Tools
+  Performing Custom Build Tools
+  Performing Custom Build Tools
+  Application.cpp
+  Config.cpp
+  Window.cpp
+  Geometry.cpp
+  GeometryGenerator.cpp
+C:\Users\663073\Workspace\VulkanPhysics\src\geometry\GeometryGenerator.cpp(110,69): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\663073\Workspace\VulkanPhysics\src\geometry\GeometryGenerator.cpp(110,27): warning C4244: 'initializing': conversion from 'double' to 'const float', possible loss of data
+  OBJLoader.cpp
+  main.cpp
+  Camera.cpp
+  CameraController.cpp
+  Cubemap.cpp
+  GraphicsPipeline.cpp
+  ParticleLibrary.cpp
+  ParticleSystem.cpp
+  Renderer.cpp
+  Scene.cpp
+  ShadowPass.cpp
+  SkyboxPass.cpp
+  Texture.cpp
+  VulkanBuffer.cpp
+  VulkanCommandBuffer.cpp
+  Compiling...
+  VulkanContext.cpp
+  VulkanDescriptorSet.cpp
+  VulkanDevice.cpp
+  VulkanRenderPass.cpp
+  VulkanShader.cpp
+  VulkanSwapChain.cpp
+  VulkanSyncObjects.cpp
+  VulkanUtils.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 4517 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  TheOrb.vcxproj -> C:\Users\663073\Workspace\VulkanPhysics\x64\Release\VulkanPhysics.exe

@@ -1,0 +1,239 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\src">
+      <UniqueIdentifier>{49f9d76c-4b2f-495e-98dd-38fc6570242a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\src\core">
+      <UniqueIdentifier>{297683fe-1d74-415d-b028-1498e9d01914}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\src\vulkan">
+      <UniqueIdentifier>{3a0f89c0-3e2d-4605-8788-1ebabf930409}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\src\shader">
+      <UniqueIdentifier>{25eafd59-90b9-41d5-b76e-9be264687a53}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\src\geometry">
+      <UniqueIdentifier>{749ffbbe-4302-4d12-a54e-88a4a9f38190}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\src\rendering">
+      <UniqueIdentifier>{730c4f90-6446-4b55-9703-505a73e90ad7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp">
+      <Filter>Source Files\src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\Window.cpp">
+      <Filter>Source Files\src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanUtils.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanDevice.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanSwapChain.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanContext.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\Application.cpp">
+      <Filter>Source Files\src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanShader.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanCommandBuffer.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanSyncObjects.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanBuffer.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\geometry\Geometry.cpp">
+      <Filter>Source Files\src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="src\geometry\GeometryGenerator.cpp">
+      <Filter>Source Files\src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanRenderPass.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\Scene.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\Renderer.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\vulkan\VulkanDescriptorSet.cpp">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\Camera.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\CameraController.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\Texture.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\ShadowPass.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\GraphicsPipeline.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\geometry\OBJLoader.cpp">
+      <Filter>Source Files\src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\Cubemap.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\SkyboxPass.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\ParticleSystem.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rendering\ParticleLibrary.cpp">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\Config.cpp">
+      <Filter>Source Files\src\core</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\core\Window.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanDevice.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanSwapChain.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanContext.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\Application.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanShader.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanCommandBuffer.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanSyncObjects.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\Vertex.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanBuffer.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\geometry\Geometry.h">
+      <Filter>Source Files\src\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="src\geometry\GeometryGenerator.h">
+      <Filter>Source Files\src\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanRenderPass.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\Scene.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\Renderer.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\UniformBufferObject.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanDescriptorSet.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\Camera.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\CameraController.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\PushConstantObject.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\Texture.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\ShadowPass.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan\VulkanUtils.h">
+      <Filter>Source Files\src\vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\GraphicsPipeline.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\geometry\OBJLoader.h">
+      <Filter>Source Files\src\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\Cubemap.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\SkyboxPass.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\ParticleSystem.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\rendering\ParticleLibrary.h">
+      <Filter>Source Files\src\rendering</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\Config.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="src\shaders\shader.frag">
+      <Filter>Source Files\src\shader</Filter>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\shader.vert">
+      <Filter>Source Files\src\shader</Filter>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\shadow.frag">
+      <Filter>Source Files\src\shader</Filter>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\shadow.vert">
+      <Filter>Source Files\src\shader</Filter>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\skybox.frag">
+      <Filter>Source Files\src\shader</Filter>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\skybox.vert">
+      <Filter>Source Files\src\shader</Filter>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\particle.frag">
+      <Filter>Source Files\src\shader</Filter>
+    </CustomBuild>
+    <CustomBuild Include="src\shaders\particle.vert">
+      <Filter>Source Files\src\shader</Filter>
+    </CustomBuild>
+  </ItemGroup>
+</Project>
