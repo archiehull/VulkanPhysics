@@ -35,7 +35,7 @@ SunHeatBonus 30.0
 
 # HeightScale NoiseFrequency
 TerrainParams 3.5 0.02
-ProceduralObjectCount 75
+ProceduralObjectCount 25
 
 
 # --- Custom Camera Configurations (F5 - F8) ---

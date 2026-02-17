@@ -18,7 +18,7 @@
 
 #include <memory>
 #include <map>
-#include <vulkan/VulkanContext.h>
+#include "../vulkan/VulkanContext.h"
 #include "Camera.h"
 
 class Renderer final {
@@ -41,6 +41,13 @@ public:
 
     VulkanRenderPass* GetRenderPass() const { return renderPass.get(); }
     GraphicsPipeline* GetPipeline() const { return graphicsPipeline.get(); }
+
+    VkDescriptorPool imguiPool = VK_NULL_HANDLE;
+    VkRenderPass uiRenderPass = VK_NULL_HANDLE;
+    std::vector<VkFramebuffer> uiFramebuffers;
+
+    void CreateImGuiResources();
+    void DrawUI(VkCommandBuffer cmd, uint32_t imageIndex);
 
 private:
     // --- 1. Pointers & Smart Pointers (8-byte aligned) ---

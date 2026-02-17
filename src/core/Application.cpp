@@ -3,6 +3,10 @@
 #include <iostream>
 #include <iomanip>
 
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_vulkan.h"
+
 // TODO:
 // refactor and decouple scene class to entity component system
 // refector scene object to seperate Transform, Rendering, Physics, Thermodynamics, Orbital
@@ -25,6 +29,15 @@ Application::Application() {
 
     config = ConfigLoader::Load("config.txt");
     window = std::make_unique<Window>(config.windowWidth, config.windowHeight, "VulkanPhysics");
+
+    // Setup ImGui Context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    // Setup Platform/Renderer backends
+    // Note: InitForVulkan needs the window, so do this after window creation
+    ImGui_ImplGlfw_InitForVulkan(window->GetGLFWWindow(), true);
 
     glfwSetWindowUserPointer(window->GetGLFWWindow(), this);
     glfwSetKeyCallback(window->GetGLFWWindow(), KeyCallback);
@@ -258,6 +271,15 @@ void Application::MainLoop() {
             RecreateSwapChain();
         }
 
+        // Start the Dear ImGui frame
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // Show a test window
+        ImGui::ShowDemoWindow();
+        ImGui::Render();
+
         scene->Update(deltaTime * timeScale);
         cameraController->Update(deltaTime, *scene);
 
@@ -401,6 +423,9 @@ void Application::FramebufferResizeCallback(GLFWwindow* glfwWindow, int width, i
 }
 
 void Application::Cleanup() {
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
     if (scene) {
         scene->Cleanup();
         scene.reset();

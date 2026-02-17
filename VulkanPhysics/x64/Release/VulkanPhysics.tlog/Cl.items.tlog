@@ -1,3 +1,10 @@
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\backends\imgui_impl_glfw.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\imgui_impl_glfw.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\backends\imgui_impl_vulkan.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\imgui_impl_vulkan.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\imgui.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_demo.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\imgui_demo.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_draw.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\imgui_draw.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_tables.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\imgui_tables.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_widgets.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\imgui_widgets.obj
 C:\Users\663073\Workspace\VulkanPhysics\src\core\Application.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\Application.obj
 C:\Users\663073\Workspace\VulkanPhysics\src\core\Config.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\Config.obj
 C:\Users\663073\Workspace\VulkanPhysics\src\core\Window.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Release\Window.obj
