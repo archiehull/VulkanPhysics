@@ -245,13 +245,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\imgui-master;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\Additional Libraries\imgui-master;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -263,13 +263,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\imgui-master;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\Additional Libraries\imgui-master;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
