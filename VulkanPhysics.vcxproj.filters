@@ -141,6 +141,9 @@
     <ClCompile Include="Additional Libraries\imgui-1.89.9\backends\imgui_impl_vulkan.cpp">
       <Filter>Source Files\src\imgui</Filter>
     </ClCompile>
+    <ClCompile Include="src\geometry\SJGLoader.cpp">
+      <Filter>Source Files\src\geometry</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Window.h">
@@ -232,6 +235,9 @@
     </ClInclude>
     <ClInclude Include="src\core\Config.h">
       <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\geometry\SJGLoader.h">
+      <Filter>Source Files\src\geometry</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

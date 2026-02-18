@@ -1,12 +1,48 @@
 #include "Scene.h"
 #include "ParticleLibrary.h"
 #include "../geometry/OBJLoader.h"
+#include "../geometry/SJGLoader.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/common.hpp>
 #include <iostream>
 #include <algorithm>
 #include <random>
+
+void Scene::PrintDebugInfo() const {
+    std::cout << "\n================ SCENE DEBUG INFO ================\n";
+
+    std::cout << "--- OBJECTS (" << objects.size() << ") ---\n";
+    for (const auto& obj : objects) {
+        const glm::vec3 pos = glm::vec3(obj->transform[3]);
+        const glm::vec3 scale = glm::vec3(
+            glm::length(glm::vec3(obj->transform[0])),
+            glm::length(glm::vec3(obj->transform[1])),
+            glm::length(glm::vec3(obj->transform[2]))
+        );
+
+        std::cout << " [OBJ] Name: " << obj->name
+            << " | Vis: " << (obj->visible ? "TRUE" : "FALSE")
+            << " | Pos: (" << pos.x << ", " << pos.y << ", " << pos.z << ")"
+            << " | Scale: (" << scale.x << ", " << scale.y << ", " << scale.z << ")"
+            << " | CastShadow: " << obj->castsShadow
+            << "\n";
+    }
+
+    std::cout << "\n--- LIGHTS (" << m_SceneLights.size() << ") ---\n";
+    for (const auto& light : m_SceneLights) {
+        std::cout << " [LGT] Name: " << light.name
+            << " | Pos: (" << light.vulkanLight.position.x << ", "
+            << light.vulkanLight.position.y << ", "
+            << light.vulkanLight.position.z << ")"
+            << " | Intensity: " << light.vulkanLight.intensity
+            << " | Color: (" << light.vulkanLight.color.x << ", "
+            << light.vulkanLight.color.y << ", "
+            << light.vulkanLight.color.z << ")"
+            << "\n";
+    }
+    std::cout << "==================================================\n\n";
+}
 
 void Scene::ToggleGlobalShadingMode() {
     globalShadingMode = (globalShadingMode == 1) ? 0 : 1;
@@ -229,7 +265,17 @@ void Scene::AddGeometry(const std::string& name, std::unique_ptr<Geometry> geome
 
 void Scene::AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable) {
     try {
-        auto geometry = OBJLoader::Load(device, physicalDevice, modelPath);
+        std::unique_ptr<Geometry> geometry;
+
+        // Check file extension
+        std::string ext = modelPath.substr(modelPath.find_last_of(".") + 1);
+        if (ext == "sjg") {
+            geometry = SJGLoader::Load(device, physicalDevice, modelPath);
+        }
+        else {
+            // Default to OBJ
+            geometry = OBJLoader::Load(device, physicalDevice, modelPath);
+        }
 
         // Explicit shared_ptr conversion
         std::shared_ptr<Geometry> sharedGeo = std::move(geometry);

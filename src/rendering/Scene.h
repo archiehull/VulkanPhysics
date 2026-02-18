@@ -130,6 +130,8 @@ public:
     Scene(const Scene&) = delete;
     Scene& operator=(const Scene&) = delete;
 
+	void PrintDebugInfo() const;
+
     void Initialize();
 
     float RadiusAdjustment(const float radius, const float deltaY) const;

@@ -908,8 +908,6 @@ void Renderer::WaitIdle() const {
 }
 
 void Renderer::Cleanup() {
-    ImGui_ImplVulkan_Shutdown();
-
     if (uiRenderPass) { vkDestroyRenderPass(device->GetDevice(), uiRenderPass, nullptr); uiRenderPass = VK_NULL_HANDLE; }
     for (auto fb : uiFramebuffers) vkDestroyFramebuffer(device->GetDevice(), fb, nullptr);
     uiFramebuffers.clear();

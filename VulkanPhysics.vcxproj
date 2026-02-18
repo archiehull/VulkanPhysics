@@ -32,6 +32,7 @@
     <ClCompile Include="src\geometry\Geometry.cpp" />
     <ClCompile Include="src\geometry\GeometryGenerator.cpp" />
     <ClCompile Include="src\geometry\OBJLoader.cpp" />
+    <ClCompile Include="src\geometry\SJGLoader.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\rendering\Camera.cpp" />
     <ClCompile Include="src\rendering\CameraController.cpp" />
@@ -62,6 +63,7 @@
     <ClInclude Include="src\geometry\Geometry.h" />
     <ClInclude Include="src\geometry\GeometryGenerator.h" />
     <ClInclude Include="src\geometry\OBJLoader.h" />
+    <ClInclude Include="src\geometry\SJGLoader.h" />
     <ClInclude Include="src\rendering\Camera.h" />
     <ClInclude Include="src\rendering\CameraController.h" />
     <ClInclude Include="src\rendering\Cubemap.h" />
