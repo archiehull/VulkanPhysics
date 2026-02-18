@@ -870,7 +870,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
 
 void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, const Scene& scene, int layerMask) {
     std::vector<VkClearValue> clearValues(2);
-    clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+    clearValues[0].color = { {m_ClearColor.r, m_ClearColor.g, m_ClearColor.b, m_ClearColor.a} };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     BeginRenderPass(cmd, renderPass->GetRenderPass(), renderPass->GetOffScreenFramebuffer(), clearValues);

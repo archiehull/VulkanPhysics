@@ -52,7 +52,11 @@ public:
     void CreateImGuiResources();
     void DrawUI(VkCommandBuffer cmd, uint32_t imageIndex);
 
+    void SetClearColor(const glm::vec4& color) { m_ClearColor = color; }
+
 private:
+    glm::vec4 m_ClearColor = { 0.1f, 0.1f, 0.1f, 1.0f };
+
     // --- 1. Pointers & Smart Pointers (8-byte aligned) ---
     VulkanDevice* device;
     VulkanSwapChain* swapChain;

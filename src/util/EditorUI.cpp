@@ -19,7 +19,7 @@ std::string EditorUI::GetInitialScenePath() const {
     return m_SceneOptions[m_SelectedSceneIndex].path;
 }
 
-std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string& seasonName) {
+std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string& seasonName, const Scene& scene) {
     std::string sceneToLoad = "";
 
     if (ImGui::BeginMainMenuBar()) {
@@ -48,12 +48,109 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
             ImGui::EndMenu();
         }
 
-        // --- TAB: Environment (Left Aligned) ---
-        if (ImGui::BeginMenu("Environment")) {
-            ImGui::MenuItem((std::string("Season: ") + seasonName).c_str(), nullptr, false, false);
-            ImGui::MenuItem((std::string("Temp: ") + std::to_string((int)currentTemp) + " C").c_str(), nullptr, false, false);
+        if (ImGui::BeginMenu("Background Colour")) {
+            // We use a hidden label "##" so the picker doesn't show its own text label
+            ImGui::ColorPicker4("##bg_picker", m_ClearColor,
+                ImGuiColorEditFlags_PickerHueWheel |
+                ImGuiColorEditFlags_AlphaBar |
+                ImGuiColorEditFlags_NoSidePreview);
+
+            ImGui::Separator();
+            if (ImGui::Button("Reset to Default", ImVec2(-1, 0))) {
+                m_ClearColor[0] = 0.1f; m_ClearColor[1] = 0.1f;
+                m_ClearColor[2] = 0.1f; m_ClearColor[3] = 1.0f;
+            }
             ImGui::EndMenu();
         }
+
+        if (ImGui::BeginMenu("Objects")) {
+            const auto& objects = scene.GetObjects();
+            if (objects.empty()) {
+                ImGui::MenuItem("No objects in scene", nullptr, false, false);
+            }
+            else {
+                for (const auto& obj : objects) {
+                    if (!obj) continue;
+
+                    // Using BeginMenu here creates the submenu for each object
+                    if (ImGui::BeginMenu(obj->name.empty() ? "Unnamed Object" : obj->name.c_str())) {
+
+                        // Header for visual clarity
+                        ImGui::TextDisabled("Object Properties");
+                        ImGui::Separator();
+
+                        // 1. Transform / Position
+                        glm::vec3 pos = obj->transform[3]; // Extract position column
+                        ImGui::Text("Position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+
+                        // 2. Layer Information
+                        const char* layerName = (obj->layerMask & SceneLayers::INSIDE) ? "Inside" : "Outside";
+                        ImGui::Text("Layer: %s", layerName);
+
+                        // 3. Shading Mode
+                        const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
+                        const char* modeName = (obj->shadingMode >= 0 && obj->shadingMode <= 4) ? modes[obj->shadingMode] : "Unknown";
+                        ImGui::Text("Shading: %s", modeName);
+
+                        // 4. Thermodynamics
+                        ImGui::Text("Temp: %.1f C", obj->currentTemp);
+                        if (obj->state == ObjectState::BURNING) {
+                            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.0f, 1.0f), "STATE: BURNING");
+                        }
+
+                        // 5. Material
+                        ImGui::Separator();
+                        ImGui::Text("Texture:");
+                        ImGui::TextWrapped("%s", obj->texturePath.c_str());
+
+                        ImGui::EndMenu(); // Close the object's submenu
+                    }
+                }
+            }
+            ImGui::EndMenu(); // Close the "Objects" tab
+        }
+
+        if (ImGui::BeginMenu("Simulation")) {
+            // 1. Start / Pause Toggle
+            std::string pauseLabel = m_IsPaused ? "Start Simulation" : "Pause Simulation";
+            if (ImGui::MenuItem(pauseLabel.c_str(), "Space")) {
+                m_IsPaused = !m_IsPaused;
+            }
+
+            ImGui::Separator();
+
+            // 2. Step Configuration
+            ImGui::Text("Step Controls");
+
+            // InputFloat allows precise text entry for the step duration
+            ImGui::InputFloat("Step Size (s)", &m_StepSize, 0.001f, 0.01f, "%.4f");
+
+            if (ImGui::MenuItem("Execute Step", "F", false, m_IsPaused)) {
+                m_StepRequested = true;
+            }
+
+            ImGui::Separator();
+
+            // 3. Restart Button
+            if (ImGui::MenuItem("Restart Environment", "R")) {
+                m_RestartRequested = true;
+            }
+
+            ImGui::Separator();
+
+            // 4. TimeScale Slider
+            ImGui::Text("Simulation Speed");
+            ImGui::SliderFloat("##speed", &m_TimeScale, 0.0f, 5.0f, "%.2fx");
+
+            ImGui::EndMenu();
+        }
+
+        // --- TAB: Environment (Left Aligned) ---
+        //if (ImGui::BeginMenu("Environment")) {
+        //    ImGui::MenuItem((std::string("Season: ") + seasonName).c_str(), nullptr, false, false);
+        //    ImGui::MenuItem((std::string("Temp: ") + std::to_string((int)currentTemp) + " C").c_str(), nullptr, false, false);
+        //    ImGui::EndMenu();
+        //}
 
         // --- RIGHT-ALIGNED STATUS AREA ---
         // 1. Prepare strings

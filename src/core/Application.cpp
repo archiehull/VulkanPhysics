@@ -362,7 +362,11 @@ void Application::MainLoop() {
         // The Draw call now handles the top bar logic
         std::string nextScene = editorUI->Draw(deltaTime,
             scene->GetWeatherIntensity(),
-            scene->GetSeasonName());
+            scene->GetSeasonName(),
+            *scene);
+
+        const float* uiColor = editorUI->GetClearColor();
+        renderer->SetClearColor(glm::vec4(uiColor[0], uiColor[1], uiColor[2], uiColor[3]));
 
         // If the user clicked a scene in the "Load Scene" tab, switch now
         if (!nextScene.empty()) {
@@ -371,7 +375,27 @@ void Application::MainLoop() {
 
         ImGui::Render();
 
-        scene->Update(deltaTime * timeScale);
+        // 1. Handle Restart
+        if (editorUI->ConsumeRestartRequest()) {
+            scene->ResetEnvironment();
+        }
+
+        // 2. Calculate advancement
+        float stepDelta = 0.0f;
+        float currentTimeScale = editorUI->GetTimeScale();
+
+        if (!editorUI->IsPaused()) {
+            // Normal running state
+            stepDelta = deltaTime * currentTimeScale;
+        }
+        else if (editorUI->ConsumeStepRequest()) {
+            // Manual step state - uses the custom step size multiplied by speed
+            stepDelta = editorUI->GetStepSize() * currentTimeScale;
+        }
+
+        // 4. Update the scene with the calculated delta
+        scene->Update(stepDelta);
+
         cameraController->Update(deltaTime, *scene);
 
         Camera* const activeCamera = cameraController->GetActiveCamera();
@@ -433,11 +457,11 @@ void Application::ProcessInput() {
         }
     }
 
-    if (glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_R) == GLFW_PRESS) {
-        timeScale = 1.0f;
-        scene->ResetEnvironment();
-        std::cout << "Environment Reset." << std::endl;
-    }
+    //if (glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_R) == GLFW_PRESS) {
+    //    timeScale = 1.0f;
+    //    scene->ResetEnvironment();
+    //    std::cout << "Environment Reset." << std::endl;
+    //}
 }
 
 void Application::KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int action, int mods) {
@@ -499,6 +523,17 @@ void Application::KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int
         }
         else if (key == GLFW_KEY_O) {
             app->scene->ToggleWeather();
+        }
+        if (key == GLFW_KEY_SPACE) {
+            app->editorUI->SetPaused(!app->editorUI->IsPaused());
+        }
+        else if (key == GLFW_KEY_F && app->editorUI->IsPaused()) {
+            // Note: You may need a way to trigger StepRequest here 
+            // or simply call scene->Update(0.0166f) once.
+        }
+        // Update existing R key to also sync with UI if needed
+        else if (key == GLFW_KEY_R) {
+            app->scene->ResetEnvironment();
         }
 
         app->cameraController->OnKeyPress(key, true);
