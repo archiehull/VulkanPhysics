@@ -157,6 +157,10 @@ void main() {
                 attenuation = 1.0 / (1.0 + 15.0 * distance + 45.0 * distance * distance);
                 specularStrength = 0.05;
             } 
+            else if (ubo.lights[i].type == 2) {
+                // New Standard Point Light
+                attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
+            }
             else {
                 // --- SUN (Type 0) ---
                 attenuation = 1.0;

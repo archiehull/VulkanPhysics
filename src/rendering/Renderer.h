@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <map>
+#include <functional>
 #include "../vulkan/VulkanContext.h"
 #include "Camera.h"
 
@@ -31,6 +32,8 @@ public:
     Renderer& operator=(const Renderer&) = delete;
 
     void Initialize();
+
+    void RegisterProceduralTexture(const std::string& name, const std::function<void(Texture&)>& generator);
 
     void DrawFrame(const Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask = SceneLayers::ALL);
     void UpdateUniformBuffer(uint32_t currentFrame, const UniformBufferObject& ubo);

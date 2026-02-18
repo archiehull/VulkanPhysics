@@ -347,6 +347,48 @@ void Renderer::CreateTextureDescriptorPool() {
     }
 }
 
+void Renderer::RegisterProceduralTexture(const std::string& name, const std::function<void(Texture&)>& generator) {
+    // 1. Create the Texture Object
+    auto tex = std::make_unique<Texture>(
+        device->GetDevice(), device->GetPhysicalDevice(),
+        commandBuffer->GetCommandPool(), device->GetGraphicsQueue());
+
+    // 2. Run the user's generation function (e.g., GenerateCheckerboard)
+    generator(*tex);
+
+    // 3. Allocate Descriptor Set (Logic similar to CreateDefaultTexture)
+    VkDescriptorSet descSet;
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = textureDescriptorPool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &textureSetLayout;
+
+    if (vkAllocateDescriptorSets(device->GetDevice(), &allocInfo, &descSet) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate descriptor set for procedural texture!");
+    }
+
+    // 4. Update Descriptor Set
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageView = tex->GetImageView();
+    imageInfo.sampler = tex->GetSampler();
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = descSet;
+    descriptorWrite.dstBinding = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(device->GetDevice(), 1, &descriptorWrite, 0, nullptr);
+
+    // 5. Store in Cache
+    textureCache[name] = { std::move(tex), descSet };
+    std::cout << "Procedural Texture Registered: " << name << std::endl;
+}
+
 void Renderer::CreateDefaultTexture() {
     defaultTextureResource.texture = std::make_unique<Texture>(
         device->GetDevice(), device->GetPhysicalDevice(),

@@ -7,16 +7,12 @@
 AppConfig ConfigLoader::Load(const std::string& sceneDirectory) {
     AppConfig config;
 
-    // Ensure directory path ends with a slash
     std::string dir = sceneDirectory;
     if (!dir.empty() && dir.back() != '/' && dir.back() != '\\') {
         dir += "/";
     }
 
-    // Load Scene-specific settings (Time, Weather, Global vars)
     ParseFile(config, dir + "settings.cfg");
-
-    // Load Scene Objects and Procedural rules
     ParseFile(config, dir + "scene.cfg");
 
     return config;
@@ -31,6 +27,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
 
     std::string line;
     SceneObjectConfig* currentObject = nullptr;
+    ProceduralTextureConfig* currentTexture = nullptr; // New State Pointer
 
     while (std::getline(file, line)) {
         // Trim whitespace
@@ -44,16 +41,46 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
         std::string key;
         ss >> key;
 
-        // --- Object Block Parsing ---
+        // --- Object Block ---
         if (key == "Object") {
             SceneObjectConfig newObj;
             ss >> newObj.name;
             config.sceneObjects.push_back(newObj);
             currentObject = &config.sceneObjects.back();
+            currentTexture = nullptr; // Ensure exclusivity
         }
         else if (key == "EndObject") {
             currentObject = nullptr;
         }
+        // --- Procedural Texture Block ---
+        else if (key == "ProceduralTexture") {
+            ProceduralTextureConfig newTex;
+            ss >> newTex.name;
+            config.proceduralTextures.push_back(newTex);
+            currentTexture = &config.proceduralTextures.back();
+            currentObject = nullptr; // Ensure exclusivity
+        }
+        else if (key == "EndTexture") {
+            currentTexture = nullptr;
+        }
+        // --- Texture Fields ---
+        else if (currentTexture) {
+            if (key == "Type") ss >> currentTexture->type;
+            else if (key == "Color1") ss >> currentTexture->color1.r >> currentTexture->color1.g >> currentTexture->color1.b >> currentTexture->color1.a;
+            else if (key == "Color2") ss >> currentTexture->color2.r >> currentTexture->color2.g >> currentTexture->color2.b >> currentTexture->color2.a;
+            else if (key == "Size") {
+                ss >> currentTexture->width;
+                currentTexture->height = currentTexture->width; // Default to square if one arg
+                if (!ss.eof()) ss >> currentTexture->height;
+            }
+            else if (key == "CellSize") ss >> currentTexture->cellSize;
+            else if (key == "Vertical") {
+                std::string boolStr;
+                ss >> boolStr;
+                currentTexture->isVertical = (boolStr == "true" || boolStr == "1");
+            }
+        }
+        // --- Object Fields ---
         else if (currentObject) {
             if (key == "Type") ss >> currentObject->type;
             else if (key == "Model") ss >> currentObject->modelPath;
@@ -92,7 +119,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 }
             }
         }
-        // --- Global Config Parsing ---
+        // --- Global Settings ---
         else if (key == "WindowSize") ss >> config.windowWidth >> config.windowHeight;
         else if (key == "TimeParams") ss >> config.time.dayLengthSeconds >> config.time.daysPerSeason;
         else if (key == "SeasonTemps") ss >> config.seasons.summerBaseTemp >> config.seasons.winterBaseTemp >> config.seasons.dayNightTempDiff;

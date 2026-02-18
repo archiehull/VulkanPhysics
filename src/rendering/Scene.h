@@ -209,6 +209,8 @@ public:
     void SetObjectReceivesShadows(const std::string& name, bool receives);
     void SetObjectShadingMode(const std::string& name, int mode);
 
+    void SetObjectTexture(const std::string& objectName, const std::string& texturePath);
+
     // --- Configuration Setters ---
     void SetTimeConfig(const TimeConfig& config);
     void SetWeatherConfig(const WeatherConfig& config);

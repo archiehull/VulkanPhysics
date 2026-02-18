@@ -75,29 +75,120 @@ bool Texture::LoadFromFile(const std::string& filepath) {
         }
     }
 
-    const VkDeviceSize imageSize = static_cast<VkDeviceSize>(texWidth) * texHeight * 4;
+    // Call the centralized upload function
+    try {
+        CreateFromPixels(pixels, texWidth, texHeight);
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error creating texture from pixels: " << e.what() << std::endl;
+        if (usedStbLoaded && pixels) stbi_image_free(pixels);
+        else if (manualAlloc && pixels) delete[] pixels;
+        return false;
+    }
+
+    if (usedStbLoaded) {
+        stbi_image_free(pixels);
+    }
+    else if (manualAlloc && pixels) {
+        delete[] pixels;
+    }
+
+    return true;
+}
+
+void Texture::GenerateSolidColor(const glm::vec4& color) {
+    unsigned char pixels[4];
+    pixels[0] = static_cast<unsigned char>(glm::clamp(color.r, 0.0f, 1.0f) * 255.0f);
+    pixels[1] = static_cast<unsigned char>(glm::clamp(color.g, 0.0f, 1.0f) * 255.0f);
+    pixels[2] = static_cast<unsigned char>(glm::clamp(color.b, 0.0f, 1.0f) * 255.0f);
+    pixels[3] = static_cast<unsigned char>(glm::clamp(color.a, 0.0f, 1.0f) * 255.0f);
+
+    CreateFromPixels(pixels, 1, 1);
+}
+
+void Texture::GenerateCheckerboard(int width, int height, const glm::vec4& color1, const glm::vec4& color2, int cellSize) {
+    std::vector<unsigned char> pixels(width * height * 4);
+
+    unsigned char c1[4] = {
+        static_cast<unsigned char>(glm::clamp(color1.r, 0.0f, 1.0f) * 255.0f),
+        static_cast<unsigned char>(glm::clamp(color1.g, 0.0f, 1.0f) * 255.0f),
+        static_cast<unsigned char>(glm::clamp(color1.b, 0.0f, 1.0f) * 255.0f),
+        static_cast<unsigned char>(glm::clamp(color1.a, 0.0f, 1.0f) * 255.0f)
+    };
+
+    unsigned char c2[4] = {
+        static_cast<unsigned char>(glm::clamp(color2.r, 0.0f, 1.0f) * 255.0f),
+        static_cast<unsigned char>(glm::clamp(color2.g, 0.0f, 1.0f) * 255.0f),
+        static_cast<unsigned char>(glm::clamp(color2.b, 0.0f, 1.0f) * 255.0f),
+        static_cast<unsigned char>(glm::clamp(color2.a, 0.0f, 1.0f) * 255.0f)
+    };
+
+    if (cellSize <= 0) cellSize = 1;
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            bool check = ((x / cellSize) + (y / cellSize)) % 2 == 0;
+            int idx = (y * width + x) * 4;
+            unsigned char* src = check ? c1 : c2;
+
+            pixels[idx + 0] = src[0];
+            pixels[idx + 1] = src[1];
+            pixels[idx + 2] = src[2];
+            pixels[idx + 3] = src[3];
+        }
+    }
+
+    CreateFromPixels(pixels.data(), width, height);
+}
+
+void Texture::GenerateGradient(int width, int height, const glm::vec4& startColor, const glm::vec4& endColor, bool isVertical) {
+    std::vector<unsigned char> pixels(width * height * 4);
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            float t = 0.0f;
+            if (isVertical) {
+                t = static_cast<float>(y) / static_cast<float>(std::max(height - 1, 1));
+            }
+            else {
+                t = static_cast<float>(x) / static_cast<float>(std::max(width - 1, 1));
+            }
+
+            glm::vec4 c = glm::mix(startColor, endColor, t);
+            int idx = (y * width + x) * 4;
+
+            pixels[idx + 0] = static_cast<unsigned char>(glm::clamp(c.r, 0.0f, 1.0f) * 255.0f);
+            pixels[idx + 1] = static_cast<unsigned char>(glm::clamp(c.g, 0.0f, 1.0f) * 255.0f);
+            pixels[idx + 2] = static_cast<unsigned char>(glm::clamp(c.b, 0.0f, 1.0f) * 255.0f);
+            pixels[idx + 3] = static_cast<unsigned char>(glm::clamp(c.a, 0.0f, 1.0f) * 255.0f);
+        }
+    }
+
+    CreateFromPixels(pixels.data(), width, height);
+}
+
+void Texture::CreateFromPixels(const unsigned char* pixels, int width, int height) {
+    // Safety check: if texture already exists, clean it up
+    if (image != VK_NULL_HANDLE) {
+        Cleanup();
+    }
+
+    const VkDeviceSize imageSize = static_cast<VkDeviceSize>(width) * height * 4;
 
     // 1. Create Staging Buffer
     VulkanBuffer stagingBuffer(device, physicalDevice);
     stagingBuffer.CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    stagingBuffer.CopyData(pixels, imageSize);
 
-    if (usedStbLoaded) {
-        stbi_image_free(pixels);
-        pixels = nullptr;
-    }
-    else if (manualAlloc && pixels) {
-        delete[] pixels;
-        pixels = nullptr;
-    }
+    // Copy data to staging buffer
+    stagingBuffer.CopyData(pixels, imageSize);
 
     const VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
 
     // 2. Create Image (Using VulkanUtils)
     VulkanUtils::CreateImage(
         device, physicalDevice,
-        static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight),
+        static_cast<uint32_t>(width), static_cast<uint32_t>(height),
         1, 1,
         format,
         VK_IMAGE_TILING_OPTIMAL,
@@ -115,7 +206,7 @@ bool Texture::LoadFromFile(const std::string& filepath) {
     VulkanUtils::CopyBufferToImage(
         device, commandPool, graphicsQueue,
         stagingBuffer.GetBuffer(), image,
-        static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight)
+        static_cast<uint32_t>(width), static_cast<uint32_t>(height)
     );
 
     VulkanUtils::TransitionImageLayout(
@@ -127,7 +218,6 @@ bool Texture::LoadFromFile(const std::string& filepath) {
     imageView = VulkanUtils::CreateImageView(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // 5. Create Sampler 
-    // (This logic is specific to texture sampling params like anisotropy, so we keep it here)
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 
@@ -164,8 +254,6 @@ bool Texture::LoadFromFile(const std::string& filepath) {
     if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture sampler!");
     }
-
-    return true;
 }
 
 void Texture::Cleanup() const {

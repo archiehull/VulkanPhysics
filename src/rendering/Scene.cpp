@@ -467,6 +467,17 @@ void Scene::SetObjectCollisionSize(const std::string& name, float radius, float 
     }
 }
 
+void Scene::SetObjectTexture(const std::string& objectName, const std::string& texturePath) {
+    const auto it = std::find_if(objects.begin(), objects.end(),
+        [&](const std::unique_ptr<SceneObject>& obj) { return obj->name == objectName; });
+
+    if (it != objects.end()) {
+        (*it)->texturePath = texturePath;
+        // Optionally update originalTexturePath if you want it to persist through burning
+        (*it)->originalTexturePath = texturePath;
+    }
+}
+
 void Scene::SetupParticleSystem(VkCommandPool commandPoolArg, VkQueue graphicsQueueArg,
     GraphicsPipeline* additivePipeline, GraphicsPipeline* alphaPipeline,
     VkDescriptorSetLayout layout, uint32_t framesInFlightArg) {

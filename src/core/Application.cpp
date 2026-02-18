@@ -26,7 +26,8 @@
 // Shadow mapping improvements (PCF, VSM, CSM)
 
 Application::Application() {
-    config = ConfigLoader::Load("src/config/newscene/");
+    config = ConfigLoader::Load("src/config/collisions/");
+
 
     window = std::make_unique<Window>(config.windowWidth, config.windowHeight, "VulkanPhysics");
 
@@ -146,6 +147,26 @@ void Application::SetupScene() {
     scene->SetWeatherConfig(config.weather);
     scene->SetSunHeatBonus(config.sunHeatBonus);
 
+    // --- GENERATE PROCEDURAL TEXTURES ---
+    for (const auto& texCfg : config.proceduralTextures) {
+        if (texCfg.type == "Checker") {
+            renderer->RegisterProceduralTexture(texCfg.name, [texCfg](Texture& tex) {
+                tex.GenerateCheckerboard(texCfg.width, texCfg.height, texCfg.color1, texCfg.color2, texCfg.cellSize);
+                });
+        }
+        else if (texCfg.type == "Gradient") {
+            renderer->RegisterProceduralTexture(texCfg.name, [texCfg](Texture& tex) {
+                tex.GenerateGradient(texCfg.width, texCfg.height, texCfg.color1, texCfg.color2, texCfg.isVertical);
+                });
+        }
+        else if (texCfg.type == "Solid") {
+            renderer->RegisterProceduralTexture(texCfg.name, [texCfg](Texture& tex) {
+                tex.GenerateSolidColor(texCfg.color1);
+                });
+        }
+        std::cout << "Generated Texture: " << texCfg.name << " (" << texCfg.type << ")" << std::endl;
+    }
+
     // 2. Setup Procedural Objects (Vegetation)
     // These are currently still generated randomly, but defined in config
     scene->ClearProceduralRegistry();
@@ -258,7 +279,7 @@ void Application::SetupScene() {
         scene->GenerateProceduralObjects(config.proceduralObjectCount, terrainRadius - 20.0f, terrainY, heightScale, noiseFreq);
     }
 
-    scene->PrintDebugInfo();
+    // scene->PrintDebugInfo();
 }
 
 void Application::RecreateSwapChain() {
