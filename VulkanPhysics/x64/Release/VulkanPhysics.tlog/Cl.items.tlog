@@ -24,6 +24,7 @@ C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Scene.cpp;C:\Users\Ell\
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\ShadowPass.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\ShadowPass.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\SkyboxPass.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\SkyboxPass.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Texture.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Texture.obj
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\util\EditorUI.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\EditorUI.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanBuffer.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\VulkanBuffer.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanCommandBuffer.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\VulkanCommandBuffer.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanContext.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\VulkanContext.obj

@@ -3,6 +3,11 @@
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
+struct SceneOption {
+    std::string name;
+    std::string path;
+};
+
 
 // --- Entity Configuration Structs ---
 
@@ -109,6 +114,8 @@ struct AppConfig {
 class ConfigLoader final {
 public:
     static AppConfig Load(const std::string& directory = "config/");
+
+    static std::vector<SceneOption> GetAvailableScenes(const std::string& rootDir = "src/config/");
 private:
     static void ParseFile(AppConfig& config, const std::string& filepath);
 };

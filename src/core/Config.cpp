@@ -3,6 +3,9 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 AppConfig ConfigLoader::Load(const std::string& sceneDirectory) {
     AppConfig config;
@@ -16,6 +19,29 @@ AppConfig ConfigLoader::Load(const std::string& sceneDirectory) {
     ParseFile(config, dir + "scene.cfg");
 
     return config;
+}
+
+std::vector<SceneOption> ConfigLoader::GetAvailableScenes(const std::string& rootDir) {
+    std::vector<SceneOption> scenes;
+
+    try {
+        if (fs::exists(rootDir) && fs::is_directory(rootDir)) {
+            for (const auto& entry : fs::directory_iterator(rootDir)) {
+                if (entry.is_directory()) {
+                    auto path = entry.path();
+                    // Validation: Only include folders that have the necessary config files
+                    if (fs::exists(path / "settings.cfg") && fs::exists(path / "scene.cfg")) {
+                        scenes.push_back({ path.filename().string(), path.string() + "/" });
+                    }
+                }
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ConfigLoader Error: " << e.what() << std::endl;
+    }
+
+    return scenes;
 }
 
 void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {

@@ -34,6 +34,9 @@
     <Filter Include="Source Files\src\imgui">
       <UniqueIdentifier>{d29fe7ac-7f20-4260-81e3-0b490166d25c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\src\util">
+      <UniqueIdentifier>{352e2bb7-8180-4390-9495-c7bcb9bbf98d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -144,6 +147,9 @@
     <ClCompile Include="src\geometry\SJGLoader.cpp">
       <Filter>Source Files\src\geometry</Filter>
     </ClCompile>
+    <ClCompile Include="src\util\EditorUI.cpp">
+      <Filter>Source Files\src\util</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Window.h">
@@ -238,6 +244,9 @@
     </ClInclude>
     <ClInclude Include="src\geometry\SJGLoader.h">
       <Filter>Source Files\src\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="src\util\EditorUI.h">
+      <Filter>Source Files\src\util</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

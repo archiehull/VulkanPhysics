@@ -26,8 +26,7 @@
 // Shadow mapping improvements (PCF, VSM, CSM)
 
 Application::Application() {
-    config = ConfigLoader::Load("src/config/collisions/");
-
+    //config = ConfigLoader::Load("src/config/collisions/");
 
     window = std::make_unique<Window>(config.windowWidth, config.windowHeight, "VulkanPhysics");
 
@@ -46,7 +45,16 @@ Application::Application() {
 
 void Application::Run() {
     InitVulkan();
-    SetupScene();
+
+    // 1. Initialize UI and find the "init" index
+    editorUI = std::make_unique<EditorUI>();
+    editorUI->Initialize("src/config/", "init");
+
+    // 2. Load the scene that the UI has selected as default
+    std::string initialPath = editorUI->GetInitialScenePath();
+    if (!initialPath.empty()) {
+        LoadScene(initialPath);
+    }
 
     lastFrameTime = std::chrono::high_resolution_clock::now();
 
@@ -84,7 +92,7 @@ void Application::Run() {
     // Print once
     //std::cout << controlsMsg << std::endl;
 
-    cameraController->SwitchCamera(CameraType::CUSTOM_1, *scene);
+    //cameraController->SwitchCamera(CameraType::CUSTOM_1, *scene);
 
     MainLoop();
     Cleanup();
@@ -133,12 +141,41 @@ void Application::InitVulkan() {
     renderer->SetupSceneParticles(*scene);
 
     cameraController = std::make_unique<CameraController>(config.customCameras);
+
+    editorUI = std::make_unique<EditorUI>();
+    editorUI->Initialize("src/config/");
+}
+
+void Application::LoadScene(const std::string& scenePath) {
+    // 1. Wait for GPU to finish current frames
+    if (vulkanDevice) {
+        vkDeviceWaitIdle(vulkanDevice->GetDevice());
+    }
+
+    // 2. Clear current scene data
+    if (scene) {
+        scene->Clear();
+    }
+
+    // 3. Load new configuration
+    config = ConfigLoader::Load(scenePath);
+
+    // 4. Re-setup scene objects
+    SetupScene();
+
+    // 5. Re-initialize systems that depend on the new config
+    cameraController = std::make_unique<CameraController>(config.customCameras);
+
+    if (renderer && scene) {
+        renderer->SetupSceneParticles(*scene);
+    }
+
+    std::cout << "Loaded Scene: " << scenePath << std::endl;
 }
 
 static const char* SUN_NAME = "Sun";
 static const char* MOON_NAME = "Moon";
 static const char* FOGSHELL_NAME = "FogShell";
-
 
 void Application::SetupScene() {
     // 1. Pass Global Configuration to Scene
@@ -318,13 +355,20 @@ void Application::MainLoop() {
             RecreateSwapChain();
         }
 
-        // Start the Dear ImGui frame
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // Show a test window
-        ImGui::ShowDemoWindow();
+        // The Draw call now handles the top bar logic
+        std::string nextScene = editorUI->Draw(deltaTime,
+            scene->GetWeatherIntensity(),
+            scene->GetSeasonName());
+
+        // If the user clicked a scene in the "Load Scene" tab, switch now
+        if (!nextScene.empty()) {
+            LoadScene(nextScene);
+        }
+
         ImGui::Render();
 
         scene->Update(deltaTime * timeScale);
