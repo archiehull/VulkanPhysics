@@ -18,7 +18,8 @@
 
 #include <memory>
 #include <map>
-#include <vulkan/VulkanContext.h>
+#include <functional>
+#include "../vulkan/VulkanContext.h"
 #include "Camera.h"
 
 class Renderer final {
@@ -32,6 +33,8 @@ public:
 
     void Initialize();
 
+    void RegisterProceduralTexture(const std::string& name, const std::function<void(Texture&)>& generator);
+
     void DrawFrame(const Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask = SceneLayers::ALL);
     void UpdateUniformBuffer(uint32_t currentFrame, const UniformBufferObject& ubo);
     void WaitIdle() const;
@@ -42,7 +45,18 @@ public:
     VulkanRenderPass* GetRenderPass() const { return renderPass.get(); }
     GraphicsPipeline* GetPipeline() const { return graphicsPipeline.get(); }
 
+    VkDescriptorPool imguiPool = VK_NULL_HANDLE;
+    VkRenderPass uiRenderPass = VK_NULL_HANDLE;
+    std::vector<VkFramebuffer> uiFramebuffers;
+
+    void CreateImGuiResources();
+    void DrawUI(VkCommandBuffer cmd, uint32_t imageIndex);
+
+    void SetClearColor(const glm::vec4& color) { m_ClearColor = color; }
+
 private:
+    glm::vec4 m_ClearColor = { 0.1f, 0.1f, 0.1f, 1.0f };
+
     // --- 1. Pointers & Smart Pointers (8-byte aligned) ---
     VulkanDevice* device;
     VulkanSwapChain* swapChain;

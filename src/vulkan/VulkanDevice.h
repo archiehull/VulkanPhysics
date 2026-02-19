@@ -36,6 +36,8 @@ public:
     VkQueue GetPresentQueue() const { return presentQueue; }
     const QueueFamilyIndices& GetQueueFamilies() const { return cachedQueueFamilies; }
 
+    VkInstance GetInstance() const { return instance; }
+
 private:
     VkInstance instance;
     VkSurfaceKHR surface;

@@ -130,6 +130,8 @@ public:
     Scene(const Scene&) = delete;
     Scene& operator=(const Scene&) = delete;
 
+	void PrintDebugInfo() const;
+
     void Initialize();
 
     float RadiusAdjustment(const float radius, const float deltaY) const;
@@ -206,6 +208,8 @@ public:
     void SetObjectCastsShadow(const std::string& name, bool casts);
     void SetObjectReceivesShadows(const std::string& name, bool receives);
     void SetObjectShadingMode(const std::string& name, int mode);
+
+    void SetObjectTexture(const std::string& objectName, const std::string& texturePath);
 
     // --- Configuration Setters ---
     void SetTimeConfig(const TimeConfig& config);

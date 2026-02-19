@@ -19,12 +19,20 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\backends\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui.cpp" />
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_demo.cpp" />
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_draw.cpp" />
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_tables.cpp" />
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_widgets.cpp" />
     <ClCompile Include="src\core\Application.cpp" />
     <ClCompile Include="src\core\Config.cpp" />
     <ClCompile Include="src\core\Window.cpp" />
     <ClCompile Include="src\geometry\Geometry.cpp" />
     <ClCompile Include="src\geometry\GeometryGenerator.cpp" />
     <ClCompile Include="src\geometry\OBJLoader.cpp" />
+    <ClCompile Include="src\geometry\SJGLoader.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\rendering\Camera.cpp" />
     <ClCompile Include="src\rendering\CameraController.cpp" />
@@ -37,6 +45,7 @@
     <ClCompile Include="src\rendering\ShadowPass.cpp" />
     <ClCompile Include="src\rendering\SkyboxPass.cpp" />
     <ClCompile Include="src\rendering\Texture.cpp" />
+    <ClCompile Include="src\util\EditorUI.cpp" />
     <ClCompile Include="src\vulkan\VulkanBuffer.cpp" />
     <ClCompile Include="src\vulkan\VulkanCommandBuffer.cpp" />
     <ClCompile Include="src\vulkan\VulkanContext.cpp" />
@@ -55,6 +64,7 @@
     <ClInclude Include="src\geometry\Geometry.h" />
     <ClInclude Include="src\geometry\GeometryGenerator.h" />
     <ClInclude Include="src\geometry\OBJLoader.h" />
+    <ClInclude Include="src\geometry\SJGLoader.h" />
     <ClInclude Include="src\rendering\Camera.h" />
     <ClInclude Include="src\rendering\CameraController.h" />
     <ClInclude Include="src\rendering\Cubemap.h" />
@@ -66,6 +76,7 @@
     <ClInclude Include="src\rendering\ShadowPass.h" />
     <ClInclude Include="src\rendering\SkyboxPass.h" />
     <ClInclude Include="src\rendering\Texture.h" />
+    <ClInclude Include="src\util\EditorUI.h" />
     <ClInclude Include="src\vulkan\PushConstantObject.h" />
     <ClInclude Include="src\vulkan\UniformBufferObject.h" />
     <ClInclude Include="src\vulkan\Vertex.h" />
@@ -245,13 +256,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\imgui-1.89.9;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\Additional Libraries\imgui-master;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -263,13 +274,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\imgui-1.89.9;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\Additional Libraries\imgui-master;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

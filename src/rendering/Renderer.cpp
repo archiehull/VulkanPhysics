@@ -8,6 +8,9 @@
 #include <iostream>
 #include <array>
 
+#include "imgui.h"
+#include "backends/imgui_impl_vulkan.h"
+
 Renderer::Renderer(VulkanDevice* deviceArg, VulkanSwapChain* swapChainArg)
     : device(deviceArg), swapChain(swapChainArg) {
 }
@@ -80,6 +83,150 @@ void Renderer::Initialize() {
 
     CreatePipeline(); // Main scene object pipeline
     CreateSyncObjects();
+
+    CreateImGuiResources();
+}
+
+void Renderer::CreateImGuiResources() {
+    // 1. Create Descriptor Pool for ImGui
+    VkDescriptorPoolSize pool_sizes[] = {
+        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+    };
+
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 1000;
+    pool_info.poolSizeCount = std::size(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+
+    if (vkCreateDescriptorPool(device->GetDevice(), &pool_info, nullptr, &imguiPool) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create imgui descriptor pool!");
+    }
+
+    // 2. Create Render Pass for UI (LoadOp = LOAD to draw on top of scene)
+    VkAttachmentDescription attachment = {};
+    attachment.format = swapChain->GetImageFormat();
+    attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // IMPORTANT: Keep existing content
+    attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // Coming from Copy Pass
+    attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // Going to Presentation
+
+    VkAttachmentReference color_attachment = {};
+    color_attachment.attachment = 0;
+    color_attachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass = {};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &color_attachment;
+
+    VkSubpassDependency dependency = {};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    info.attachmentCount = 1;
+    info.pAttachments = &attachment;
+    info.subpassCount = 1;
+    info.pSubpasses = &subpass;
+    info.dependencyCount = 1;
+    info.pDependencies = &dependency;
+
+    if (vkCreateRenderPass(device->GetDevice(), &info, nullptr, &uiRenderPass) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create ui render pass!");
+    }
+
+    // 3. Create Framebuffers
+    const auto& imageViews = swapChain->GetImageViews();
+    uiFramebuffers.resize(imageViews.size());
+    for (size_t i = 0; i < imageViews.size(); i++) {
+        VkImageView attachments[] = { imageViews[i] };
+        VkFramebufferCreateInfo fb_info = {};
+        fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fb_info.renderPass = uiRenderPass;
+        fb_info.attachmentCount = 1;
+        fb_info.pAttachments = attachments;
+        fb_info.width = swapChain->GetExtent().width;
+        fb_info.height = swapChain->GetExtent().height;
+        fb_info.layers = 1;
+
+        if (vkCreateFramebuffer(device->GetDevice(), &fb_info, nullptr, &uiFramebuffers[i]) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create ui framebuffer!");
+        }
+    }
+
+    // 4. Init ImGui Vulkan Implementation
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    //init_info.Instance = device->GetInstance(); // Need to expose this or pass it
+    init_info.PhysicalDevice = device->GetPhysicalDevice();
+    init_info.Instance = device->GetInstance();
+    init_info.Device = device->GetDevice();
+    init_info.QueueFamily = device->GetQueueFamilies().graphicsFamily.value();
+    init_info.Queue = device->GetGraphicsQueue();
+    init_info.PipelineCache = VK_NULL_HANDLE;
+    init_info.DescriptorPool = imguiPool;
+    init_info.Subpass = 0;
+    init_info.MinImageCount = 2; // Assume 2 for now, or expose from swapchain
+    init_info.ImageCount = static_cast<uint32_t>(imageViews.size());
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    init_info.Allocator = nullptr;
+    init_info.CheckVkResultFn = nullptr; // Or add a check function
+
+    ImGui_ImplVulkan_Init(&init_info, uiRenderPass);
+
+    // 5. Upload Fonts
+    VkCommandBuffer cmd = commandBuffer->GetCommandBuffer(0); // Temporary use 0
+
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &begin_info);
+
+    ImGui_ImplVulkan_CreateFontsTexture(cmd);
+
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submit_info = {};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &cmd;
+
+    vkQueueSubmit(device->GetGraphicsQueue(), 1, &submit_info, VK_NULL_HANDLE);
+    vkDeviceWaitIdle(device->GetDevice());
+
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
+}
+
+void Renderer::DrawUI(VkCommandBuffer cmd, uint32_t imageIndex) {
+    VkRenderPassBeginInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    info.renderPass = uiRenderPass;
+    info.framebuffer = uiFramebuffers[imageIndex];
+    info.renderArea.extent = swapChain->GetExtent();
+    info.clearValueCount = 0; // No clear, we load
+
+    vkCmdBeginRenderPass(cmd, &info, VK_SUBPASS_CONTENTS_INLINE);
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+    vkCmdEndRenderPass(cmd);
 }
 
 void Renderer::DrawFrame(const Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask) {
@@ -198,6 +345,48 @@ void Renderer::CreateTextureDescriptorPool() {
     if (vkCreateDescriptorPool(device->GetDevice(), &poolInfo, nullptr, &textureDescriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture descriptor pool!");
     }
+}
+
+void Renderer::RegisterProceduralTexture(const std::string& name, const std::function<void(Texture&)>& generator) {
+    // 1. Create the Texture Object
+    auto tex = std::make_unique<Texture>(
+        device->GetDevice(), device->GetPhysicalDevice(),
+        commandBuffer->GetCommandPool(), device->GetGraphicsQueue());
+
+    // 2. Run the user's generation function (e.g., GenerateCheckerboard)
+    generator(*tex);
+
+    // 3. Allocate Descriptor Set (Logic similar to CreateDefaultTexture)
+    VkDescriptorSet descSet;
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = textureDescriptorPool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &textureSetLayout;
+
+    if (vkAllocateDescriptorSets(device->GetDevice(), &allocInfo, &descSet) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate descriptor set for procedural texture!");
+    }
+
+    // 4. Update Descriptor Set
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageView = tex->GetImageView();
+    imageInfo.sampler = tex->GetSampler();
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = descSet;
+    descriptorWrite.dstBinding = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(device->GetDevice(), 1, &descriptorWrite, 0, nullptr);
+
+    // 5. Store in Cache
+    textureCache[name] = { std::move(tex), descSet };
+    std::cout << "Procedural Texture Registered: " << name << std::endl;
 }
 
 void Renderer::CreateDefaultTexture() {
@@ -672,6 +861,8 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
     // --- 4. Copy to SwapChain ---
     CopyOffScreenToSwapChain(cmd, imageIndex);
 
+    DrawUI(cmd, imageIndex);
+
     if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
         throw std::runtime_error("failed to record command buffer!");
     }
@@ -679,7 +870,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
 
 void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, const Scene& scene, int layerMask) {
     std::vector<VkClearValue> clearValues(2);
-    clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+    clearValues[0].color = { {m_ClearColor.r, m_ClearColor.g, m_ClearColor.b, m_ClearColor.a} };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     BeginRenderPass(cmd, renderPass->GetRenderPass(), renderPass->GetOffScreenFramebuffer(), clearValues);
@@ -743,21 +934,27 @@ void Renderer::CopyOffScreenToSwapChain(VkCommandBuffer cmd, uint32_t imageIndex
         1, &copyRegion);
 
     swapChainBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    swapChainBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    swapChainBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // Changed from PRESENT_SRC_KHR
     swapChainBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    swapChainBarrier.dstAccessMask = 0;
+    swapChainBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // Changed
 
     vkCmdPipelineBarrier(cmd,
         VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // Changed
         0, 0, nullptr, 0, nullptr, 1, &swapChainBarrier);
 }
+
 
 void Renderer::WaitIdle() const {
     vkDeviceWaitIdle(device->GetDevice());
 }
 
 void Renderer::Cleanup() {
+    if (uiRenderPass) { vkDestroyRenderPass(device->GetDevice(), uiRenderPass, nullptr); uiRenderPass = VK_NULL_HANDLE; }
+    for (auto fb : uiFramebuffers) vkDestroyFramebuffer(device->GetDevice(), fb, nullptr);
+    uiFramebuffers.clear();
+    if (imguiPool) { vkDestroyDescriptorPool(device->GetDevice(), imguiPool, nullptr); imguiPool = VK_NULL_HANDLE; }
+
     for (size_t i = 0; i < uniformBuffers.size(); i++) {
         if (uniformBuffersMapped[i]) {
             vkUnmapMemory(device->GetDevice(), uniformBuffers[i]->GetBufferMemory());

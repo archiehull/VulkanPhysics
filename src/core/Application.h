@@ -7,6 +7,7 @@
 #include "../rendering/Renderer.h"
 #include "../rendering/Scene.h"
 #include "../rendering/CameraController.h"
+#include "../util/EditorUI.h"
 #include "Config.h"
 
 #include <memory>
@@ -26,6 +27,12 @@ private:
     void Cleanup();
     void RecreateSwapChain();
 
+    void LoadScene(const std::string& scenePath);
+
+    std::vector<SceneOption> sceneOptions;
+
+    int selectedSceneIndex = 0;
+
     // Input handling
     void ProcessInput();
     static void KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int action, int mods);
@@ -38,6 +45,7 @@ private:
     std::unique_ptr<Renderer> renderer;
     std::unique_ptr<Scene> scene;
     std::unique_ptr<CameraController> cameraController;
+    std::unique_ptr<EditorUI> editorUI;
 
     std::chrono::time_point<std::chrono::high_resolution_clock> lastFrameTime;
 

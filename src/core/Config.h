@@ -3,6 +3,59 @@
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
+struct SceneOption {
+    std::string name;
+    std::string path;
+};
+
+
+// --- Entity Configuration Structs ---
+
+struct SceneObjectConfig {
+    std::string name;
+    std::string type;
+    std::string modelPath;
+    std::string texturePath; // Can now be a file path OR a procedural name
+
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 rotation = glm::vec3(0.0f);
+    glm::vec3 scale = glm::vec3(1.0f);
+    glm::vec3 params = glm::vec3(0.0f);
+
+    bool visible = true;
+    bool castsShadow = true;
+    bool receiveShadows = true;
+    int shadingMode = 1;
+    int layerMask = 3;
+
+    bool hasCollision = true;
+    bool isFlammable = false;
+
+    bool hasOrbit = false;
+    float orbitRadius = 0.0f;
+    float orbitSpeed = -1.0f;
+    float orbitDirection = 0.0f;
+    float orbitInitialAngle = 0.0f;
+
+    bool isLight = false;
+    glm::vec3 lightColor = glm::vec3(1.0f);
+    float lightIntensity = 1.0f;
+    int lightType = 0;
+};
+
+// --- NEW: Procedural Texture Configuration ---
+struct ProceduralTextureConfig {
+    std::string name;
+    std::string type; // "Checker", "Gradient", "Solid"
+
+    glm::vec4 color1 = glm::vec4(1.0f);
+    glm::vec4 color2 = glm::vec4(0.0f);
+
+    int width = 512;
+    int height = 512;
+    int cellSize = 64;   // For Checker
+    bool isVertical = true; // For Gradient
+};
 
 struct ProceduralPlantConfig {
     std::string modelPath;
@@ -14,19 +67,9 @@ struct ProceduralPlantConfig {
     bool isFlammable;
 };
 
-struct StaticObjectConfig {
-    std::string name;
-    std::string modelPath;
-    std::string texturePath;
-    glm::vec3 position;
-    glm::vec3 rotation;
-    glm::vec3 scale;
-    bool isFlammable;
-};
-
 struct CustomCameraConfig {
     std::string name;
-    std::string type; // "FreeRoam", "Orbit", "Static"
+    std::string type;
     glm::vec3 position;
     glm::vec3 target;
 };
@@ -50,42 +93,29 @@ struct WeatherConfig {
     float fireSuppressionDuration = 15.0f;
 };
 
-struct OrbitConfig {
-    float directionDegrees = 0.0f;
-    float radius = 275.0f;
-    float initialAngle = 0.0f;
-};
-
 struct AppConfig {
-    // Window
     int windowWidth = 800;
     int windowHeight = 600;
 
-    // Environment
     TimeConfig time;
     SeasonConfig seasons;
     WeatherConfig weather;
-
-    OrbitConfig sunOrbit;
-    OrbitConfig moonOrbit;
-
-    // Thermodynamics
     float sunHeatBonus = 60.0f;
 
-    // Terrain
-    float terrainHeightScale = 3.5f;
-    float terrainNoiseFreq = 0.02f;
-
-    // Objects
-    int proceduralObjectCount = 75;
+    int proceduralObjectCount = 5;
     std::vector<ProceduralPlantConfig> proceduralPlants;
-    std::vector<StaticObjectConfig> staticObjects;
-
-    // --- Custom Cameras ---
+    std::vector<SceneObjectConfig> sceneObjects;
     std::vector<CustomCameraConfig> customCameras;
+
+    // --- NEW: Texture Registry ---
+    std::vector<ProceduralTextureConfig> proceduralTextures;
 };
 
 class ConfigLoader final {
 public:
-    static AppConfig Load(const std::string& filepath);
+    static AppConfig Load(const std::string& directory = "config/");
+
+    static std::vector<SceneOption> GetAvailableScenes(const std::string& rootDir = "src/config/");
+private:
+    static void ParseFile(AppConfig& config, const std::string& filepath);
 };

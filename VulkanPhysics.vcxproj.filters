@@ -31,6 +31,12 @@
     <Filter Include="Source Files\src\rendering">
       <UniqueIdentifier>{730c4f90-6446-4b55-9703-505a73e90ad7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\src\imgui">
+      <UniqueIdentifier>{d29fe7ac-7f20-4260-81e3-0b490166d25c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\src\util">
+      <UniqueIdentifier>{352e2bb7-8180-4390-9495-c7bcb9bbf98d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -116,6 +122,33 @@
     </ClCompile>
     <ClCompile Include="src\core\Config.cpp">
       <Filter>Source Files\src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui.cpp">
+      <Filter>Source Files\src\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_demo.cpp">
+      <Filter>Source Files\src\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_draw.cpp">
+      <Filter>Source Files\src\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_tables.cpp">
+      <Filter>Source Files\src\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_widgets.cpp">
+      <Filter>Source Files\src\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\backends\imgui_impl_glfw.cpp">
+      <Filter>Source Files\src\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Additional Libraries\imgui-1.89.9\backends\imgui_impl_vulkan.cpp">
+      <Filter>Source Files\src\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="src\geometry\SJGLoader.cpp">
+      <Filter>Source Files\src\geometry</Filter>
+    </ClCompile>
+    <ClCompile Include="src\util\EditorUI.cpp">
+      <Filter>Source Files\src\util</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -208,6 +241,12 @@
     </ClInclude>
     <ClInclude Include="src\core\Config.h">
       <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\geometry\SJGLoader.h">
+      <Filter>Source Files\src\geometry</Filter>
+    </ClInclude>
+    <ClInclude Include="src\util\EditorUI.h">
+      <Filter>Source Files\src\util</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

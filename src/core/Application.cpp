@@ -3,6 +3,10 @@
 #include <iostream>
 #include <iomanip>
 
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_vulkan.h"
+
 // TODO:
 // refactor and decouple scene class to entity component system
 // refector scene object to seperate Transform, Rendering, Physics, Thermodynamics, Orbital
@@ -22,9 +26,17 @@
 // Shadow mapping improvements (PCF, VSM, CSM)
 
 Application::Application() {
+    //config = ConfigLoader::Load("src/config/collisions/");
 
-    config = ConfigLoader::Load("config.txt");
     window = std::make_unique<Window>(config.windowWidth, config.windowHeight, "VulkanPhysics");
+
+    // Setup ImGui Context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForVulkan(window->GetGLFWWindow(), true);
 
     glfwSetWindowUserPointer(window->GetGLFWWindow(), this);
     glfwSetKeyCallback(window->GetGLFWWindow(), KeyCallback);
@@ -33,7 +45,16 @@ Application::Application() {
 
 void Application::Run() {
     InitVulkan();
-    SetupScene();
+
+    // 1. Initialize UI and find the "init" index
+    editorUI = std::make_unique<EditorUI>();
+    editorUI->Initialize("src/config/", "init");
+
+    // 2. Load the scene that the UI has selected as default
+    std::string initialPath = editorUI->GetInitialScenePath();
+    if (!initialPath.empty()) {
+        LoadScene(initialPath);
+    }
 
     lastFrameTime = std::chrono::high_resolution_clock::now();
 
@@ -69,10 +90,9 @@ void Application::Run() {
 )";
 
     // Print once
-    std::cout << controlsMsg << std::endl;
+    //std::cout << controlsMsg << std::endl;
 
-    // Initialize with Static Camera (F1)
-    cameraController->SwitchCamera(CameraType::OUTSIDE_ORB, *scene);
+    //cameraController->SwitchCamera(CameraType::CUSTOM_1, *scene);
 
     MainLoop();
     Cleanup();
@@ -121,105 +141,182 @@ void Application::InitVulkan() {
     renderer->SetupSceneParticles(*scene);
 
     cameraController = std::make_unique<CameraController>(config.customCameras);
+
+    editorUI = std::make_unique<EditorUI>();
+    editorUI->Initialize("src/config/");
+}
+
+void Application::LoadScene(const std::string& scenePath) {
+    // 1. Wait for GPU to finish current frames
+    if (vulkanDevice) {
+        vkDeviceWaitIdle(vulkanDevice->GetDevice());
+    }
+
+    // 2. Clear current scene data
+    if (scene) {
+        scene->Clear();
+    }
+
+    // 3. Load new configuration
+    config = ConfigLoader::Load(scenePath);
+
+    // 4. Re-setup scene objects
+    SetupScene();
+
+    // 5. Re-initialize systems that depend on the new config
+    cameraController = std::make_unique<CameraController>(config.customCameras);
+
+    if (renderer && scene) {
+        renderer->SetupSceneParticles(*scene);
+    }
+
+    std::cout << "Loaded Scene: " << scenePath << std::endl;
 }
 
 static const char* SUN_NAME = "Sun";
 static const char* MOON_NAME = "Moon";
 static const char* FOGSHELL_NAME = "FogShell";
 
-
 void Application::SetupScene() {
-    // Pass Configuration to Scene
+    // 1. Pass Global Configuration to Scene
     scene->SetTimeConfig(config.time);
     scene->SetSeasonConfig(config.seasons);
     scene->SetWeatherConfig(config.weather);
     scene->SetSunHeatBonus(config.sunHeatBonus);
 
-    // Calculate Orbit Speed based on Day Length
-    // Speed (rad/s) = 2PI / dayLength
-    const float dayLength = config.time.dayLengthSeconds;
-    const float baseOrbitSpeed = (dayLength > 0.0f) ? (glm::two_pi<float>() / dayLength) : 0.1f;
+    // --- GENERATE PROCEDURAL TEXTURES ---
+    for (const auto& texCfg : config.proceduralTextures) {
+        if (texCfg.type == "Checker") {
+            renderer->RegisterProceduralTexture(texCfg.name, [texCfg](Texture& tex) {
+                tex.GenerateCheckerboard(texCfg.width, texCfg.height, texCfg.color1, texCfg.color2, texCfg.cellSize);
+                });
+        }
+        else if (texCfg.type == "Gradient") {
+            renderer->RegisterProceduralTexture(texCfg.name, [texCfg](Texture& tex) {
+                tex.GenerateGradient(texCfg.width, texCfg.height, texCfg.color1, texCfg.color2, texCfg.isVertical);
+                });
+        }
+        else if (texCfg.type == "Solid") {
+            renderer->RegisterProceduralTexture(texCfg.name, [texCfg](Texture& tex) {
+                tex.GenerateSolidColor(texCfg.color1);
+                });
+        }
+        std::cout << "Generated Texture: " << texCfg.name << " (" << texCfg.type << ")" << std::endl;
+    }
 
-    const float sunOrbitSpeed = baseOrbitSpeed;
-    const float moonOrbitSpeed = baseOrbitSpeed;
-
-    // Helper to calculate Trajectory (Start Vector direction)
-    auto GetTrajectory = [](float directionDegrees) -> glm::vec3 {
-        const float rad = glm::radians(directionDegrees);
-        glm::vec3 t(cos(rad), 0.0f, sin(rad));
-        if (glm::length(t) < 0.001f) t = glm::vec3(1.0f, 0.0f, 0.0f);
-        return glm::normalize(t);
-        };
-
-    const glm::vec3 sunTrajectory = GetTrajectory(config.sunOrbit.directionDegrees);
-    const glm::vec3 moonTrajectory = GetTrajectory(config.moonOrbit.directionDegrees);
-
-    const glm::vec3 sunAxis = glm::normalize(glm::cross(sunTrajectory, glm::vec3(0.0f, 1.0f, 0.0f)));
-    const glm::vec3 moonAxis = glm::normalize(glm::cross(moonTrajectory, glm::vec3(0.0f, 1.0f, 0.0f)));
-
-    const glm::vec3 sunStart = sunTrajectory * config.sunOrbit.radius;
-    const glm::vec3 moonStart = moonTrajectory * config.moonOrbit.radius;
-
-    const float deltaY = -75.0f;
-    const float orbRadius = 150.0f;
-    const float adjustedRadius = scene->RadiusAdjustment(orbRadius, deltaY);
-
-    scene->AddTerrain("GroundGrid", adjustedRadius, 512, 512, config.terrainHeightScale, config.terrainNoiseFreq, glm::vec3(0.0f, 0.0f + deltaY, 0.0f), "textures/desert2.jpg");
-    scene->AddPedestal("BasePedestal", adjustedRadius, orbRadius * 2.3, 100.0f, glm::vec3(0.0f, 0.0f + deltaY, 0.0f), "textures/mahogany.jpg");
-    scene->SetObjectCastsShadow("BasePedestal", false);
-    scene->SetObjectLayerMask("BasePedestal", SceneLayers::OUTSIDE);
-    scene->SetObjectCollision("BasePedestal", false);
-
+    // 2. Setup Procedural Objects (Vegetation)
+    // These are currently still generated randomly, but defined in config
     scene->ClearProceduralRegistry();
     if (config.proceduralPlants.empty()) {
-        scene->RegisterProceduralObject("models/cactus.obj", "textures/cactus.jpg", 7.0f, glm::vec3(0.01f), glm::vec3(0.02f), glm::vec3(-90.0f, 0.0f, 0.0f), true);
-        scene->RegisterProceduralObject("models/DeadTree.obj", "textures/bark.jpg", 5.0f, glm::vec3(0.1f), glm::vec3(0.2f), glm::vec3(0.0f), true);
-        scene->RegisterProceduralObject("models/DeadTree.obj", "textures/bark.jpg", 4.0f, glm::vec3(0.25f), glm::vec3(0.35f), glm::vec3(0.0f), true);
+        // Safe defaults if config file is missing
+        //scene->RegisterProceduralObject("models/cactus.obj", "textures/cactus.jpg", 7.0f, glm::vec3(0.01f), glm::vec3(0.02f), glm::vec3(-90.0f, 0.0f, 0.0f), true);
     }
     else {
         for (const auto& plant : config.proceduralPlants) {
             scene->RegisterProceduralObject(plant.modelPath, plant.texturePath, plant.frequency, plant.minScale, plant.maxScale, plant.baseRotation, plant.isFlammable);
         }
     }
-    scene->GenerateProceduralObjects(config.proceduralObjectCount, orbRadius - 20, deltaY, config.terrainHeightScale, config.terrainNoiseFreq);
-    for (const auto& obj : config.staticObjects) {
-        scene->AddModel(obj.name, obj.position, obj.rotation, obj.scale, obj.modelPath, obj.texturePath, obj.isFlammable);
+
+    // Capture Terrain Params for procedural generation later
+    // Defaults:
+    float terrainRadius = 150.0f;
+    float terrainY = -75.0f;
+    float heightScale = 3.5f;
+    float noiseFreq = 0.02f;
+
+    // 3. Process Explicit Scene Objects
+    for (const auto& objCfg : config.sceneObjects) {
+
+        // --- Geometry Creation ---
+        if (objCfg.type == "Terrain") {
+            // Params: x=Radius, y=HeightScale, z=NoiseFreq
+            scene->AddTerrain(objCfg.name, objCfg.params.x, 512, 512, objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
+
+            // Update procedural generation targets
+            terrainRadius = objCfg.params.x;
+            heightScale = objCfg.params.y;
+            noiseFreq = objCfg.params.z;
+            terrainY = objCfg.position.y;
+        }
+        else if (objCfg.type == "Pedestal") {
+            // Params: x=TopRadius, y=BaseWidth, z=Height
+            scene->AddPedestal(objCfg.name, objCfg.params.x, objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
+        }
+        else if (objCfg.type == "Sphere") {
+            // Params: x=Radius
+            scene->AddSphere(objCfg.name, 16, 32, objCfg.params.x, objCfg.position, objCfg.texturePath);
+        }
+        else if (objCfg.type == "Bowl") {
+            // Params: x=Radius
+            scene->AddBowl(objCfg.name, objCfg.params.x, 32, 16, objCfg.position, objCfg.texturePath);
+        }
+        else if (objCfg.type == "Cube") {
+            scene->AddCube(objCfg.name, objCfg.position, objCfg.scale, objCfg.texturePath);
+        }
+        else if (objCfg.type == "Model") {
+            // Standard Model
+            scene->AddModel(objCfg.name, objCfg.position, objCfg.rotation, objCfg.scale, objCfg.modelPath, objCfg.texturePath, objCfg.isFlammable);
+        }
+        else if (objCfg.type == "Grid") {
+            // Params: x=Rows, y=Cols, z=CellSize
+            scene->AddGrid(objCfg.name, (int)objCfg.params.x, (int)objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
+        }
+
+        // --- Apply Common Properties ---
+        // (We assume the object was just added to the back of the vector)
+        scene->SetObjectVisible(scene->GetObjects().size() - 1, objCfg.visible);
+        scene->SetObjectCastsShadow(objCfg.name, objCfg.castsShadow);
+        scene->SetObjectReceivesShadows(objCfg.name, objCfg.receiveShadows);
+        scene->SetObjectShadingMode(objCfg.name, objCfg.shadingMode);
+        scene->SetObjectLayerMask(objCfg.name, objCfg.layerMask);
+        scene->SetObjectCollision(objCfg.name, objCfg.hasCollision);
+
+        // --- Apply Light ---
+        if (objCfg.isLight) {
+            scene->AddLight(objCfg.name, objCfg.position, objCfg.lightColor, objCfg.lightIntensity, objCfg.lightType);
+            scene->SetLightLayerMask(objCfg.name, objCfg.layerMask);
+        }
+
+        // --- Apply Orbit ---
+        if (objCfg.hasOrbit) {
+            // Calculate Axis from "Direction Degrees"
+            auto GetTrajectory = [](float degrees) -> glm::vec3 {
+                const float rad = glm::radians(degrees);
+                glm::vec3 t(cos(rad), 0.0f, sin(rad));
+                if (glm::length(t) < 0.001f) t = glm::vec3(1.0f, 0.0f, 0.0f);
+                return glm::normalize(t);
+                };
+
+            const glm::vec3 trajectory = GetTrajectory(objCfg.orbitDirection);
+            // Default "Up" for orbit cross product is Y-up
+            const glm::vec3 axis = glm::normalize(glm::cross(trajectory, glm::vec3(0.0f, 1.0f, 0.0f)));
+            const glm::vec3 startVector = trajectory * objCfg.orbitRadius;
+
+            // Determine Speed
+            float speed = objCfg.orbitSpeed;
+            if (speed < -0.001f) {
+                // Auto-calculate based on Day Length
+                const float dayLength = config.time.dayLengthSeconds;
+                speed = (dayLength > 0.0f) ? (glm::two_pi<float>() / dayLength) : 0.1f;
+            }
+
+            // Apply to Object
+            scene->SetObjectOrbit(objCfg.name, objCfg.position, objCfg.orbitRadius, speed, axis, startVector, objCfg.orbitInitialAngle);
+
+            // Apply to Light (if it exists)
+            if (objCfg.isLight) {
+                scene->SetLightOrbit(objCfg.name, objCfg.position, objCfg.orbitRadius, speed, axis, startVector, objCfg.orbitInitialAngle);
+            }
+        }
     }
 
-    scene->AddSphere(SUN_NAME, 16, 32, 5.0f, glm::vec3(0.0f), "textures/sun.png");
-    scene->AddLight(SUN_NAME, glm::vec3(0.0f), glm::vec3(1.0f, 0.9f, 0.8f), 1.0f, 0);
-    scene->SetObjectCastsShadow(SUN_NAME, false);
-    scene->SetObjectOrbit(SUN_NAME, glm::vec3(0.0f, 0.0f + deltaY, 0.0f), config.sunOrbit.radius, sunOrbitSpeed, sunAxis, sunStart, config.sunOrbit.initialAngle);
-    scene->SetLightOrbit(SUN_NAME, glm::vec3(0.0f, 0.0f + deltaY, 0.0f), config.sunOrbit.radius, sunOrbitSpeed, sunAxis, sunStart, config.sunOrbit.initialAngle);
-    scene->SetObjectLayerMask(SUN_NAME, SceneLayers::ALL);
-    scene->SetLightLayerMask(SUN_NAME, SceneLayers::ALL);
-    scene->SetObjectCollision(SUN_NAME, false);
+    // 4. Generate Procedural Vegetation
+    // We use the terrainRadius we captured (minus buffer) to ensure plants spawn on the terrain
+    if (!config.proceduralPlants.empty()) {
+        scene->GenerateProceduralObjects(config.proceduralObjectCount, terrainRadius - 20.0f, terrainY, heightScale, noiseFreq);
+    }
 
-    scene->AddSphere(MOON_NAME, 16, 32, 2.0f, glm::vec3(0.0f), "textures/moon.jpg");
-    scene->AddLight(MOON_NAME, glm::vec3(0.0f), glm::vec3(0.1f, 0.1f, 0.3f), 1.5f, 0);
-    scene->SetObjectCastsShadow(MOON_NAME, false);
-    scene->SetObjectOrbit(MOON_NAME, glm::vec3(0.0f, 0.0f + deltaY, 0.0f), config.moonOrbit.radius, moonOrbitSpeed, moonAxis, moonStart, config.moonOrbit.initialAngle);
-    scene->SetLightOrbit(MOON_NAME, glm::vec3(0.0f, 0.0f + deltaY, 0.0f), config.moonOrbit.radius, moonOrbitSpeed, moonAxis, moonStart, config.moonOrbit.initialAngle);
-    scene->SetObjectLayerMask(MOON_NAME, SceneLayers::ALL);
-    scene->SetLightLayerMask(MOON_NAME, SceneLayers::ALL);
-    scene->SetObjectCollision(MOON_NAME, false);
-
-    scene->AddSphere("PedestalLightSphere", 16, 32, 5.0f, glm::vec3(200.0f, 0.0f, 200.0f));
-    scene->AddLight("PedestalLight", glm::vec3(200.0f, 0.0f, 200.0f), glm::vec3(1.0f, 0.5f, 0.2f), 5.0f, 0);
-    scene->SetLightLayerMask("PedestalLight", SceneLayers::OUTSIDE);
-    scene->SetObjectLayerMask("PedestalLightSphere", SceneLayers::OUTSIDE);
-    scene->SetObjectCollision("PedestalLightSphere", false);
-
-    scene->AddSphere("CrystalBall", 32, 64, orbRadius, glm::vec3(0.0f, 0.0f, 0.0f), "");
-    scene->SetObjectShadingMode("CrystalBall", 3);
-    scene->SetObjectCastsShadow("CrystalBall", false);
-    scene->SetObjectCollision("CrystalBall", false);
-
-    scene->AddSphere(FOGSHELL_NAME, 32, 64, orbRadius + 1, glm::vec3(0.0f, 0.0f, 0.0f), "");
-    scene->SetObjectShadingMode(FOGSHELL_NAME, 4);
-    scene->SetObjectCastsShadow(FOGSHELL_NAME, false);
-    scene->SetObjectLayerMask(FOGSHELL_NAME, 0x1 | 0x2);
-    scene->SetObjectCollision(FOGSHELL_NAME, false);
+    // scene->PrintDebugInfo();
 }
 
 void Application::RecreateSwapChain() {
@@ -258,7 +355,47 @@ void Application::MainLoop() {
             RecreateSwapChain();
         }
 
-        scene->Update(deltaTime * timeScale);
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // The Draw call now handles the top bar logic
+        std::string nextScene = editorUI->Draw(deltaTime,
+            scene->GetWeatherIntensity(),
+            scene->GetSeasonName(),
+            *scene);
+
+        const float* uiColor = editorUI->GetClearColor();
+        renderer->SetClearColor(glm::vec4(uiColor[0], uiColor[1], uiColor[2], uiColor[3]));
+
+        // If the user clicked a scene in the "Load Scene" tab, switch now
+        if (!nextScene.empty()) {
+            LoadScene(nextScene);
+        }
+
+        ImGui::Render();
+
+        // 1. Handle Restart
+        if (editorUI->ConsumeRestartRequest()) {
+            scene->ResetEnvironment();
+        }
+
+        // 2. Calculate advancement
+        float stepDelta = 0.0f;
+        float currentTimeScale = editorUI->GetTimeScale();
+
+        if (!editorUI->IsPaused()) {
+            // Normal running state
+            stepDelta = deltaTime * currentTimeScale;
+        }
+        else if (editorUI->ConsumeStepRequest()) {
+            // Manual step state - uses the custom step size multiplied by speed
+            stepDelta = editorUI->GetStepSize() * currentTimeScale;
+        }
+
+        // 4. Update the scene with the calculated delta
+        scene->Update(stepDelta);
+
         cameraController->Update(deltaTime, *scene);
 
         Camera* const activeCamera = cameraController->GetActiveCamera();
@@ -320,11 +457,11 @@ void Application::ProcessInput() {
         }
     }
 
-    if (glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_R) == GLFW_PRESS) {
-        timeScale = 1.0f;
-        scene->ResetEnvironment();
-        std::cout << "Environment Reset." << std::endl;
-    }
+    //if (glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_R) == GLFW_PRESS) {
+    //    timeScale = 1.0f;
+    //    scene->ResetEnvironment();
+    //    std::cout << "Environment Reset." << std::endl;
+    //}
 }
 
 void Application::KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int action, int mods) {
@@ -387,6 +524,17 @@ void Application::KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int
         else if (key == GLFW_KEY_O) {
             app->scene->ToggleWeather();
         }
+        if (key == GLFW_KEY_SPACE) {
+            app->editorUI->SetPaused(!app->editorUI->IsPaused());
+        }
+        else if (key == GLFW_KEY_F && app->editorUI->IsPaused()) {
+            // Note: You may need a way to trigger StepRequest here 
+            // or simply call scene->Update(0.0166f) once.
+        }
+        // Update existing R key to also sync with UI if needed
+        else if (key == GLFW_KEY_R) {
+            app->scene->ResetEnvironment();
+        }
 
         app->cameraController->OnKeyPress(key, true);
     }
@@ -401,6 +549,15 @@ void Application::FramebufferResizeCallback(GLFWwindow* glfwWindow, int width, i
 }
 
 void Application::Cleanup() {
+    if (vulkanDevice) {
+        vkDeviceWaitIdle(vulkanDevice->GetDevice());
+    }
+
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+
     if (scene) {
         scene->Cleanup();
         scene.reset();
