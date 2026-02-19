@@ -1,75 +1,75 @@
 #pragma once
 #include "Collider.h"
-#include "Sphere.h" // Required to access Sphere properties
-#include <cmath>
+#include "Sphere.h" 
+#include <glm/glm.hpp>
+#include <glm/gtx/norm.hpp> // Required for length2 (LengthSq)
 #include <algorithm>
 
 class Cylinder : public Collider
 {
 public:
 	// Cylinder defined by a segment (p1 to p2) and a radius
-	Cylinder(const Vec3& p1, const Vec3& p2, float radius)
+	Cylinder(const glm::vec3& p1, const glm::vec3& p2, float radius)
 		: Collider(p1), m_p2(p2), m_radius(radius)
 	{
 	}
 
 	// Point-inside-cylinder test
-	bool IsInside(const Vec3& point) const override
+	bool IsInside(const glm::vec3& point) const override
 	{
-		Vec3 axis = m_p2 - m_position;
-		Vec3 toPoint = point - m_position;
+		glm::vec3 axis = m_p2 - m_position;
+		glm::vec3 toPoint = point - m_position;
 
-		double axisLengthSq = LengthSq(axis);
+		float axisLengthSq = glm::length2(axis);
 
-		if (axisLengthSq <= 1e-9)
-			return LengthSq(toPoint) <= (static_cast<double>(m_radius) * m_radius);
+		if (axisLengthSq <= 1e-6f)
+			return glm::length2(toPoint) <= (m_radius * m_radius);
 
-		double t = Dot(toPoint, axis) / axisLengthSq;
+		float t = glm::dot(toPoint, axis) / axisLengthSq;
 
-		if (t < 0.0 || t > 1.0) return false;
+		if (t < 0.0f || t > 1.0f) return false;
 
-		Vec3 closestOnAxis = m_position + (axis * t);
-		double distSq = LengthSq(point - closestOnAxis);
-		double rSq = static_cast<double>(m_radius) * m_radius;
+		glm::vec3 closestOnAxis = m_position + (axis * t);
+		float distSq = glm::length2(point - closestOnAxis);
+		float rSq = m_radius * m_radius;
 
-		return distSq <= rSq + 1e-9;
+		return distSq <= rSq + 1e-6f;
 	}
 
 	// Sphere-Cylinder Intersection
 	bool Intersects(const Sphere& sphere) const
 	{
 		// Find closest point on the cylinder axis to the sphere center
-		Vec3 closest = ClosestPointOnSegment(m_position, m_p2, sphere.Position());
+		glm::vec3 closest = ClosestPointOnSegment(m_position, m_p2, sphere.Position());
 
 		// Calculate distance squared between sphere center and that point
-		double distSq = LengthSq(sphere.Position() - closest);
+		float distSq = glm::length2(sphere.Position() - closest);
 
 		// Check against sum of radii squared
-		double rSum = static_cast<double>(m_radius) + static_cast<double>(sphere.m_radius);
-		return distSq <= (rSum * rSum) + 1e-9;
+		float rSum = m_radius + sphere.m_radius;
+		return distSq <= (rSum * rSum) + 1e-6f;
 	}
 
 	// Placeholder for line intersection (required by base class)
 	bool Intersects(const Line& line) const override { return false; }
 
 public:
-	Vec3 m_p2;
+	glm::vec3 m_p2;
 	float m_radius;
 
 private:
 	// Helper: Closest point on line segment ab to point p
-	static Vec3 ClosestPointOnSegment(const Vec3& a, const Vec3& b, const Vec3& p)
+	static glm::vec3 ClosestPointOnSegment(const glm::vec3& a, const glm::vec3& b, const glm::vec3& p)
 	{
-		Vec3 ab = b - a;
-		double abLenSq = LengthSq(ab);
+		glm::vec3 ab = b - a;
+		float abLenSq = glm::length2(ab);
 
-		if (abLenSq <= 1e-9) return a;
+		if (abLenSq <= 1e-6f) return a;
 
-		double t = Dot(p - a, ab) / abLenSq;
+		float t = glm::dot(p - a, ab) / abLenSq;
 
 		// Clamp t to segment [0, 1]
-		if (t < 0.0) t = 0.0;
-		if (t > 1.0) t = 1.0;
+		t = glm::clamp(t, 0.0f, 1.0f);
 
 		return a + (ab * t);
 	}

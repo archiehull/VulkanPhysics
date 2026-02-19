@@ -7,7 +7,7 @@
 #include "../rendering/Renderer.h"
 #include "../rendering/Scene.h"
 #include "../rendering/CameraController.h"
-#include "../util/EditorUI.h"
+#include "../core/EditorUI.h"
 #include "Config.h"
 
 #include <memory>

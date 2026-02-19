@@ -1,91 +1,44 @@
 #pragma once
 #include "Collider.h"
-#include <cmath>
+#include <glm/gtx/norm.hpp> 
 
 class Sphere : public Collider
 {
 public:
-	// radius stored as float per request
-	Sphere(const Vec3& center, float radius)
+	Sphere(const glm::vec3& center, float radius)
 		: Collider(center), m_radius(radius) {
 	}
 
-	// point-inside-sphere test
-	bool IsInside(const Vec3& point) const override
+	bool IsInside(const glm::vec3& point) const override
 	{
-		const double rSq = static_cast<double>(m_radius) * static_cast<double>(m_radius);
-		return DistanceSqToPoint(point) <= rSq + EPS;
+		return glm::distance2(point, m_position) <= (m_radius * m_radius) + EPS;
 	}
 
-	// segment-sphere intersection test
 	bool Intersects(const Line& line) const override
 	{
-		Vec3 closest = ClosestPointOnSegment(line, m_position);
-		const double rSq = static_cast<double>(m_radius) * static_cast<double>(m_radius);
-		return LengthSq(m_position - closest) <= rSq + EPS;
+		glm::vec3 closest = ClosestPointOnSegment(line, m_position);
+		return glm::distance2(m_position, closest) <= (m_radius * m_radius) + EPS;
 	}
 
-	// infinite-line (unbounded) sphere intersection test
-	bool Intersects(const InfiniteLine& line) const
-	{
-		double dist = ShortestDistanceToLine(line, m_position);
-		return dist <= static_cast<double>(m_radius) + EPS;
-	}
-
-	// Sphere-sphere collision: true if distance between centers <= sum of radii
 	bool CollideWith(const Sphere& other) const
 	{
-		double rSum = static_cast<double>(m_radius) + static_cast<double>(other.m_radius);
-		return DistanceSqToPoint(other.m_position) <= (rSum * rSum) + EPS;
-	}
-
-	static Vec3 ClosestPointOnInfiniteLine(const InfiniteLine& line, const Vec3& PG)
-	{
-		Vec3 PL = line.point;
-		Vec3 DL = line.direction;
-
-		// find the vector from PL to PG
-		Vec3 PLPG = PG - PL;
-
-		// find the projection scalar m
-		double m = Dot(PLPG, DL) / Dot(DL, DL);
-
-		// multiply by DL to find the point on the line
-		return PL + (DL * m);
-	}
-
-	static double ShortestDistanceToLine(const InfiniteLine& line, const Vec3& PG)
-	{
-		Vec3 PA = ClosestPointOnInfiniteLine(line, PG);
-
-		return Length(PG - PA);
+		float rSum = m_radius + other.m_radius;
+		return glm::distance2(m_position, other.m_position) <= (rSum * rSum) + EPS;
 	}
 
 	float m_radius;
 
 private:
-	static constexpr double EPS = 1e-9;
+	static constexpr float EPS = 1e-6f;
 
-	double DistanceSqToPoint(const Vec3& p) const
+	static glm::vec3 ClosestPointOnSegment(const Line& seg, const glm::vec3& point)
 	{
-		double dx = p.x - m_position.x;
-		double dy = p.y - m_position.y;
-		double dz = p.z - m_position.z;
-		return dx * dx + dy * dy + dz * dz;
-	}
+		glm::vec3 ab = seg.b - seg.a;
+		float abLenSq = glm::length2(ab);
+		if (abLenSq <= 0.0f) return seg.a;
 
-	static Vec3 ClosestPointOnSegment(const Line& seg, const Vec3& point)
-	{
-		Vec3 a = seg.a;
-		Vec3 b = seg.b;
-		Vec3 ab = b - a;
-		double abLenSq = LengthSq(ab);
-		if (abLenSq <= 0.0)
-			return a; // degenerate segment -> return endpoint
-
-		double t = Dot(point - a, ab) / abLenSq;
-		if (t < 0.0) t = 0.0;
-		else if (t > 1.0) t = 1.0;
-		return a + (ab * t);
+		float t = glm::dot(point - seg.a, ab) / abLenSq;
+		t = glm::clamp(t, 0.0f, 1.0f);
+		return seg.a + (ab * t);
 	}
 };
