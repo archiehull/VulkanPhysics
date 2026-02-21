@@ -20,6 +20,10 @@ parameters menu
 drop object / throw object
 show trail/arc of throw to set params (2d tanks)
 
+toggle live physics while editing
+
+object spawner (drop ball every x seconds)
+
 lightinf config snd placer (colourpicker)
 
 set object orbit (around coord or other object)
@@ -59,3 +63,15 @@ highlight reel world/animation showing off grapbics / shaders
 text boxes for info
 
 saved animations/clips in replay menu
+enable same seed or random see for physics
+
+marble run / plink board (drop coin in shute bouncing off pegs(in tunnels))
+
+roulette wheel -> betting mechanics
+mini casino
+poker chips on table, table shake
+
+send force / wind with mouse
+rubber band flick
+click pushes forwaed in direction of camera
+push size and strength params
