@@ -13,6 +13,7 @@ move object with wasdqe
 different shape types (cylinder/nade/model)
 connect / rotate
 place ontop/next to
+force object collisions in editor
 group shapes
 scale
 parameters menu
