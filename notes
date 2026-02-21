@@ -2,21 +2,27 @@ camera menu
 list cameras drom config
 mukti caners view in 4x4
 each pannel hsve canera selection menu
+add new camers + more controls
 
 object placer
 select object moves orbjt camers to object
+click on object / crossbair on objext to select (pop up ckntect menu)
 semected object glows / colour pulse
 objrcter placer, defauly y10+ object hieght over 0,0
+move object with wasdqe
 different shape types (cylinder/nade/model)
-place next to
 connect / rotate
 place ontop/next to
 group shapes
 scale
-set parameters
-- radius, xy linked (sq), xy, x2 length/width
-lightinf config snd placer
-set object orbit
+parameters menu
+- radius, xy linked (sq), xy, x2 length/width, scale, angle, shape type
+
+lightinf config snd placer (colourpicker)
+
+set object orbit (around coord or other object)
+add collision detectuon for path setting
+-if collide then break off path !!
 set object movement path (coord list) / speed
 xy axis rotation
 cuboid placer with mouse select disgonal coordinates
@@ -25,10 +31,11 @@ add fornite preset build models
 set default scene
 save scene
 
-tezture menu/selection
+per object tezture menu/selection
 procedural texuree menu
+skybox selection
 
-particle menu/emmiter
+particle menu/emmiter on object
 
 hud / throw animation hands
 
@@ -39,3 +46,6 @@ per component latency view
 
 full ecs
 
+pop out / pin menu items as textboz
+
+imgui scaling options
