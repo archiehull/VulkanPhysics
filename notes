@@ -1,0 +1,41 @@
+camera menu
+list cameras drom config
+mukti caners view in 4x4
+each pannel hsve canera selection menu
+
+object placer
+select object moves orbjt camers to object
+semected object glows / colour pulse
+objrcter placer, defauly y10+ object hieght over 0,0
+different shape types (cylinder/nade/model)
+place next to
+connect / rotate
+place ontop/next to
+group shapes
+scale
+set parameters
+- radius, xy linked (sq), xy, x2 length/width
+lightinf config snd placer
+set object orbit
+set object movement path (coord list) / speed
+xy axis rotation
+cuboid placer with mouse select disgonal coordinates
+add fornite preset build models
+
+set default scene
+save scene
+
+tezture menu/selection
+procedural texuree menu
+
+particle menu/emmiter
+
+hud / throw animation hands
+
+step back/record movement to file
+replay editior
+latency calculation
+per component latency view
+
+full ecs
+
