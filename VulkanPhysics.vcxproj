@@ -59,7 +59,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Application.h" />
+    <ClInclude Include="src\core\Components.h" />
     <ClInclude Include="src\core\Config.h" />
+    <ClInclude Include="src\core\ECS.h" />
     <ClInclude Include="src\core\EditorUI.h" />
     <ClInclude Include="src\core\Window.h" />
     <ClInclude Include="src\geometry\Geometry.h" />

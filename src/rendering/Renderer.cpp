@@ -176,7 +176,6 @@ void Renderer::CreateImGuiResources() {
 
     // 4. Init ImGui Vulkan Implementation
     ImGui_ImplVulkan_InitInfo init_info = {};
-    //init_info.Instance = device->GetInstance(); // Need to expose this or pass it
     init_info.PhysicalDevice = device->GetPhysicalDevice();
     init_info.Instance = device->GetInstance();
     init_info.Device = device->GetDevice();
@@ -348,15 +347,12 @@ void Renderer::CreateTextureDescriptorPool() {
 }
 
 void Renderer::RegisterProceduralTexture(const std::string& name, const std::function<void(Texture&)>& generator) {
-    // 1. Create the Texture Object
     auto tex = std::make_unique<Texture>(
         device->GetDevice(), device->GetPhysicalDevice(),
         commandBuffer->GetCommandPool(), device->GetGraphicsQueue());
 
-    // 2. Run the user's generation function (e.g., GenerateCheckerboard)
     generator(*tex);
 
-    // 3. Allocate Descriptor Set (Logic similar to CreateDefaultTexture)
     VkDescriptorSet descSet;
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -368,7 +364,6 @@ void Renderer::RegisterProceduralTexture(const std::string& name, const std::fun
         throw std::runtime_error("failed to allocate descriptor set for procedural texture!");
     }
 
-    // 4. Update Descriptor Set
     VkDescriptorImageInfo imageInfo{};
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     imageInfo.imageView = tex->GetImageView();
@@ -384,7 +379,6 @@ void Renderer::RegisterProceduralTexture(const std::string& name, const std::fun
 
     vkUpdateDescriptorSets(device->GetDevice(), 1, &descriptorWrite, 0, nullptr);
 
-    // 5. Store in Cache
     textureCache[name] = { std::move(tex), descSet };
     std::cout << "Procedural Texture Registered: " << name << std::endl;
 }
@@ -640,23 +634,34 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetPipeline());
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
 
-    for (const auto& obj : scene.GetObjects()) {
-        if (!obj || !obj->visible || !obj->geometry || obj->shadingMode == 3 || obj->shadingMode == 2 || obj->shadingMode == 4) continue;
-        if ((obj->layerMask & layerMask) == 0) continue;
+    Registry& reg = const_cast<Registry&>(scene.GetRegistry());
+    for (Entity e : scene.GetRenderableEntities()) {
+        if (!reg.HasComponent<RenderComponent>(e) || !reg.HasComponent<TransformComponent>(e)) continue;
+
+        auto& renderComp = reg.GetComponent<RenderComponent>(e);
+        auto& transformComp = reg.GetComponent<TransformComponent>(e);
+
+        if (!renderComp.visible || !renderComp.geometry) continue;
+        if (renderComp.shadingMode == 3 || renderComp.shadingMode == 2 || renderComp.shadingMode == 4) continue;
+        if ((renderComp.layerMask & layerMask) == 0) continue;
 
         PushConstantObject pco{};
-        pco.model = obj->transform;
-        pco.shadingMode = obj->shadingMode;
-        pco.receiveShadows = obj->receiveShadows ? 1 : 0;
-        pco.layerMask = obj->layerMask;
+        pco.model = transformComp.matrix;
+        pco.shadingMode = renderComp.shadingMode;
+        pco.receiveShadows = renderComp.receiveShadows ? 1 : 0;
+        pco.layerMask = renderComp.layerMask;
+
+        // Push constants
         vkCmdPushConstants(cmd, graphicsPipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
 
-        const VkDescriptorSet textureSet = GetTextureDescriptorSet(obj->texturePath);
+        // Bind Texture
+        const VkDescriptorSet textureSet = GetTextureDescriptorSet(renderComp.texturePath);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 1, 1, &textureSet, 0, nullptr);
 
-        obj->geometry->Bind(cmd);
-        obj->geometry->Draw(cmd);
+        renderComp.geometry->Bind(cmd);
+        renderComp.geometry->Draw(cmd);
     }
+
     vkCmdEndRenderPass(cmd);
 
     // Barrier for refraction texture read
@@ -705,26 +710,43 @@ void Renderer::CreateSyncObjects() {
 }
 
 void Renderer::DrawSceneObjects(VkCommandBuffer cmd, const Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int layerMask) {
-    for (const auto& obj : scene.GetObjects()) {
-        if (!obj || !obj->visible || !obj->geometry) continue;
-        if ((obj->layerMask & layerMask) == 0) continue;
-        if (skipIfNotCastingShadow && !obj->castsShadow) continue;
+    Registry& reg = const_cast<Registry&>(scene.GetRegistry());
+
+    for (Entity e : scene.GetRenderableEntities()) {
+        if (!reg.HasComponent<RenderComponent>(e) || !reg.HasComponent<TransformComponent>(e)) continue;
+
+        auto& renderComp = reg.GetComponent<RenderComponent>(e);
+        auto& transformComp = reg.GetComponent<TransformComponent>(e);
+
+        if (!renderComp.visible || !renderComp.geometry) continue;
+        if ((renderComp.layerMask & layerMask) == 0) continue;
+        if (skipIfNotCastingShadow && !renderComp.castsShadow) continue;
+
+        // Fetch thermodynamics state if the entity is flammable
+        float burnFactor = 0.0f;
+        if (reg.HasComponent<ThermoComponent>(e)) {
+            burnFactor = reg.GetComponent<ThermoComponent>(e).burnFactor;
+        }
 
         PushConstantObject pco{};
-        pco.model = obj->transform;
-        pco.shadingMode = obj->shadingMode;
-        pco.receiveShadows = obj->receiveShadows ? 1 : 0;
-        pco.layerMask = obj->layerMask;
-        pco.burnFactor = obj->burnFactor;
+        pco.model = transformComp.matrix;
+        pco.shadingMode = renderComp.shadingMode;
+        pco.receiveShadows = renderComp.receiveShadows ? 1 : 0;
+        pco.layerMask = renderComp.layerMask;
+        pco.burnFactor = burnFactor;
+
+        // Push constants
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
 
+        // Bind Texture
         if (bindTextures) {
-            const VkDescriptorSet textureSet = GetTextureDescriptorSet(obj->texturePath);
+            const VkDescriptorSet textureSet = GetTextureDescriptorSet(renderComp.texturePath);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, 1, &textureSet, 0, nullptr);
         }
 
-        obj->geometry->Bind(cmd);
-        obj->geometry->Draw(cmd);
+        // Draw Geometry
+        renderComp.geometry->Bind(cmd);
+        renderComp.geometry->Draw(cmd);
     }
 }
 

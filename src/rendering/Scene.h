@@ -10,16 +10,11 @@
 #include "../core/Config.h" // Include Config for struct defs
 #include "ParticleSystem.h"
 
-struct OrbitData {
-    bool isOrbiting = false;
-    glm::vec3 center = glm::vec3(0.0f);
-    float radius = 1.0f;
-    float speed = 1.0f; // radians per second
-    glm::vec3 axis = glm::vec3(0.0f, 1.0f, 0.0f); // Normalized Orbit axis
-    glm::vec3 startVector = glm::vec3(1.0f, 0.0f, 0.0f); // Defines the zero-angle position
-    float initialAngle = 0.0f; // Initial angle offset (in radians)
-    float currentAngle = 0.0f; // Internal state: current angle (in radians)
-};
+// ECS Includes
+#include "../core/ECS.h"
+#include "../core/Components.h"
+#include <unordered_map>
+#include "../core/ISystem.h"
 
 enum class ObjectState {
     NORMAL,
@@ -42,74 +37,12 @@ enum class Season {
     SPRING
 };
 
-struct SceneLight {
-    std::string name;
-    Light vulkanLight;
-    OrbitData OrbitData;
-    int layerMask = SceneLayers::INSIDE;
-};
-
 struct TerrainConfig {
     bool exists = false;
     float radius = 100.0f;
     float heightScale = 1.0f;
     float noiseFreq = 0.01f;
     glm::vec3 position = glm::vec3(0.0f);
-};
-
-struct SceneObject {
-    std::string name;
-    std::shared_ptr<Geometry> geometry;
-    std::shared_ptr<Geometry> storedOriginalGeometry = nullptr;
-
-    glm::mat4 storedOriginalTransform = glm::mat4(1.0f);
-    glm::mat4 transform = glm::mat4(1.0f);
-    bool visible = true;
-
-    std::string originalTexturePath;
-    std::string texturePath;
-
-    int shadingMode = 1;
-    bool castsShadow = true;
-    bool receiveShadows = true;
-
-    OrbitData OrbitData;
-    int layerMask = SceneLayers::INSIDE;
-
-    ObjectState state = ObjectState::NORMAL;
-    bool isFlammable = false;
-
-    int fireEmitterId = -1;
-    int smokeEmitterId = -1;
-    int fireLightIndex = -1;
-
-    // Thermodynamics
-    float currentTemp = 20.0f;
-    float ignitionThreshold = 100.0f;
-    float thermalResponse = 5.0f;
-    float selfHeatingRate = 15.0f;
-
-    // Timers
-    float burnTimer = 0.0f;
-    float maxBurnDuration = 10.0f;
-
-    float regrowTimer = 0.0f;
-    float dustDuration = 10.0f;
-
-    // Visuals
-    float burnFactor = 0.0f;
-    int fireParticleSystemIndex = -1;
-    int simpleShadowId = -1;
-
-
-    // Collisions
-    bool hasCollision = true;
-    float collisionRadius = 2.0f;
-    float collisionHeight = 5.0f;
-
-    explicit SceneObject(std::shared_ptr<Geometry> geo, const std::string& texPath = "", const std::string& objName = "")
-        : name(objName), geometry(std::move(geo)), originalTexturePath(texPath), texturePath(texPath) {
-    }
 };
 
 struct ProceduralObjectConfig {
@@ -130,7 +63,7 @@ public:
     Scene(const Scene&) = delete;
     Scene& operator=(const Scene&) = delete;
 
-	void PrintDebugInfo() const;
+    Entity GetEntityByName(const std::string& name) const;
 
     void Initialize();
 
@@ -145,7 +78,7 @@ public:
 
     void AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable = false);
 
-    int AddLight(const std::string& name, const glm::vec3& position, const glm::vec3& color, float intensity, int type);
+    Entity AddLight(const std::string& name, const glm::vec3& position, const glm::vec3& color, float intensity, int type);
 
     void SetObjectOrbit(const std::string& name, const glm::vec3& center, float radius, float speedRadPerSec, const glm::vec3& axis, const glm::vec3& startVector, float initialAngleRad = 0.0f);
     void SetLightOrbit(const std::string& name, const glm::vec3& center, float radius, float speedRadPerSec, const glm::vec3& axis, const glm::vec3& startVector, float initialAngleRad = 0.0f);
@@ -175,7 +108,7 @@ public:
     void AddDust();
     void SpawnDustCloud();
 
-    void Ignite(SceneObject* obj);
+    void Ignite(Entity e);
 
     void UpdateThermodynamics(float deltaTime, float sunIntensity);
 
@@ -196,10 +129,13 @@ public:
     std::vector<Light> GetLights() const;
 
     void Clear();
-    const std::vector<std::unique_ptr<SceneObject>>& GetObjects() const { return objects; }
 
-    void SetObjectTransform(size_t index, const glm::mat4& transform);
-    void SetObjectVisible(size_t index, bool visible);
+    // --- ECS Data Accessors ---
+    const Registry& GetRegistry() const { return m_Registry; }
+    const std::vector<Entity>& GetRenderableEntities() const { return m_RenderableEntities; }
+
+    void SetObjectTransform(const std::string& name, const glm::mat4& transform);
+    void SetObjectVisible(const std::string& name, bool visible);
     void SetOrbitSpeed(const std::string& name, float speedRadPerSec);
 
     void SetObjectLayerMask(const std::string& name, int mask);
@@ -226,10 +162,14 @@ public:
     void Cleanup() { Clear(); }
 
 private:
-    void AddObjectInternal(const std::string& name, std::unique_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable);
-    void StopObjectFire(SceneObject* obj);
+    Registry m_Registry;
+    std::vector<std::unique_ptr<ISystem>> m_Systems;
+    std::unordered_map<std::string, Entity> m_EntityMap;
+    std::vector<Entity> m_RenderableEntities;
+    std::vector<Entity> m_LightEntities;
 
-    glm::vec3 InitializeOrbit(OrbitData& data, const glm::vec3& center, float radius, float speedRadPerSec, const glm::vec3& axis, const glm::vec3& startVector, float initialAngleRad) const;
+    Entity AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable);
+    void StopObjectFire(Entity e);
 
     // --- Config Data ---
     TimeConfig m_TimeConfig;
@@ -267,8 +207,6 @@ private:
     bool m_UseSimpleShadows = false;
 
     TerrainConfig m_TerrainConfig;
-    std::vector<SceneLight> m_SceneLights;
-    std::vector<std::unique_ptr<SceneObject>> objects;
     std::vector<ProceduralObjectConfig> proceduralRegistry;
 
     VkDevice device;

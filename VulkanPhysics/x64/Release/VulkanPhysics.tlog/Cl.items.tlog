@@ -7,6 +7,7 @@ C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\img
 C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_widgets.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\imgui_widgets.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\Application.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Application.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\Config.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Config.obj
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\ECS.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\ECS.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\EditorUI.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\EditorUI.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\Window.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Window.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\Geometry.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Geometry.obj
