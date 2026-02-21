@@ -79,4 +79,5 @@ struct LightComponent {
     glm::vec3 color = glm::vec3(1.0f);
     float intensity = 1.0f;
     int type = 0;
+    int layerMask = SceneLayers::ALL;
 };

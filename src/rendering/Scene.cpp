@@ -367,22 +367,28 @@ Entity Scene::AddLight(const std::string& name, const glm::vec3& position, const
         return MAX_ENTITIES;
     }
 
-    Entity entity = m_Registry.CreateEntity();
-    m_EntityMap[name] = entity;
+    // 1. Check if an entity with this name already exists (e.g. created by AddSphere)
+    Entity entity = GetEntityByName(name);
 
-    m_Registry.AddComponent<NameComponent>(entity, { name });
+    // 2. If it doesn't exist, create a standalone light entity
+    if (entity == MAX_ENTITIES) {
+        entity = m_Registry.CreateEntity();
+        m_EntityMap[name] = entity;
 
-    TransformComponent transform;
-    transform.matrix = glm::translate(glm::mat4(1.0f), position);
-    m_Registry.AddComponent<TransformComponent>(entity, transform);
+        m_Registry.AddComponent<NameComponent>(entity, { name });
 
+        TransformComponent transform;
+        transform.matrix = glm::translate(glm::mat4(1.0f), position);
+        m_Registry.AddComponent<TransformComponent>(entity, transform);
+        m_Registry.AddComponent<OrbitComponent>(entity, OrbitComponent{});
+    }
+
+    // 3. Attach the light component to the entity
     LightComponent light;
     light.color = color;
     light.intensity = intensity;
     light.type = type;
     m_Registry.AddComponent<LightComponent>(entity, light);
-
-    m_Registry.AddComponent<OrbitComponent>(entity, OrbitComponent{});
 
     m_LightEntities.push_back(entity);
 
@@ -799,7 +805,7 @@ std::vector<Light> Scene::GetLights() const {
             vLight.color = lightComp.color;
             vLight.intensity = lightComp.intensity;
             vLight.type = lightComp.type;
-            vLight.layerMask = SceneLayers::INSIDE;
+            vLight.layerMask = lightComp.layerMask;
             lights.push_back(vLight);
         }
     }
@@ -841,7 +847,10 @@ void Scene::SetObjectLayerMask(const std::string& name, int mask) {
 }
 
 void Scene::SetLightLayerMask(const std::string& name, int mask) {
-    // You can implement light-specific logic here later.
+    Entity e = GetEntityByName(name);
+    if (e != MAX_ENTITIES && m_Registry.HasComponent<LightComponent>(e)) {
+        m_Registry.GetComponent<LightComponent>(e).layerMask = mask;
+    }
 }
 
 void Scene::SetObjectVisible(const std::string& name, bool visible) {
