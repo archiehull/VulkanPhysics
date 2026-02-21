@@ -140,7 +140,7 @@ void Application::InitVulkan() {
 
     renderer->SetupSceneParticles(*scene);
 
-    cameraController = std::make_unique<CameraController>(config.customCameras);
+    cameraController = std::make_unique<CameraController>(*scene, config.customCameras);
 
     editorUI = std::make_unique<EditorUI>();
     editorUI->Initialize("src/config/");
@@ -164,7 +164,7 @@ void Application::LoadScene(const std::string& scenePath) {
     SetupScene();
 
     // 5. Re-initialize systems that depend on the new config
-    cameraController = std::make_unique<CameraController>(config.customCameras);
+    cameraController = std::make_unique<CameraController>(*scene, config.customCameras);
 
     if (renderer && scene) {
         renderer->SetupSceneParticles(*scene);
@@ -398,33 +398,31 @@ void Application::MainLoop() {
 
         cameraController->Update(deltaTime, *scene);
 
-        Camera* const activeCamera = cameraController->GetActiveCamera();
-
-        //// Print camera position every frame
-        //if (activeCamera) {
-        //    const glm::vec3 pos = activeCamera->GetPosition();
-        //    std::cout << std::fixed << std::setprecision(3)
-        //        << "Camera Position: (" << pos.x << ", " << pos.y << ", " << pos.z << ")\n";
-        //}
-
-        const glm::mat4 viewMatrix = activeCamera->GetViewMatrix();
-        const glm::mat4 projMatrix = activeCamera->GetProjectionMatrix(
-            vulkanSwapChain->GetExtent().width / static_cast<float>(vulkanSwapChain->GetExtent().height)
-        );
 
         int currentViewMask = SceneLayers::ALL;
 
-        const float dist = glm::length(activeCamera->GetPosition());
-        const float ballRadius = 150.0f;
+        //const float dist = glm::length(activeCamera->GetPosition());
+        //const float ballRadius = 150.0f;
 
-        if (dist < ballRadius) {
-            currentViewMask = SceneLayers::INSIDE;
-        }
-        else {
-            currentViewMask = SceneLayers::ALL;
-        }
+        //if (dist < ballRadius) {
+        //    currentViewMask = SceneLayers::INSIDE;
+        //}
+        //else {
+        //    currentViewMask = SceneLayers::ALL;
+        //}
 
-        renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask);
+        Entity activeCamEntity = cameraController->GetActiveCameraEntity(); //
+        auto& registry = scene->GetRegistry(); //
+
+        if (activeCamEntity != MAX_ENTITIES && registry.HasComponent<CameraComponent>(activeCamEntity)) {
+            auto& camComp = registry.GetComponent<CameraComponent>(activeCamEntity); //
+
+            const glm::mat4 viewMatrix = camComp.viewMatrix; //
+            const glm::mat4 projMatrix = camComp.projectionMatrix; //
+
+            // Use these for your renderer call
+            renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask);
+        }
 
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
@@ -482,19 +480,23 @@ void Application::KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int
         }
         // F4 Ignite Logic
         else if (key == GLFW_KEY_F4) {
-            // 1. Ensure we are in Orbit Mode
+            // Switch to Cacti mode if not already there
             if (app->cameraController->GetActiveCameraType() != CameraType::CACTI) {
                 app->cameraController->SwitchCamera(CameraType::CACTI, *app->scene);
-                //std::cout << "Switched to Cactus Orbit Camera (Auto)" << std::endl;
             }
 
-            // 2. Get and Ignite the target
-            Entity target = app->cameraController->GetOrbitTarget();
-            if (target != MAX_ENTITIES) { // MAX_ENTITIES acts as our "null" entity
-                app->scene->Ignite(target);
-            }
-            else {
-                std::cout << "No target to ignite!" << std::endl;
+            // Use the new GetActiveCameraEntity() to find what we are looking at
+            Entity camEnt = app->cameraController->GetActiveCameraEntity(); //
+            auto& reg = app->scene->GetRegistry(); //
+
+            if (camEnt != MAX_ENTITIES && reg.HasComponent<OrbitComponent>(camEnt)) {
+                // Since the camera is orbiting an entity, we ignite the target of that orbit
+                // You might need to add a 'targetEntity' field to OrbitComponent if not there,
+                // or keep tracking it in the Controller.
+                Entity target = app->cameraController->GetOrbitTarget();
+                if (target != MAX_ENTITIES) {
+                    app->scene->Ignite(target);
+                }
             }
         }
         else if (key == GLFW_KEY_F5) {

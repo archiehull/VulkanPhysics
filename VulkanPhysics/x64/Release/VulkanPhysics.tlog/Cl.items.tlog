@@ -25,6 +25,7 @@ C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Scene.cpp;C:\Users\Ell\
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\ShadowPass.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\ShadowPass.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\SkyboxPass.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\SkyboxPass.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Texture.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Texture.obj
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\CameraSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\CameraSystem.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\OrbitSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\OrbitSystem.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\ParticleUpdateSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\ParticleUpdateSystem.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\SimpleShadowSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\SimpleShadowSystem.obj

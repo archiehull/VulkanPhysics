@@ -1,79 +1,66 @@
 #include "CameraController.h"
 #include "Scene.h"
 #include <GLFW/glfw3.h>
+#include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <iostream>
-#include <vector>
 #include <random>
+#include "../core/Config.h"
+#include "../systems/CameraSystem.h"
+#include "Camera.h"
 
-CameraController::CameraController(const std::vector<CustomCameraConfig>& customConfigs)
-    : activeCamera(nullptr)
-    , activeCameraType(CameraType::OUTSIDE_ORB)
-{
-    SetupCameras(customConfigs);
-
-    // Set default orbit parameters for the starting Outside camera
-    OrbitRadius = 350.0f;
-    OrbitPitch = 20.0f;
-    OrbitYaw = 0.0f;
-    OrbitTargetObject = MAX_ENTITIES;
-
-    // Default pointer set to Birds Eye to match activeCameraType
-    activeCamera = cameras[CameraType::OUTSIDE_ORB].get();
+CameraController::CameraController(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs) {
+    SetupCameras(scene, customConfigs);
+    SwitchCamera(CameraType::OUTSIDE_ORB, scene);
 }
 
-void CameraController::SetupCameras(const std::vector<CustomCameraConfig>& customConfigs) {
-    // 1. FREE ROAM Camera (F2)
-    auto freeRoamCam = std::make_unique<Camera>();
-    freeRoamCam->SetPosition(glm::vec3(0.0f, -75.0f, 0.0f));
-    freeRoamCam->SetTarget(glm::vec3(0.0f, -75.0f, 10.0f));
-    freeRoamCam->SetMoveSpeed(35.0f);
-    freeRoamCam->SetRotateSpeed(45.0f);
-    cameras[CameraType::FREE_ROAM] = std::move(freeRoamCam);
+void CameraController::SetupCameras(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs) {
+    // 1. Create Standard Entities via Scene Helper
+    cameraEntities[CameraType::FREE_ROAM] = scene.CreateCameraEntity("FreeRoamCam", { 0.0f, -75.0f, 0.0f }, CameraType::FREE_ROAM);
+    cameraEntities[CameraType::OUTSIDE_ORB] = scene.CreateCameraEntity("OutsideCam", { 0.0f, 60.0f, 350.0f }, CameraType::OUTSIDE_ORB);
+    cameraEntities[CameraType::CACTI] = scene.CreateCameraEntity("CactusCam", { 20.0f, 10.0f, 20.0f }, CameraType::CACTI);
 
-    // 2. OUTSIDE Camera (F1)
-    auto outsideCam = std::make_unique<Camera>();
-    outsideCam->SetPosition(glm::vec3(0.0f, 60.0f, 350.0f));
-    outsideCam->SetTarget(glm::vec3(0.0f, 0.0f, 0.0f));
-    cameras[CameraType::OUTSIDE_ORB] = std::move(outsideCam);
-
-    // 3. Orbit Camera (F3)
-    auto OrbitCam = std::make_unique<Camera>();
-    OrbitCam->SetPosition(glm::vec3(20.0f, 10.0f, 20.0f));
-    OrbitCam->SetTarget(glm::vec3(0.0f, 0.0f, 0.0f));
-    cameras[CameraType::CACTI] = std::move(OrbitCam);
-
-    // 4. Custom Cameras (F5-F8)
+    // 2. Setup Custom Cameras from Config
     CameraType customTypes[] = { CameraType::CUSTOM_1, CameraType::CUSTOM_2, CameraType::CUSTOM_3, CameraType::CUSTOM_4 };
-
     for (size_t i = 0; i < customConfigs.size() && i < 4; ++i) {
         const auto& conf = customConfigs[i];
         CameraType type = customTypes[i];
 
-        auto cam = std::make_unique<Camera>();
-        cam->SetPosition(conf.position);
-        cam->SetTarget(conf.target);
+        // Map "Orbit" string to the helper logic
+        CameraType internalRefType = (conf.type == "Orbit") ? CameraType::OUTSIDE_ORB : CameraType::FREE_ROAM;
+        Entity camEnt = scene.CreateCameraEntity(conf.name, conf.position, internalRefType);
 
-        // Store metadata
+        cameraEntities[type] = camEnt;
+
         CustomCameraInfo info;
         info.name = conf.name;
         info.type = conf.type;
         info.initialTarget = conf.target;
         customCameraMeta[type] = info;
-
-        cameras[type] = std::move(cam);
-        std::cout << "Loaded Custom Camera [" << i + 1 << "]: " << conf.name << " (" << conf.type << ")" << std::endl;
     }
 }
 
 void CameraController::SwitchCamera(CameraType type, Scene& scene) {
-    if (cameras.find(type) == cameras.end()) return;
+    if (cameraEntities.find(type) == cameraEntities.end()) return;
 
-    // Handle Standard Types
+    auto& registry = scene.GetRegistry();
+
+    // Deactivate old camera component
+    if (activeCameraEntity != MAX_ENTITIES) {
+        registry.GetComponent<CameraComponent>(activeCameraEntity).isActive = false;
+    }
+
+    activeCameraType = type;
+    activeCameraEntity = cameraEntities[type];
+
+    // Activate new camera component
+    auto& camComp = registry.GetComponent<CameraComponent>(activeCameraEntity);
+    camComp.isActive = true;
+
+    // Logic for specific modes
     if (type == CameraType::CACTI) {
+        // Find a random cactus
         std::vector<Entity> cacti;
-        Registry& registry = scene.GetRegistry();
-
         for (Entity e : scene.GetRenderableEntities()) {
             if (registry.HasComponent<RenderComponent>(e)) {
                 if (registry.GetComponent<RenderComponent>(e).texturePath.find("cactus") != std::string::npos) {
@@ -85,173 +72,91 @@ void CameraController::SwitchCamera(CameraType type, Scene& scene) {
         if (!cacti.empty()) {
             static std::random_device rd;
             static std::mt19937 gen(rd());
-            std::uniform_int_distribution<> dis(0, static_cast<int>(cacti.size()) - 1);
-            OrbitTargetObject = cacti[dis(gen)];
-            OrbitRadius = 15.0f;
-            OrbitYaw = 0.0f;
-            OrbitPitch = 20.0f;
+            std::uniform_int_distribution<> dis(0, (int)cacti.size() - 1);
+            Entity target = cacti[dis(gen)];
 
-            std::string objName = "Unknown";
-            if (registry.HasComponent<NameComponent>(OrbitTargetObject)) {
-                objName = registry.GetComponent<NameComponent>(OrbitTargetObject).name;
-            }
-            std::cout << "Orbiting Cactus: " << objName << std::endl;
+            glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(target).matrix[3]);
+            scene.SetObjectOrbit("CactusCam", targetPos + glm::vec3(0, 3, 0), 15.0f, 0.0f, { 0,1,0 }, { 1,0,0 });
         }
-        else {
-            type = CameraType::FREE_ROAM;
-        }
-    }
-    else if (type == CameraType::FREE_ROAM) {
-        // Reset Logic if needed
     }
     else if (type == CameraType::OUTSIDE_ORB) {
-        OrbitTargetObject = MAX_ENTITIES;
-        OrbitRadius = 350.0f;
-        OrbitYaw = 0.0f;
-        OrbitPitch = 20.0f;
+        scene.SetObjectOrbit("OutsideCam", { 0,0,0 }, 350.0f, 0.05f, { 0,1,0 }, { 1,0,0 });
     }
 
-    // Handle Custom Types
-    if (customCameraMeta.find(type) != customCameraMeta.end()) {
-        const auto& info = customCameraMeta[type];
-        std::cout << "Switched to Custom Camera: " << info.name << std::endl;
-
-        if (info.type == "Orbit") {
-            OrbitTargetObject = MAX_ENTITIES; // Custom orbit usually orbits a fixed point
-            FixedOrbitCenter = info.initialTarget;
-            glm::vec3 diff = cameras[type]->GetPosition() - info.initialTarget;
-            OrbitRadius = glm::length(diff);
-        }
-    }
-
-    activeCameraType = type;
-    activeCamera = cameras[type].get();
+    std::cout << "Switched to Camera Entity: " << registry.GetComponent<NameComponent>(activeCameraEntity).name << std::endl;
 }
 
 void CameraController::Update(float deltaTime, Scene& scene) {
-    if (!activeCamera) return;
+    if (activeCameraEntity == MAX_ENTITIES) return;
 
-    // Check if current is custom
-    if (customCameraMeta.find(activeCameraType) != customCameraMeta.end()) {
-        const auto& info = customCameraMeta[activeCameraType];
-        if (info.type == "FreeRoam") {
-            UpdateFreeRoamCamera(deltaTime, scene);
-        }
-        else if (info.type == "Orbit") {
-            UpdateOrbitCamera(deltaTime, scene);
-        }
-        // If "Static", do nothing (no update call)
-        return;
+    // 1. Handle Free Roam Input (Direct Transform Manipulation)
+    if (activeCameraType == CameraType::FREE_ROAM ||
+        (customCameraMeta.count(activeCameraType) && customCameraMeta[activeCameraType].type == "FreeRoam")) {
+        UpdateFreeRoam(deltaTime, scene);
     }
-
-    // Standard types
-    switch (activeCameraType) {
-    case CameraType::FREE_ROAM:
-        UpdateFreeRoamCamera(deltaTime, scene);
-        break;
-    case CameraType::CACTI:
-    case CameraType::OUTSIDE_ORB:
-        UpdateOrbitCamera(deltaTime, scene);
-        break;
+    // 2. Handle Orbit Input (OrbitComponent Manipulation)
+    else if (activeCameraType == CameraType::CACTI || activeCameraType == CameraType::OUTSIDE_ORB ||
+        (customCameraMeta.count(activeCameraType) && customCameraMeta[activeCameraType].type == "Orbit")) {
+        UpdateOrbitInput(deltaTime, scene);
     }
 }
 
-void CameraController::UpdateOrbitCamera(float deltaTime, Scene& scene) {
-    // Determine Target Position
-    glm::vec3 targetPos;
+void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene) {
+    auto& registry = scene.GetRegistry();
+    auto& transform = registry.GetComponent<TransformComponent>(activeCameraEntity);
+    auto& cam = registry.GetComponent<CameraComponent>(activeCameraEntity);
 
-    // 1. Cacti Mode: Follow Object
-    if (activeCameraType == CameraType::CACTI && OrbitTargetObject != MAX_ENTITIES) {
-        Registry& registry = scene.GetRegistry();
-        if (registry.HasComponent<TransformComponent>(OrbitTargetObject)) {
-            targetPos = glm::vec3(registry.GetComponent<TransformComponent>(OrbitTargetObject).matrix[3]);
-            targetPos.y += 3.0f;
-        }
-    }
-    // 2. Custom Orbit Mode: Follow Fixed Point
-    else if (customCameraMeta.find(activeCameraType) != customCameraMeta.end()) {
-        targetPos = customCameraMeta[activeCameraType].initialTarget;
-    }
-    // 3. Outside Orb: Follow Center
-    else {
-        targetPos = glm::vec3(0.0f, 0.0f, 0.0f);
-    }
+    // Speed constants
+    const float shiftMult = keyShift ? 3.0f : 1.0f;
+    const float moveSpeed = 35.0f * shiftMult;
+    const float rotateSpeed = 60.0f * shiftMult;
 
-    const float rotateSpeed = 50.0f;
-    const float zoomSpeed = 50.0f;
+    // Calculate basis vectors from the current transform matrix
+    glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2])); // Z-Axis
+    glm::vec3 right = glm::normalize(glm::vec3(transform.matrix[0]));  // X-Axis
+    glm::vec3 up = { 0, 1, 0 };
 
-    if (keyA || keyLeft)  OrbitYaw -= rotateSpeed * deltaTime;
-    if (keyD || keyRight) OrbitYaw += rotateSpeed * deltaTime;
-    if (keyW || keyUp)    OrbitPitch += rotateSpeed * deltaTime;
-    if (keyS || keyDown)  OrbitPitch -= rotateSpeed * deltaTime;
+    glm::vec3 pos = glm::vec3(transform.matrix[3]);
+    glm::vec3 prevPos = pos;
 
-    if (keyQ) OrbitRadius -= zoomSpeed * deltaTime;
-    if (keyE) OrbitRadius += zoomSpeed * deltaTime;
+    // Translation
+    if (keyW) pos += front * moveSpeed * deltaTime;
+    if (keyS) pos -= front * moveSpeed * deltaTime;
+    if (keyA) pos -= right * moveSpeed * deltaTime;
+    if (keyD) pos += right * moveSpeed * deltaTime;
+    if (keyE) pos += up * moveSpeed * deltaTime;
+    if (keyQ) pos -= up * moveSpeed * deltaTime;
 
-    // Clamp defaults
-    OrbitPitch = std::clamp(OrbitPitch, -89.0f, 89.0f);
-    if (OrbitRadius < 1.0f) OrbitRadius = 1.0f;
+    ClampCameraPosition(pos, scene, prevPos);
 
-    const float radYaw = glm::radians(OrbitYaw);
-    const float radPitch = glm::radians(OrbitPitch);
+    // Rotation (Update Yaw/Pitch in Component)
+    if (keyLeft)  cam.yaw -= rotateSpeed * deltaTime;
+    if (keyRight) cam.yaw += rotateSpeed * deltaTime;
+    if (keyUp)    cam.pitch += rotateSpeed * deltaTime;
+    if (keyDown)  cam.pitch -= rotateSpeed * deltaTime;
+    cam.pitch = std::clamp(cam.pitch, -89.0f, 89.0f);
 
-    glm::vec3 offset;
-    offset.x = OrbitRadius * cos(radPitch) * sin(radYaw);
-    offset.y = OrbitRadius * sin(radPitch);
-    offset.z = OrbitRadius * cos(radPitch) * cos(radYaw);
-
-    glm::vec3 newPos = targetPos + offset;
-
-    activeCamera->SetPosition(newPos);
-    activeCamera->SetTarget(targetPos);
+    // Reconstruct Matrix from Pos + Euler
+    glm::mat4 m = glm::translate(glm::mat4(1.0f), pos);
+    m = glm::rotate(m, glm::radians(cam.yaw), { 0, 1, 0 });
+    m = glm::rotate(m, glm::radians(cam.pitch), { 1, 0, 0 });
+    transform.matrix = m;
 }
 
-void CameraController::UpdateFreeRoamCamera(float deltaTime, Scene& scene) {
-    const bool groupA_forward = keyW;
-    const bool groupA_backward = keyS;
-    const bool groupA_left = keyA;
-    const bool groupA_right = keyD;
-    const bool groupB_forward = keyUp;
-    const bool groupB_backward = keyDown;
-    const bool groupB_left = keyLeft;
-    const bool groupB_right = keyRight;
+void CameraController::UpdateOrbitInput(float deltaTime, Scene& scene) {
+    auto& registry = scene.GetRegistry();
+    if (!registry.HasComponent<OrbitComponent>(activeCameraEntity)) return;
 
-    const bool moveForward = keyCtrl ? groupB_forward : groupA_forward;
-    const bool moveBackward = keyCtrl ? groupB_backward : groupA_backward;
-    const bool moveLeft = keyCtrl ? groupB_left : groupA_left;
-    const bool moveRight = keyCtrl ? groupB_right : groupA_right;
-    const bool moveUp = keyE;
-    const bool moveDown = keyQ;
+    auto& orbit = registry.GetComponent<OrbitComponent>(activeCameraEntity);
+    const float speed = 50.0f;
 
-    const bool rotatePitchUp = keyCtrl ? groupA_forward : groupB_forward;
-    const bool rotatePitchDown = keyCtrl ? groupA_backward : groupB_backward;
-    const bool rotateYawLeft = keyCtrl ? groupA_left : groupB_left;
-    const bool rotateYawRight = keyCtrl ? groupA_right : groupB_right;
+    // Update orbit parameters based on input
+    if (keyA || keyLeft)  orbit.currentAngle -= glm::radians(speed * deltaTime);
+    if (keyD || keyRight) orbit.currentAngle += glm::radians(speed * deltaTime);
 
-    const float shiftMultiplier = keyShift ? 3.0f : 1.0f;
-    const float moveDelta = deltaTime * shiftMultiplier;
-    const float rotateDelta = deltaTime * shiftMultiplier;
-
-    const glm::vec3 oldPos = activeCamera->GetPosition();
-
-    if (moveForward)  activeCamera->MoveForward(moveDelta);
-    if (moveBackward) activeCamera->MoveBackward(moveDelta);
-    if (moveLeft)     activeCamera->MoveLeft(moveDelta);
-    if (moveRight)    activeCamera->MoveRight(moveDelta);
-    if (moveDown)     activeCamera->MoveDown(moveDelta);
-    if (moveUp)       activeCamera->MoveUp(moveDelta);
-
-    glm::vec3 currentPos = activeCamera->GetPosition();
-    // ClampCameraPosition(currentPos, scene, oldPos); // Optional for custom cams
-    if (activeCameraType == CameraType::FREE_ROAM) {
-        ClampCameraPosition(currentPos, scene, oldPos);
-    }
-    activeCamera->SetPosition(currentPos);
-
-    if (rotatePitchUp)   activeCamera->RotatePitch(rotateDelta);
-    if (rotatePitchDown) activeCamera->RotatePitch(-rotateDelta);
-    if (rotateYawLeft)   activeCamera->RotateYaw(-rotateDelta);
-    if (rotateYawRight)  activeCamera->RotateYaw(rotateDelta);
+    if (keyW || keyUp)    orbit.radius -= speed * deltaTime;
+    if (keyS || keyDown)  orbit.radius += speed * deltaTime;
+    orbit.radius = std::max(orbit.radius, 2.0f);
 }
 
 void CameraController::OnKeyPress(int key, bool pressed) {
@@ -259,14 +164,13 @@ void CameraController::OnKeyPress(int key, bool pressed) {
     if (key == GLFW_KEY_A) keyA = pressed;
     if (key == GLFW_KEY_S) keyS = pressed;
     if (key == GLFW_KEY_D) keyD = pressed;
-    if (key == GLFW_KEY_Q || key == GLFW_KEY_PAGE_DOWN) keyQ = pressed;
-    if (key == GLFW_KEY_E || key == GLFW_KEY_PAGE_UP) keyE = pressed;
+    if (key == GLFW_KEY_Q) keyQ = pressed;
+    if (key == GLFW_KEY_E) keyE = pressed;
     if (key == GLFW_KEY_UP) keyUp = pressed;
-    if (key == GLFW_KEY_LEFT) keyLeft = pressed;
     if (key == GLFW_KEY_DOWN) keyDown = pressed;
+    if (key == GLFW_KEY_LEFT) keyLeft = pressed;
     if (key == GLFW_KEY_RIGHT) keyRight = pressed;
-    if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL) keyCtrl = pressed;
-    if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT) keyShift = pressed;
+    if (key == GLFW_KEY_LEFT_SHIFT) keyShift = pressed;
 }
 
 void CameraController::ClampCameraPosition(glm::vec3& pos, Scene& scene, const glm::vec3& prevPos) const {

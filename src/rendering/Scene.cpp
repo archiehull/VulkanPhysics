@@ -8,6 +8,7 @@
 #include <iostream>
 #include <algorithm>
 #include <random>
+#include "Camera.h"
 
 // ECS Systems
 #include "../systems/OrbitSystem.h"
@@ -16,6 +17,7 @@
 #include "../systems/TimeSystem.h"
 #include "../systems/WeatherSystem.h"
 #include "../systems/ParticleUpdateSystem.h"
+#include "../systems/CameraSystem.h"
 
 
 Entity Scene::GetEntityByName(const std::string& name) const {
@@ -106,6 +108,7 @@ void Scene::Initialize() {
     m_Registry.AddComponent<DustCloudComponent>(dustEntity, DustCloudComponent{});
 
     // 3. Register ECS Systems
+    m_Systems.push_back(std::make_unique<CameraSystem>());
     m_Systems.push_back(std::make_unique<OrbitSystem>());
     m_Systems.push_back(std::make_unique<TimeSystem>());
     m_Systems.push_back(std::make_unique<WeatherSystem>());
@@ -861,4 +864,27 @@ void Scene::ResetEnvironment() {
         env.weatherTimer = 0.0f;
         env.timeSinceLastRain = 0.0f;
     }
+}
+
+Entity Scene::CreateCameraEntity(const std::string& name, const glm::vec3& pos, CameraType type) {
+    Entity entity = m_Registry.CreateEntity();
+    m_EntityMap[name] = entity;
+
+    m_Registry.AddComponent<NameComponent>(entity, { name });
+
+    TransformComponent transform;
+    transform.matrix = glm::translate(glm::mat4(1.0f), pos);
+    m_Registry.AddComponent<TransformComponent>(entity, transform);
+
+    CameraComponent camera;
+    m_Registry.AddComponent<CameraComponent>(entity, camera);
+
+    // If it's an Orbit camera, we can give it an OrbitComponent right now!
+    if (type == CameraType::OUTSIDE_ORB || type == CameraType::CACTI) {
+        OrbitComponent orbit;
+        orbit.isOrbiting = true;
+        m_Registry.AddComponent<OrbitComponent>(entity, orbit);
+    }
+
+    return entity;
 }

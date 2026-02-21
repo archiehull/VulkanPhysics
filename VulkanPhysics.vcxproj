@@ -46,6 +46,7 @@
     <ClCompile Include="src\rendering\ShadowPass.cpp" />
     <ClCompile Include="src\rendering\SkyboxPass.cpp" />
     <ClCompile Include="src\rendering\Texture.cpp" />
+    <ClCompile Include="src\systems\CameraSystem.cpp" />
     <ClCompile Include="src\systems\OrbitSystem.cpp" />
     <ClCompile Include="src\systems\ParticleUpdateSystem.cpp" />
     <ClCompile Include="src\systems\SimpleShadowSystem.cpp" />
@@ -86,6 +87,7 @@
     <ClInclude Include="src\rendering\ShadowPass.h" />
     <ClInclude Include="src\rendering\SkyboxPass.h" />
     <ClInclude Include="src\rendering\Texture.h" />
+    <ClInclude Include="src\systems\CameraSystem.h" />
     <ClInclude Include="src\systems\ISystem.h" />
     <ClInclude Include="src\systems\OrbitSystem.h" />
     <ClInclude Include="src\systems\ParticleUpdateSystem.h" />

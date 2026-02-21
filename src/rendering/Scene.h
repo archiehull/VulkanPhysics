@@ -9,6 +9,8 @@
 #include "../vulkan/UniformBufferObject.h"
 #include "../core/Config.h" 
 #include "ParticleSystem.h"
+#include "Camera.h"
+
 
 // ECS Includes
 #include "../core/CoreTypes.h"
@@ -59,6 +61,8 @@ public:
     void AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable = false);
 
     Entity AddLight(const std::string& name, const glm::vec3& position, const glm::vec3& color, float intensity, int type);
+    Entity CreateCameraEntity(const std::string& name, const glm::vec3& pos, CameraType type);
+
 
     void SetObjectOrbit(const std::string& name, const glm::vec3& center, float radius, float speedRadPerSec, const glm::vec3& axis, const glm::vec3& startVector, float initialAngleRad = 0.0f);
     void SetLightOrbit(const std::string& name, const glm::vec3& center, float radius, float speedRadPerSec, const glm::vec3& axis, const glm::vec3& startVector, float initialAngleRad = 0.0f);

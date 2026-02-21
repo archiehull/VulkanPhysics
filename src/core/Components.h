@@ -116,3 +116,20 @@ struct DustCloudComponent {
     glm::vec3 direction = glm::vec3(0.0f);
     float speed = 15.0f;
 };
+
+// 10. Camera Data
+struct CameraComponent {
+    float fov = 60.0f;
+    float nearPlane = 0.1f;
+    float farPlane = 1000.0f;
+
+    // Computed every frame by the CameraSystem
+    glm::mat4 viewMatrix = glm::mat4(1.0f);
+    glm::mat4 projectionMatrix = glm::mat4(1.0f);
+
+    bool isActive = false;
+
+    // Euler angles for Free Roam (can be moved to a separate Control component later)
+    float yaw = -90.0f;
+    float pitch = 0.0f;
+};
