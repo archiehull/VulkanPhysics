@@ -17,6 +17,8 @@ group shapes
 scale
 parameters menu
 - radius, xy linked (sq), xy, x2 length/width, scale, angle, shape type
+drop object / throw object
+show trail/arc of throw to set params (2d tanks)
 
 lightinf config snd placer (colourpicker)
 
@@ -49,3 +51,11 @@ full ecs
 pop out / pin menu items as textboz
 
 imgui scaling options
+
+toggleable depth/normsl map (per-object)
+
+highlight reel world/animation showing off grapbics / shaders
+
+text boxes for info
+
+saved animations/clips in replay menu
