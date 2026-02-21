@@ -15,11 +15,12 @@
   imgui_widgets.cpp
   Application.cpp
   Config.cpp
+  EditorUI.cpp
   Window.cpp
   Geometry.cpp
   GeometryGenerator.cpp
-C:\Users\663073\Workspace\VulkanPhysics\src\geometry\GeometryGenerator.cpp(110,69): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\663073\Workspace\VulkanPhysics\src\geometry\GeometryGenerator.cpp(110,27): warning C4244: 'initializing': conversion from 'double' to 'const float', possible loss of data
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\GeometryGenerator.cpp(110,69): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\GeometryGenerator.cpp(110,27): warning C4244: 'initializing': conversion from 'double' to 'const float', possible loss of data
   OBJLoader.cpp
   SJGLoader.cpp
   main.cpp
@@ -27,15 +28,14 @@ C:\Users\663073\Workspace\VulkanPhysics\src\geometry\GeometryGenerator.cpp(110,2
   CameraController.cpp
   Cubemap.cpp
   GraphicsPipeline.cpp
-  ParticleLibrary.cpp
   Compiling...
+  ParticleLibrary.cpp
   ParticleSystem.cpp
   Renderer.cpp
   Scene.cpp
   ShadowPass.cpp
   SkyboxPass.cpp
   Texture.cpp
-  EditorUI.cpp
   VulkanBuffer.cpp
   VulkanCommandBuffer.cpp
   VulkanContext.cpp
@@ -48,6 +48,6 @@ C:\Users\663073\Workspace\VulkanPhysics\src\geometry\GeometryGenerator.cpp(110,2
   VulkanUtils.cpp
   Generating code
   Previous IPDB was built with incompatible compiler, fall back to full compilation.
-  All 6713 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  All 6732 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
   Finished generating code
-  VulkanPhysics.vcxproj -> C:\Users\663073\Workspace\VulkanPhysics\x64\Release\VulkanPhysics.exe
+  VulkanPhysics.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\VulkanPhysics.exe

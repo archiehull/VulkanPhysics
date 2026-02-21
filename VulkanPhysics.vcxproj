@@ -28,6 +28,7 @@
     <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_widgets.cpp" />
     <ClCompile Include="src\core\Application.cpp" />
     <ClCompile Include="src\core\Config.cpp" />
+    <ClCompile Include="src\core\EditorUI.cpp" />
     <ClCompile Include="src\core\Window.cpp" />
     <ClCompile Include="src\geometry\Geometry.cpp" />
     <ClCompile Include="src\geometry\GeometryGenerator.cpp" />
@@ -45,7 +46,6 @@
     <ClCompile Include="src\rendering\ShadowPass.cpp" />
     <ClCompile Include="src\rendering\SkyboxPass.cpp" />
     <ClCompile Include="src\rendering\Texture.cpp" />
-    <ClCompile Include="src\util\EditorUI.cpp" />
     <ClCompile Include="src\vulkan\VulkanBuffer.cpp" />
     <ClCompile Include="src\vulkan\VulkanCommandBuffer.cpp" />
     <ClCompile Include="src\vulkan\VulkanContext.cpp" />
@@ -60,6 +60,7 @@
   <ItemGroup>
     <ClInclude Include="src\core\Application.h" />
     <ClInclude Include="src\core\Config.h" />
+    <ClInclude Include="src\core\EditorUI.h" />
     <ClInclude Include="src\core\Window.h" />
     <ClInclude Include="src\geometry\Geometry.h" />
     <ClInclude Include="src\geometry\GeometryGenerator.h" />
@@ -76,7 +77,6 @@
     <ClInclude Include="src\rendering\ShadowPass.h" />
     <ClInclude Include="src\rendering\SkyboxPass.h" />
     <ClInclude Include="src\rendering\Texture.h" />
-    <ClInclude Include="src\util\EditorUI.h" />
     <ClInclude Include="src\vulkan\PushConstantObject.h" />
     <ClInclude Include="src\vulkan\UniformBufferObject.h" />
     <ClInclude Include="src\vulkan\Vertex.h" />
