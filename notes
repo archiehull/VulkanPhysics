@@ -18,6 +18,7 @@ scale
 parameters menu
 - radius, xy linked (sq), xy, x2 length/width, scale, angle, shape type
 drop object / throw object
+object hotbar and hud
 show trail/arc of throw to set params (2d tanks)
 
 toggle live physics while editing
@@ -75,3 +76,10 @@ send force / wind with mouse
 rubber band flick
 click pushes forwaed in direction of camera
 push size and strength params
+
+input manager with easy key remapss 
+edit/set on spot with context menu or keypress
+inputs window (not menu cos too long)
+
+windowed version of menu with extra properties
+
