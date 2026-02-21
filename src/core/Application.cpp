@@ -48,7 +48,7 @@ void Application::Run() {
 
     // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/config/", "init");
+    editorUI->Initialize("src/config/", "desert");
 
     // 2. Load the scene that the UI has selected as default
     std::string initialPath = editorUI->GetInitialScenePath();
@@ -393,11 +393,20 @@ void Application::MainLoop() {
             stepDelta = editorUI->GetStepSize() * currentTimeScale;
         }
 
+        auto& registry = scene->GetRegistry();
+        const VkExtent2D extent = vulkanSwapChain->GetExtent();
+        const float aspectRatio = (extent.height > 0) ? (extent.width / static_cast<float>(extent.height)) : 1.0f;
+
+        for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+            if (registry.HasComponent<CameraComponent>(e)) {
+                registry.GetComponent<CameraComponent>(e).aspectRatio = aspectRatio;
+            }
+        }
+
         // 4. Update the scene with the calculated delta
         scene->Update(stepDelta);
 
         cameraController->Update(deltaTime, *scene);
-
 
         int currentViewMask = SceneLayers::ALL;
 
@@ -412,7 +421,6 @@ void Application::MainLoop() {
         //}
 
         Entity activeCamEntity = cameraController->GetActiveCameraEntity(); //
-        auto& registry = scene->GetRegistry(); //
 
         if (activeCamEntity != MAX_ENTITIES && registry.HasComponent<CameraComponent>(activeCamEntity)) {
             auto& camComp = registry.GetComponent<CameraComponent>(activeCamEntity); //

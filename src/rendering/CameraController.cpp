@@ -8,6 +8,7 @@
 #include "../core/Config.h"
 #include "../systems/CameraSystem.h"
 #include "Camera.h"
+#include <glm/gtc/quaternion.hpp>
 
 CameraController::CameraController(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs) {
     SetupCameras(scene, customConfigs);
@@ -75,6 +76,8 @@ void CameraController::SwitchCamera(CameraType type, Scene& scene) {
             std::uniform_int_distribution<> dis(0, (int)cacti.size() - 1);
             Entity target = cacti[dis(gen)];
 
+            OrbitTargetObject = target;
+
             glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(target).matrix[3]);
             scene.SetObjectOrbit("CactusCam", targetPos + glm::vec3(0, 3, 0), 15.0f, 0.0f, { 0,1,0 }, { 1,0,0 });
         }
@@ -130,8 +133,8 @@ void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene) {
     ClampCameraPosition(pos, scene, prevPos);
 
     // Rotation (Update Yaw/Pitch in Component)
-    if (keyLeft)  cam.yaw -= rotateSpeed * deltaTime;
-    if (keyRight) cam.yaw += rotateSpeed * deltaTime;
+    if (keyLeft)  cam.yaw += rotateSpeed * deltaTime;
+    if (keyRight) cam.yaw -= rotateSpeed * deltaTime;
     if (keyUp)    cam.pitch += rotateSpeed * deltaTime;
     if (keyDown)  cam.pitch -= rotateSpeed * deltaTime;
     cam.pitch = std::clamp(cam.pitch, -89.0f, 89.0f);
@@ -148,15 +151,39 @@ void CameraController::UpdateOrbitInput(float deltaTime, Scene& scene) {
     if (!registry.HasComponent<OrbitComponent>(activeCameraEntity)) return;
 
     auto& orbit = registry.GetComponent<OrbitComponent>(activeCameraEntity);
-    const float speed = 50.0f;
 
-    // Update orbit parameters based on input
-    if (keyA || keyLeft)  orbit.currentAngle -= glm::radians(speed * deltaTime);
-    if (keyD || keyRight) orbit.currentAngle += glm::radians(speed * deltaTime);
+    // Using your exact old speeds
+    const float rotateSpeed = 50.0f;
+    const float zoomSpeed = 50.0f;
 
-    if (keyW || keyUp)    orbit.radius -= speed * deltaTime;
-    if (keyS || keyDown)  orbit.radius += speed * deltaTime;
-    orbit.radius = std::max(orbit.radius, 2.0f);
+    // 1. Yaw (Orbit Left/Right) -> A & D
+    if (keyA || keyLeft)  orbit.currentAngle -= glm::radians(rotateSpeed * deltaTime);
+    if (keyD || keyRight) orbit.currentAngle += glm::radians(rotateSpeed * deltaTime);
+
+    // 2. Zoom (Radius) -> Q & E
+    if (keyQ)    orbit.radius -= zoomSpeed * deltaTime;
+    if (keyE)  orbit.radius += zoomSpeed * deltaTime;
+    orbit.radius = std::max(orbit.radius, 1.0f);
+
+    // 3. Pitch (Elevation Up/Down) -> Q & E
+    if (keyW || keyUp || keyS || keyDown) {
+        float deltaElev = 0.0f;
+        if (keyS || keyDown) deltaElev += glm::radians(rotateSpeed * deltaTime); // Move Up
+        if (keyW || keyUp) deltaElev -= glm::radians(rotateSpeed * deltaTime); // Move Down
+
+        // Calculate the local "Right" axis to pitch the startVector up and down
+        glm::vec3 right = glm::normalize(glm::cross(orbit.axis, orbit.startVector));
+
+        // Apply the pitch rotation to the start vector
+        glm::quat pitchQuat = glm::angleAxis(deltaElev, right);
+        glm::vec3 newStart = pitchQuat * orbit.startVector;
+
+        // Prevent flipping over the top/bottom poles (like std::clamp(OrbitPitch, -89, 89))
+        float dot = glm::dot(glm::normalize(newStart), orbit.axis);
+        if (glm::abs(dot) < 0.999f) {
+            orbit.startVector = newStart;
+        }
+    }
 }
 
 void CameraController::OnKeyPress(int key, bool pressed) {

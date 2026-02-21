@@ -122,10 +122,13 @@ struct CameraComponent {
     float fov = 60.0f;
     float nearPlane = 0.1f;
     float farPlane = 1000.0f;
+    float aspectRatio = 16.0f / 9.0f;
 
     // Computed every frame by the CameraSystem
     glm::mat4 viewMatrix = glm::mat4(1.0f);
     glm::mat4 projectionMatrix = glm::mat4(1.0f);
+
+    int viewMask = SceneLayers::ALL;
 
     bool isActive = false;
 
