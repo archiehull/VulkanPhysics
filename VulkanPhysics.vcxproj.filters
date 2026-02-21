@@ -34,6 +34,9 @@
     <Filter Include="Source Files\src\imgui">
       <UniqueIdentifier>{d29fe7ac-7f20-4260-81e3-0b490166d25c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\src\systems">
+      <UniqueIdentifier>{3f196d6e-c5fa-48da-b24a-3ef0eb0da539}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -147,6 +150,15 @@
     <ClCompile Include="src\core\EditorUI.cpp">
       <Filter>Source Files\src\core</Filter>
     </ClCompile>
+    <ClCompile Include="src\systems\OrbitSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\SimpleShadowSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\ThermodynamicsSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Window.h">
@@ -249,6 +261,21 @@
       <Filter>Source Files\src\core</Filter>
     </ClInclude>
     <ClInclude Include="src\core\Components.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\OrbitSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\SimpleShadowSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\ISystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\ThermodynamicsSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\CoreTypes.h">
       <Filter>Source Files\src\core</Filter>
     </ClInclude>
   </ItemGroup>

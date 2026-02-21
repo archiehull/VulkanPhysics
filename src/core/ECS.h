@@ -6,52 +6,94 @@
 #include <typeindex>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 
-// ------------------------------------------------------------------
-// 1. Define the Entity
-// An Entity is just a unique ID. It has no data or logic of its own.
-// ------------------------------------------------------------------
 using Entity = uint32_t;
 const Entity MAX_ENTITIES = 5000;
 
-// ------------------------------------------------------------------
-// 2. Component Arrays
-// We need a way to store arrays of components. We use an interface 
-// so the Registry can hold a list of different ComponentArray types.
-// ------------------------------------------------------------------
 class IComponentArray {
 public:
     virtual ~IComponentArray() = default;
     virtual void EntityDestroyed(Entity entity) = 0;
 };
 
+// ------------------------------------------------------------------
+// OPTIMIZED COMPONENT ARRAY (Sparse Set Pattern)
+// ------------------------------------------------------------------
 template <typename T>
 class ComponentArray : public IComponentArray {
 private:
-    // Maps an Entity ID to its Component data
-    std::unordered_map<Entity, T> componentData;
+    // The packed array of actual component data (Cache friendly!)
+    std::vector<T> componentData;
+
+    // Map from Entity ID to index in componentData (The "Sparse" array concept)
+    std::vector<size_t> entityToIndex;
+
+    // Map from index in componentData back to Entity ID (Used for safe deletion)
+    std::vector<Entity> indexToEntity;
+
+    size_t validSize = 0; // How many components are currently active
 
 public:
+    ComponentArray() {
+        // Pre-allocate arrays to maximum entities to avoid runtime reallocations
+        componentData.resize(MAX_ENTITIES);
+        entityToIndex.resize(MAX_ENTITIES, -1); // -1 means invalid/no component
+        indexToEntity.resize(MAX_ENTITIES, -1);
+    }
+
     void InsertData(Entity entity, T component) {
-        componentData[entity] = component;
+        if (entityToIndex[entity] != static_cast<size_t>(-1)) {
+            // Overwrite existing component
+            componentData[entityToIndex[entity]] = component;
+            return;
+        }
+
+        // Put new component at the end of the packed array
+        size_t newIndex = validSize;
+        entityToIndex[entity] = newIndex;
+        indexToEntity[newIndex] = entity;
+        componentData[newIndex] = component;
+        validSize++;
     }
 
     void RemoveData(Entity entity) {
-        componentData.erase(entity);
+        if (entityToIndex[entity] == static_cast<size_t>(-1)) return; // Entity doesn't have this component
+
+        // To keep the dense array packed, we move the LAST element into the deleted element's spot.
+        size_t indexOfRemovedEntity = entityToIndex[entity];
+        size_t indexOfLastElement = validSize - 1;
+
+        if (indexOfRemovedEntity != indexOfLastElement) {
+            // Swap data
+            componentData[indexOfRemovedEntity] = componentData[indexOfLastElement];
+
+            // Update the tracking maps for the moved element
+            Entity entityOfLastElement = indexToEntity[indexOfLastElement];
+            entityToIndex[entityOfLastElement] = indexOfRemovedEntity;
+            indexToEntity[indexOfRemovedEntity] = entityOfLastElement;
+        }
+
+        // Invalidate the removed entity's tracking
+        entityToIndex[entity] = -1;
+        indexToEntity[indexOfLastElement] = -1;
+        validSize--;
     }
 
     T& GetData(Entity entity) {
-        if (componentData.find(entity) == componentData.end()) {
+        size_t index = entityToIndex[entity];
+        if (index == static_cast<size_t>(-1)) {
             throw std::runtime_error("Retrieving non-existent component.");
         }
-        return componentData[entity];
+        return componentData[index];
     }
 
     bool HasData(Entity entity) const {
-        return componentData.find(entity) != componentData.end();
+        // Ensure entity is within bounds before checking
+        if (entity >= entityToIndex.size()) return false;
+        return entityToIndex[entity] != static_cast<size_t>(-1);
     }
 
-    // Called automatically by the Registry when an entity is destroyed
     void EntityDestroyed(Entity entity) override {
         if (HasData(entity)) {
             RemoveData(entity);

@@ -1,20 +1,11 @@
 #pragma once
-#pragma once
 
 #include <glm/glm.hpp>
 #include <string>
 #include <memory>
 #include "../geometry/Geometry.h"
-#include "../rendering/Scene.h" // Assuming SceneLayers and ObjectState are accessible
-// If ObjectState is in Scene.h, you might want to move it to a shared header like CoreTypes.h
-
-enum class ObjectState {
-    NORMAL,
-    HEATING,
-    BURNING,
-    BURNT,
-    REGROWING
-};
+#include "ECS.h"
+#include "CoreTypes.h"
 
 // 1. Identification
 struct NameComponent {
@@ -24,8 +15,6 @@ struct NameComponent {
 // 2. Spatial Data
 struct TransformComponent {
     glm::mat4 matrix = glm::mat4(1.0f);
-    // You can optionally store pos/rot/scale separately if you want to rebuild the matrix often, 
-    // but since your current code mainly uses the matrix, we'll stick to that to start.
 };
 
 // 3. Visual Data
@@ -70,12 +59,10 @@ struct ThermoComponent {
     float regrowTimer = 0.0f;
     float burnFactor = 0.0f;
 
-    // Particle/Light connections
     int fireEmitterId = -1;
     int smokeEmitterId = -1;
-    int fireLightEntity = -1; // Changed from index to Entity ID
+    int fireLightEntity = -1;
 
-    // Geometry swapping for burnt state
     std::shared_ptr<Geometry> storedOriginalGeometry = nullptr;
     glm::mat4 storedOriginalTransform = glm::mat4(1.0f);
 };

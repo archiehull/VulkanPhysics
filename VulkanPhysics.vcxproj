@@ -46,6 +46,9 @@
     <ClCompile Include="src\rendering\ShadowPass.cpp" />
     <ClCompile Include="src\rendering\SkyboxPass.cpp" />
     <ClCompile Include="src\rendering\Texture.cpp" />
+    <ClCompile Include="src\systems\OrbitSystem.cpp" />
+    <ClCompile Include="src\systems\SimpleShadowSystem.cpp" />
+    <ClCompile Include="src\systems\ThermodynamicsSystem.cpp" />
     <ClCompile Include="src\vulkan\VulkanBuffer.cpp" />
     <ClCompile Include="src\vulkan\VulkanCommandBuffer.cpp" />
     <ClCompile Include="src\vulkan\VulkanContext.cpp" />
@@ -61,6 +64,7 @@
     <ClInclude Include="src\core\Application.h" />
     <ClInclude Include="src\core\Components.h" />
     <ClInclude Include="src\core\Config.h" />
+    <ClInclude Include="src\core\CoreTypes.h" />
     <ClInclude Include="src\core\ECS.h" />
     <ClInclude Include="src\core\EditorUI.h" />
     <ClInclude Include="src\core\Window.h" />
@@ -79,6 +83,10 @@
     <ClInclude Include="src\rendering\ShadowPass.h" />
     <ClInclude Include="src\rendering\SkyboxPass.h" />
     <ClInclude Include="src\rendering\Texture.h" />
+    <ClInclude Include="src\systems\ISystem.h" />
+    <ClInclude Include="src\systems\OrbitSystem.h" />
+    <ClInclude Include="src\systems\SimpleShadowSystem.h" />
+    <ClInclude Include="src\systems\ThermodynamicsSystem.h" />
     <ClInclude Include="src\vulkan\PushConstantObject.h" />
     <ClInclude Include="src\vulkan\UniformBufferObject.h" />
     <ClInclude Include="src\vulkan\Vertex.h" />

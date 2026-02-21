@@ -264,7 +264,7 @@ void Application::SetupScene() {
 
         // --- Apply Common Properties ---
         // (We assume the object was just added to the back of the vector)
-        scene->SetObjectVisible(scene->GetObjects().size() - 1, objCfg.visible);
+        scene->SetObjectVisible(objCfg.name, objCfg.visible);
         scene->SetObjectCastsShadow(objCfg.name, objCfg.castsShadow);
         scene->SetObjectReceivesShadows(objCfg.name, objCfg.receiveShadows);
         scene->SetObjectShadingMode(objCfg.name, objCfg.shadingMode);
@@ -489,8 +489,8 @@ void Application::KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int
             }
 
             // 2. Get and Ignite the target
-            SceneObject* const target = app->cameraController->GetOrbitTarget();
-            if (target) {
+            Entity target = app->cameraController->GetOrbitTarget();
+            if (target != MAX_ENTITIES) { // MAX_ENTITIES acts as our "null" entity
                 app->scene->Ignite(target);
             }
             else {

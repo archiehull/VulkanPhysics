@@ -2,6 +2,7 @@
 
 #include "Camera.h"
 #include "../core/Config.h" // Added for CustomCameraConfig
+#include "../core/ECS.h"
 #include <memory>
 #include <map>
 #include <vector>
@@ -19,15 +20,15 @@ public:
     CameraController(const CameraController&) = delete;
     CameraController& operator=(const CameraController&) = delete;
 
-    void Update(float deltaTime, const Scene& scene);
+    void Update(float deltaTime, Scene& scene);
 
     inline Camera* GetActiveCamera() const { return activeCamera; }
     CameraType GetActiveCameraType() const { return activeCameraType; }
 
-    void SwitchCamera(CameraType type, const Scene& scene);
+    void SwitchCamera(CameraType type, Scene& scene);
 
     // NEW: Getter for the current Orbit target (for F4 Ignition)
-    SceneObject* GetOrbitTarget() const { return OrbitTargetObject; }
+    Entity GetOrbitTarget() const { return OrbitTargetObject; }
 
     // Input handling
     void OnKeyPress(int key, bool pressed);
@@ -56,14 +57,15 @@ private:
     bool keyShift = false;
 
     // Orbit Camera State
-    SceneObject* OrbitTargetObject = nullptr;
+    Entity OrbitTargetObject = MAX_ENTITIES;
     glm::vec3 FixedOrbitCenter = glm::vec3(0.0f); // For custom orbits that don't target an object
     float OrbitRadius = 15.0f;
     float OrbitYaw = 0.0f;
     float OrbitPitch = 20.0f;
 
     void SetupCameras(const std::vector<CustomCameraConfig>& customConfigs);
-    void UpdateFreeRoamCamera(float deltaTime, const Scene& scene);
-    void UpdateOrbitCamera(float deltaTime, const Scene& scene);
-    void ClampCameraPosition(glm::vec3& position, const Scene& scene, const glm::vec3& previousPosition) const;
+    void UpdateFreeRoamCamera(float deltaTime, Scene& scene);
+    void UpdateOrbitCamera(float deltaTime, Scene& scene);
+    void ClampCameraPosition(glm::vec3& position, Scene& scene, const glm::vec3& previousPosition) const;
+
 };

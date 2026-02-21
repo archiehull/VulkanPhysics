@@ -1,11 +1,11 @@
 #include "OrbitSystem.h"
+#include "../rendering/Scene.h"
 #include <glm/gtc/quaternion.hpp>
 
-void OrbitSystem::Update(Registry& registry, float deltaTime) {
-    // Iterate over EVERY entity in existence to check for orbits
-    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+void OrbitSystem::Update(Scene& scene, float deltaTime) {
+    Registry& registry = scene.GetRegistry();
 
-        // Skip entities that don't have the required components
+    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
         if (!registry.HasComponent<OrbitComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
             continue;
         }
@@ -14,12 +14,10 @@ void OrbitSystem::Update(Registry& registry, float deltaTime) {
         if (orbit.isOrbiting) {
             auto& transform = registry.GetComponent<TransformComponent>(e);
 
-            // Calculate new position
             orbit.currentAngle += orbit.speed * deltaTime;
             const glm::quat rotation = glm::angleAxis(orbit.currentAngle, orbit.axis);
             const glm::vec3 offset = rotation * orbit.startVector;
 
-            // Apply to transform matrix (translation is the 4th column)
             transform.matrix[3] = glm::vec4(orbit.center + offset, 1.0f);
         }
     }

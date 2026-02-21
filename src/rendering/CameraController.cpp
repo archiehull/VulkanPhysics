@@ -16,7 +16,7 @@ CameraController::CameraController(const std::vector<CustomCameraConfig>& custom
     OrbitRadius = 350.0f;
     OrbitPitch = 20.0f;
     OrbitYaw = 0.0f;
-    OrbitTargetObject = nullptr;
+    OrbitTargetObject = MAX_ENTITIES;
 
     // Default pointer set to Birds Eye to match activeCameraType
     activeCamera = cameras[CameraType::OUTSIDE_ORB].get();
@@ -66,18 +66,22 @@ void CameraController::SetupCameras(const std::vector<CustomCameraConfig>& custo
     }
 }
 
-void CameraController::SwitchCamera(CameraType type, const Scene& scene) {
+void CameraController::SwitchCamera(CameraType type, Scene& scene) {
     if (cameras.find(type) == cameras.end()) return;
 
     // Handle Standard Types
     if (type == CameraType::CACTI) {
-        // ... (Existing Cacti Logic) ...
-        std::vector<SceneObject*> cacti;
-        for (const auto& obj : scene.GetObjects()) {
-            if (obj->texturePath.find("cactus") != std::string::npos) {
-                cacti.push_back(obj.get());
+        std::vector<Entity> cacti;
+        Registry& registry = scene.GetRegistry();
+
+        for (Entity e : scene.GetRenderableEntities()) {
+            if (registry.HasComponent<RenderComponent>(e)) {
+                if (registry.GetComponent<RenderComponent>(e).texturePath.find("cactus") != std::string::npos) {
+                    cacti.push_back(e);
+                }
             }
         }
+
         if (!cacti.empty()) {
             static std::random_device rd;
             static std::mt19937 gen(rd());
@@ -86,17 +90,22 @@ void CameraController::SwitchCamera(CameraType type, const Scene& scene) {
             OrbitRadius = 15.0f;
             OrbitYaw = 0.0f;
             OrbitPitch = 20.0f;
-            std::cout << "Orbiting Cactus: " << OrbitTargetObject->name << std::endl;
+
+            std::string objName = "Unknown";
+            if (registry.HasComponent<NameComponent>(OrbitTargetObject)) {
+                objName = registry.GetComponent<NameComponent>(OrbitTargetObject).name;
+            }
+            std::cout << "Orbiting Cactus: " << objName << std::endl;
         }
         else {
             type = CameraType::FREE_ROAM;
         }
     }
     else if (type == CameraType::FREE_ROAM) {
-        // Reset Logic if needed, or just switch
+        // Reset Logic if needed
     }
     else if (type == CameraType::OUTSIDE_ORB) {
-        OrbitTargetObject = nullptr;
+        OrbitTargetObject = MAX_ENTITIES;
         OrbitRadius = 350.0f;
         OrbitYaw = 0.0f;
         OrbitPitch = 20.0f;
@@ -108,14 +117,10 @@ void CameraController::SwitchCamera(CameraType type, const Scene& scene) {
         std::cout << "Switched to Custom Camera: " << info.name << std::endl;
 
         if (info.type == "Orbit") {
-            OrbitTargetObject = nullptr; // Custom orbit usually orbits a fixed point
+            OrbitTargetObject = MAX_ENTITIES; // Custom orbit usually orbits a fixed point
             FixedOrbitCenter = info.initialTarget;
-            // Calculate initial radius/pitch/yaw based on pos vs target? 
-            // For simplicity, we keep the camera's loaded pos and let the user move.
-            // But we need to set internal Orbit variables to match current pos.
             glm::vec3 diff = cameras[type]->GetPosition() - info.initialTarget;
             OrbitRadius = glm::length(diff);
-            // (Yaw/Pitch calculation omitted for brevity, defaults to 0/20 or current)
         }
     }
 
@@ -123,7 +128,7 @@ void CameraController::SwitchCamera(CameraType type, const Scene& scene) {
     activeCamera = cameras[type].get();
 }
 
-void CameraController::Update(float deltaTime, const Scene& scene) {
+void CameraController::Update(float deltaTime, Scene& scene) {
     if (!activeCamera) return;
 
     // Check if current is custom
@@ -151,14 +156,17 @@ void CameraController::Update(float deltaTime, const Scene& scene) {
     }
 }
 
-void CameraController::UpdateOrbitCamera(float deltaTime, const Scene& scene) {
+void CameraController::UpdateOrbitCamera(float deltaTime, Scene& scene) {
     // Determine Target Position
     glm::vec3 targetPos;
 
     // 1. Cacti Mode: Follow Object
-    if (activeCameraType == CameraType::CACTI && OrbitTargetObject) {
-        targetPos = glm::vec3(OrbitTargetObject->transform[3]);
-        targetPos.y += 3.0f;
+    if (activeCameraType == CameraType::CACTI && OrbitTargetObject != MAX_ENTITIES) {
+        Registry& registry = scene.GetRegistry();
+        if (registry.HasComponent<TransformComponent>(OrbitTargetObject)) {
+            targetPos = glm::vec3(registry.GetComponent<TransformComponent>(OrbitTargetObject).matrix[3]);
+            targetPos.y += 3.0f;
+        }
     }
     // 2. Custom Orbit Mode: Follow Fixed Point
     else if (customCameraMeta.find(activeCameraType) != customCameraMeta.end()) {
@@ -198,8 +206,7 @@ void CameraController::UpdateOrbitCamera(float deltaTime, const Scene& scene) {
     activeCamera->SetTarget(targetPos);
 }
 
-void CameraController::UpdateFreeRoamCamera(float deltaTime, const Scene& scene) {
-    // ... (Keep existing Free Roam Logic exactly as is) ...
+void CameraController::UpdateFreeRoamCamera(float deltaTime, Scene& scene) {
     const bool groupA_forward = keyW;
     const bool groupA_backward = keyS;
     const bool groupA_left = keyA;
@@ -262,7 +269,7 @@ void CameraController::OnKeyPress(int key, bool pressed) {
     if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT) keyShift = pressed;
 }
 
-void CameraController::ClampCameraPosition(glm::vec3& pos, const Scene& scene, const glm::vec3& prevPos) const {
+void CameraController::ClampCameraPosition(glm::vec3& pos, Scene& scene, const glm::vec3& prevPos) const {
     const float COLLISION_BUFFER = 1.7f;
 
     const auto& terrain = scene.GetTerrainConfig();
@@ -288,14 +295,20 @@ void CameraController::ClampCameraPosition(glm::vec3& pos, const Scene& scene, c
         }
     }
 
-    for (const auto& obj : scene.GetObjects()) {
-        if (!obj->hasCollision) continue;
+    Registry& registry = scene.GetRegistry();
+    for (Entity e : scene.GetRenderableEntities()) {
+        if (!registry.HasComponent<ColliderComponent>(e) || !registry.HasComponent<TransformComponent>(e)) continue;
 
-        const glm::vec3 objPos = glm::vec3(obj->transform[3]);
-        const float objTop = objPos.y + obj->collisionHeight;
+        auto& collider = registry.GetComponent<ColliderComponent>(e);
+        auto& transform = registry.GetComponent<TransformComponent>(e);
+
+        if (!collider.hasCollision) continue;
+
+        const glm::vec3 objPos = glm::vec3(transform.matrix[3]);
+        const float objTop = objPos.y + collider.height;
 
         const float distXZ = glm::distance(glm::vec2(pos.x, pos.z), glm::vec2(objPos.x, objPos.z));
-        const float minSeparation = obj->collisionRadius + COLLISION_BUFFER;
+        const float minSeparation = collider.radius + COLLISION_BUFFER;
 
         if (distXZ < minSeparation) {
             // Move bufferedTop inside for local optimization (OPT.01)

@@ -228,7 +228,7 @@ void Renderer::DrawUI(VkCommandBuffer cmd, uint32_t imageIndex) {
     vkCmdEndRenderPass(cmd);
 }
 
-void Renderer::DrawFrame(const Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask) {
+void Renderer::DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask) {
     // Wait for this frame's fence
     const VkFence fence = syncObjects->GetInFlightFence(currentFrame);
     vkWaitForFences(device->GetDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
@@ -620,7 +620,7 @@ void Renderer::BeginRenderPass(VkCommandBuffer cmd, VkRenderPass pass, VkFramebu
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
-void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, const Scene& scene, int layerMask) {
+void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int layerMask) {
     std::vector<VkClearValue> clearValues(2);
     clearValues[0].color = { {0.1f, 0.1f, 0.1f, 1.0f} };
     clearValues[1].depthStencil = { 1.0f, 0 };
@@ -634,7 +634,7 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetPipeline());
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
 
-    Registry& reg = const_cast<Registry&>(scene.GetRegistry());
+    Registry& reg = scene.GetRegistry();
     for (Entity e : scene.GetRenderableEntities()) {
         if (!reg.HasComponent<RenderComponent>(e) || !reg.HasComponent<TransformComponent>(e)) continue;
 
@@ -709,9 +709,8 @@ void Renderer::CreateSyncObjects() {
     syncObjects->CreateSyncObjects(imageCount);
 }
 
-void Renderer::DrawSceneObjects(VkCommandBuffer cmd, const Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int layerMask) {
-    Registry& reg = const_cast<Registry&>(scene.GetRegistry());
-
+void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int layerMask) {
+    Registry& reg = scene.GetRegistry();
     for (Entity e : scene.GetRenderableEntities()) {
         if (!reg.HasComponent<RenderComponent>(e) || !reg.HasComponent<TransformComponent>(e)) continue;
 
@@ -797,7 +796,7 @@ void Renderer::SetupSceneParticles(Scene& scene) const {
     );
 }
 
-void Renderer::RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, const Scene& scene, int layerMask) {
+void Renderer::RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int layerMask) {
     shadowPass->Begin(cmd);
 
     vkCmdBindDescriptorSets(
@@ -824,7 +823,7 @@ void Renderer::RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, const
 }
 
 void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
-    uint32_t currentFrame, const Scene& scene,
+    uint32_t currentFrame, Scene& scene,
     const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask) {
 
     vkResetCommandBuffer(cmd, 0);
@@ -890,7 +889,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
     }
 }
 
-void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, const Scene& scene, int layerMask) {
+void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int layerMask) {
     std::vector<VkClearValue> clearValues(2);
     clearValues[0].color = { {m_ClearColor.r, m_ClearColor.g, m_ClearColor.b, m_ClearColor.a} };
     clearValues[1].depthStencil = { 1.0f, 0 };

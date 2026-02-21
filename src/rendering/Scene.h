@@ -11,24 +11,11 @@
 #include "ParticleSystem.h"
 
 // ECS Includes
+#include "../core/CoreTypes.h"
 #include "../core/ECS.h"
 #include "../core/Components.h"
 #include <unordered_map>
-#include "../core/ISystem.h"
-
-enum class ObjectState {
-    NORMAL,
-    HEATING,
-    BURNING,
-    BURNT,
-    REGROWING
-};
-
-namespace SceneLayers {
-    constexpr int INSIDE = 1 << 0;
-    constexpr int OUTSIDE = 1 << 1;
-    constexpr int ALL = INSIDE | OUTSIDE;
-}
+#include "../systems/ISystem.h"
 
 enum class Season {
     SUMMER,
@@ -85,7 +72,7 @@ public:
 
     void AddBowl(const std::string& name, float radius, int slices, int stacks, const glm::vec3& position, const std::string& texturePath);
     void AddPedestal(const std::string& name, float topRadius, float baseWidth, float height, const glm::vec3& position, const std::string& texturePath);
-
+    
     void SetupParticleSystem(VkCommandPool commandPoolArg, VkQueue graphicsQueueArg,
         GraphicsPipeline* additivePipeline, GraphicsPipeline* alphaPipeline,
         VkDescriptorSetLayout layout, uint32_t framesInFlightArg);
@@ -132,7 +119,18 @@ public:
 
     // --- ECS Data Accessors ---
     const Registry& GetRegistry() const { return m_Registry; }
+    Registry& GetRegistry() { return m_Registry; }
     const std::vector<Entity>& GetRenderableEntities() const { return m_RenderableEntities; }
+
+    float GetSunHeatBonus() const { return m_SunHeatBonus; }
+    float GetPostRainFireSuppressionTimer() const { return m_PostRainFireSuppressionTimer; }
+    const TimeConfig& GetTimeConfig() const { return m_TimeConfig; }
+    void StopObjectFire(Entity e);
+
+    ParticleSystem* GetOrCreateSystem(const ParticleProps& props);
+
+    std::shared_ptr<Geometry> dustGeometryPrototype;
+    std::string sootTexturePath = "textures/soot.jpg";
 
     void SetObjectTransform(const std::string& name, const glm::mat4& transform);
     void SetObjectVisible(const std::string& name, bool visible);
@@ -169,7 +167,6 @@ private:
     std::vector<Entity> m_LightEntities;
 
     Entity AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable);
-    void StopObjectFire(Entity e);
 
     // --- Config Data ---
     TimeConfig m_TimeConfig;
@@ -212,8 +209,6 @@ private:
     VkDevice device;
     VkPhysicalDevice physicalDevice;
 
-    ParticleSystem* GetOrCreateSystem(const ParticleProps& props);
-
     VkCommandPool commandPool = VK_NULL_HANDLE;
     VkQueue graphicsQueue = VK_NULL_HANDLE;
     GraphicsPipeline* particlePipelineAdditive = nullptr;
@@ -223,6 +218,4 @@ private:
 
     std::vector<std::unique_ptr<ParticleSystem>> particleSystems;
 
-    std::shared_ptr<Geometry> dustGeometryPrototype;
-    std::string sootTexturePath = "textures/soot.jpg";
 };

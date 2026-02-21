@@ -18,7 +18,7 @@ public:
     SkyboxPass& operator=(const SkyboxPass&) = delete;
 
     void Initialize(VkRenderPass renderPass, const VkExtent2D& extent, VkDescriptorSetLayout globalSetLayout);
-    void Draw(VkCommandBuffer cmd, const Scene& scene, uint32_t currentFrame, VkDescriptorSet globalDescriptorSet) const;
+    void Draw(VkCommandBuffer cmd, Scene& scene, uint32_t currentFrame, VkDescriptorSet globalDescriptorSet) const;
     void Cleanup();
 
     Cubemap* GetCubemap() const { return cubemap.get(); }

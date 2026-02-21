@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <random>
 #include "../systems/OrbitSystem.h"
+#include "../systems/SimpleShadowSystem.h"
+#include "../systems/ThermodynamicsSystem.h"
 
 namespace {
     // Utility to avoid repeating the const_cast boilerplate when reading from the registry in const methods
@@ -93,7 +95,10 @@ void Scene::Initialize() {
     catch (const std::exception& e) {
         throw std::runtime_error(std::string("Warning: Failed to load dust prototype: ") + e.what());
     }
+
     m_Systems.push_back(std::make_unique<OrbitSystem>());
+    m_Systems.push_back(std::make_unique<SimpleShadowSystem>());
+    m_Systems.push_back(std::make_unique<ThermodynamicsSystem>());
 }
 
 void Scene::RegisterProceduralObject(const std::string& modelPath, const std::string& texturePath, float frequency, const glm::vec3& minScale, const glm::vec3& maxScale, const glm::vec3& baseRotation, bool isFlammable) {
@@ -767,7 +772,7 @@ void Scene::Update(float deltaTime) {
     }
 
     for (auto& sys : m_Systems) {
-        sys->Update(m_Registry, deltaTime);
+        sys->Update(*this, deltaTime);
     }
 
     UpdateThermodynamics(deltaTime, sunHeight);
