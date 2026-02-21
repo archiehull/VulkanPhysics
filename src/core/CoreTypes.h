@@ -15,3 +15,10 @@ namespace SceneLayers {
     constexpr int OUTSIDE = 1 << 1;
     constexpr int ALL = INSIDE | OUTSIDE;
 }
+
+enum class Season {
+    SUMMER,
+    AUTUMN,
+    WINTER,
+    SPRING
+};

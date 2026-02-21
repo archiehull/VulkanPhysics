@@ -6,6 +6,7 @@
 #include "../geometry/Geometry.h"
 #include "ECS.h"
 #include "CoreTypes.h"
+#include "../core/Config.h"
 
 // 1. Identification
 struct NameComponent {
@@ -22,7 +23,7 @@ struct RenderComponent {
     std::shared_ptr<Geometry> geometry;
     std::string texturePath;
     std::string originalTexturePath;
-
+    
     Entity simpleShadowEntity = MAX_ENTITIES;
 
     int shadingMode = 1;
@@ -80,4 +81,38 @@ struct LightComponent {
     float intensity = 1.0f;
     int type = 0;
     int layerMask = SceneLayers::ALL;
+};
+
+// 8. Global Environment / Time / Weather Data
+struct EnvironmentComponent {
+    // Configurations
+    TimeConfig timeConfig;
+    SeasonConfig seasonConfig;
+    WeatherConfig weatherConfig;
+    float sunHeatBonus = 60.0f;
+
+    // Time & Season State
+    Season currentSeason = Season::SUMMER;
+    float seasonTimer = 0.0f;
+
+    // Weather State
+    bool isPrecipitating = false;
+    float weatherTimer = 0.0f;
+    float currentWeatherDurationTarget = 10.0f;
+    float weatherIntensity = 0.0f; // Stores the current global temperature
+
+    // Fire & Dust interactions
+    float postRainFireSuppressionTimer = 0.0f;
+    float timeSinceLastRain = 0.0f;
+
+    float currentSunHeight = 0.0f;
+    bool useSimpleShadows = false;
+};
+
+struct DustCloudComponent {
+    bool isActive = false;
+    int emitterId = -1;
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 direction = glm::vec3(0.0f);
+    float speed = 15.0f;
 };

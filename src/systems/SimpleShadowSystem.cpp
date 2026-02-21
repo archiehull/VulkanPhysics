@@ -1,12 +1,18 @@
 #include "SimpleShadowSystem.h"
 #include "../rendering/Scene.h"
-#include <algorithm>                     
 #include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
 
 void SimpleShadowSystem::Update(Scene& scene, float deltaTime) {
-    if (!scene.IsUsingSimpleShadows()) return;
+    auto& registry = scene.GetRegistry();
+    Entity envEntity = scene.GetEnvironmentEntity();
+    if (envEntity == MAX_ENTITIES) return;
 
-    Registry& registry = scene.GetRegistry();
+    auto& env = registry.GetComponent<EnvironmentComponent>(envEntity);
+
+    // Only process if enabled
+    if (!env.useSimpleShadows) return;
+
     glm::vec3 lightPos = glm::vec3(0.0f, 100.0f, 0.0f);
     bool sunIsUp = false;
 
@@ -17,7 +23,7 @@ void SimpleShadowSystem::Update(Scene& scene, float deltaTime) {
         if (lightPos.y > -20.0f) sunIsUp = true;
     }
 
-    for (Entity e : scene.GetRenderableEntities()) {
+    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
         if (!registry.HasComponent<RenderComponent>(e) || !registry.HasComponent<TransformComponent>(e)) continue;
 
         auto& render = registry.GetComponent<RenderComponent>(e);

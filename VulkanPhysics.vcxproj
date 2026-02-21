@@ -47,8 +47,11 @@
     <ClCompile Include="src\rendering\SkyboxPass.cpp" />
     <ClCompile Include="src\rendering\Texture.cpp" />
     <ClCompile Include="src\systems\OrbitSystem.cpp" />
+    <ClCompile Include="src\systems\ParticleUpdateSystem.cpp" />
     <ClCompile Include="src\systems\SimpleShadowSystem.cpp" />
     <ClCompile Include="src\systems\ThermodynamicsSystem.cpp" />
+    <ClCompile Include="src\systems\TimeSystem.cpp" />
+    <ClCompile Include="src\systems\WeatherSystem.cpp" />
     <ClCompile Include="src\vulkan\VulkanBuffer.cpp" />
     <ClCompile Include="src\vulkan\VulkanCommandBuffer.cpp" />
     <ClCompile Include="src\vulkan\VulkanContext.cpp" />
@@ -85,8 +88,11 @@
     <ClInclude Include="src\rendering\Texture.h" />
     <ClInclude Include="src\systems\ISystem.h" />
     <ClInclude Include="src\systems\OrbitSystem.h" />
+    <ClInclude Include="src\systems\ParticleUpdateSystem.h" />
     <ClInclude Include="src\systems\SimpleShadowSystem.h" />
     <ClInclude Include="src\systems\ThermodynamicsSystem.h" />
+    <ClInclude Include="src\systems\TimeSystem.h" />
+    <ClInclude Include="src\systems\WeatherSystem.h" />
     <ClInclude Include="src\vulkan\PushConstantObject.h" />
     <ClInclude Include="src\vulkan\UniformBufferObject.h" />
     <ClInclude Include="src\vulkan\Vertex.h" />

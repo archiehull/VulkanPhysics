@@ -7,7 +7,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include "../vulkan/UniformBufferObject.h"
-#include "../core/Config.h" // Include Config for struct defs
+#include "../core/Config.h" 
 #include "ParticleSystem.h"
 
 // ECS Includes
@@ -16,13 +16,6 @@
 #include "../core/Components.h"
 #include <unordered_map>
 #include "../systems/ISystem.h"
-
-enum class Season {
-    SUMMER,
-    AUTUMN,
-    WINTER,
-    SPRING
-};
 
 struct TerrainConfig {
     bool exists = false;
@@ -72,7 +65,7 @@ public:
 
     void AddBowl(const std::string& name, float radius, int slices, int stacks, const glm::vec3& position, const std::string& texturePath);
     void AddPedestal(const std::string& name, float topRadius, float baseWidth, float height, const glm::vec3& position, const std::string& texturePath);
-    
+
     void SetupParticleSystem(VkCommandPool commandPoolArg, VkQueue graphicsQueueArg,
         GraphicsPipeline* additivePipeline, GraphicsPipeline* alphaPipeline,
         VkDescriptorSetLayout layout, uint32_t framesInFlightArg);
@@ -95,12 +88,11 @@ public:
     void AddDust();
     void SpawnDustCloud();
 
+    void StopPrecipitation();
+    void StopDust();
+    void StopObjectFire(Entity e);
+
     void Ignite(Entity e);
-
-    void UpdateThermodynamics(float deltaTime, float sunIntensity);
-
-    float GetWeatherIntensity() const { return m_WeatherIntensity; }
-    std::string GetSeasonName() const;
 
     const std::vector<std::unique_ptr<ParticleSystem>>& GetParticleSystems() const { return particleSystems; }
 
@@ -111,7 +103,12 @@ public:
 
     void AddSimpleShadow(const std::string& objectName, float radius);
     void ToggleSimpleShadows();
-    bool IsUsingSimpleShadows() const { return m_UseSimpleShadows; }
+
+    // Updated to query the component instead of a local boolean
+    bool IsUsingSimpleShadows() const {
+        if (m_EnvironmentEntity == MAX_ENTITIES) return false;
+        return m_Registry.GetComponent<EnvironmentComponent>(m_EnvironmentEntity).useSimpleShadows;
+    }
 
     std::vector<Light> GetLights() const;
 
@@ -122,10 +119,7 @@ public:
     Registry& GetRegistry() { return m_Registry; }
     const std::vector<Entity>& GetRenderableEntities() const { return m_RenderableEntities; }
 
-    float GetSunHeatBonus() const { return m_SunHeatBonus; }
-    float GetPostRainFireSuppressionTimer() const { return m_PostRainFireSuppressionTimer; }
-    const TimeConfig& GetTimeConfig() const { return m_TimeConfig; }
-    void StopObjectFire(Entity e);
+    Entity GetEnvironmentEntity() const { return m_EnvironmentEntity; }
 
     ParticleSystem* GetOrCreateSystem(const ParticleProps& props);
 
@@ -145,19 +139,27 @@ public:
 
     void SetObjectTexture(const std::string& objectName, const std::string& texturePath);
 
-    // --- Configuration Setters ---
+    // --- Configuration Setters (These route to EnvironmentComponent) ---
     void SetTimeConfig(const TimeConfig& config);
     void SetWeatherConfig(const WeatherConfig& config);
     void SetSeasonConfig(const SeasonConfig& config);
     void SetSunHeatBonus(float bonus);
 
     void ToggleWeather();
-    bool IsPrecipitating() const { return m_IsPrecipitating; }
     void NextSeason();
 
     void ClearProceduralRegistry();
 
     void Cleanup() { Clear(); }
+
+    // --- Environment Component Getters ---
+    float GetWeatherIntensity() const;
+    std::string GetSeasonName() const;
+    bool IsPrecipitating() const;
+    float GetSunHeatBonus() const;
+    float GetPostRainFireSuppressionTimer() const;
+    const TimeConfig& GetTimeConfig() const;
+    bool IsDustActive() const; // Reads from DustCloudComponent now!
 
 private:
     Registry m_Registry;
@@ -166,42 +168,16 @@ private:
     std::vector<Entity> m_RenderableEntities;
     std::vector<Entity> m_LightEntities;
 
+    // The singleton entity tracking global environment configurations
+    Entity m_EnvironmentEntity = MAX_ENTITIES;
+
     Entity AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable);
 
-    // --- Config Data ---
-    TimeConfig m_TimeConfig;
-    SeasonConfig m_SeasonConfig;
-    WeatherConfig m_WeatherConfig;
-    float m_SunHeatBonus = 60.0f;
-
-    Season m_CurrentSeason = Season::SUMMER;
-    float m_SeasonTimer = 0.0f;
-    float m_WeatherIntensity = 0.0f;
-
+    // Particle System state variables
     int m_RainEmitterId = -1;
     int m_SnowEmitterId = -1;
 
-    bool m_IsPrecipitating = false;
-    float m_WeatherTimer = 0.0f;
-    float m_CurrentWeatherDurationTarget = 10.0f; // Target for current state (either clear or rain)
-    float m_PostRainFireSuppressionTimer = 0.0f;
-
-    void StopPrecipitation();
-    void PickNextWeatherDuration(); // Helper to choose random duration
-
-    bool m_DustActive = false;
-    int m_DustEmitterId = -1;
-    glm::vec3 m_DustPosition = glm::vec3(0.0f);
-    glm::vec3 m_DustDirection = glm::vec3(0.0f);
-
-    float m_TimeSinceLastRain = 0.0f;
-
-    void StopDust();
-
     int globalShadingMode = 1;
-
-    void UpdateSimpleShadows();
-    bool m_UseSimpleShadows = false;
 
     TerrainConfig m_TerrainConfig;
     std::vector<ProceduralObjectConfig> proceduralRegistry;
@@ -217,5 +193,4 @@ private:
     uint32_t framesInFlight = 2;
 
     std::vector<std::unique_ptr<ParticleSystem>> particleSystems;
-
 };
