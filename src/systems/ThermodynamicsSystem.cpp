@@ -93,17 +93,22 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
             const float growth = glm::clamp(thermo.burnTimer / (thermo.maxBurnDuration * 0.6f), 0.0f, 1.0f);
             thermo.burnFactor = glm::clamp(thermo.burnTimer / thermo.maxBurnDuration, 0.0f, 1.0f);
 
-            float objectSize = 1.0f;
+            // Extract true world scale
+            const float scaleX = glm::length(glm::vec3(transform.matrix[0]));
+            const float scaleY = glm::length(glm::vec3(transform.matrix[1]));
+            const float scaleZ = glm::length(glm::vec3(transform.matrix[2]));
+            const float maxWorldScale = std::max({ scaleX, scaleY, scaleZ });
+
+            float objectSize = maxWorldScale;
             if (registry.HasComponent<ColliderComponent>(e)) {
                 auto& collider = registry.GetComponent<ColliderComponent>(e);
-                objectSize = std::max(collider.radius, collider.height * 0.5f);
-
-                // FIX 1: Clamp object size! This prevents giant terrain or huge models 
-                // from spawning screen-filling sprites.
-                objectSize = glm::clamp(objectSize, 0.5f, 3.0f);
+                objectSize = std::max(collider.radius, collider.height * 0.5f) * maxWorldScale;
             }
 
-            const float maxFireHeight = 1.5f * objectSize; // Toned down from 3.0f
+            // Clamp so we don't spawn millions of particles for a mountain, or 0 for a pebble
+            objectSize = glm::clamp(objectSize, 0.5f, 5.0f);
+
+            const float maxFireHeight = 1.5f * objectSize;
             const float minFireHeight = 0.2f * objectSize;
             const float currentFireHeight = minFireHeight + (maxFireHeight - minFireHeight) * growth;
 
@@ -112,21 +117,23 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 fireProps.position = basePos;
                 fireProps.position.y += currentFireHeight * 0.5f;
 
-                // Keep spread wide so it engulfs the object...
+                // 1. SPREAD: engulf the size of the object
                 fireProps.positionVariation = glm::vec3(0.4f * objectSize, currentFireHeight * 0.4f, 0.4f * objectSize);
 
-                // FIX 2: Tone down the individual sprite size multiplier (was 1.5f, now 0.5f)
-                const float particleScale = objectSize * (0.1f + growth * 0.5f);
+                // 2. SPRITE SIZE: ONLY use temporal growth. DO NOT multiply by objectSize!
+                // This guarantees the sprites are always clearly visible (starts at 0.1, grows to 1.5x normal size)
+                const float particleScale = 0.1f + (growth * 1.4f);
 
                 fireProps.sizeBegin *= particleScale;
                 fireProps.sizeEnd *= particleScale;
                 fireProps.sizeVariation *= particleScale;
 
-                fireProps.velocity *= particleScale;
+                // Allow flames to rise a bit faster on large objects so they don't clump
+                fireProps.velocity *= particleScale * (1.0f + (objectSize * 0.2f));
                 fireProps.velocityVariation *= particleScale;
 
-                // FIX 3: Spawn MORE particles to fill the space, rather than HUGE particles
-                const float rate = (100.0f + (400.0f * growth)) * objectSize;
+                // 3. RATE: Multiply rate by objectSize so huge objects pump out LOTS of normal-sized flames
+                const float rate = (50.0f + (300.0f * growth)) * objectSize;
                 scene.GetOrCreateSystem(fireProps)->UpdateEmitter(thermo.fireEmitterId, fireProps, rate);
             }
 
@@ -135,16 +142,17 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 smokeProps.position = basePos;
                 smokeProps.position.y += currentFireHeight;
 
-                const float smokeScale = objectSize * (0.1f + growth * 0.7f); // Toned down
+                // Same rule for smoke: temporal scale only
+                const float smokeScale = 0.1f + (growth * 1.9f);
                 smokeProps.sizeBegin *= smokeScale;
                 smokeProps.sizeEnd *= smokeScale;
                 smokeProps.sizeVariation *= smokeScale;
 
-                smokeProps.velocity *= smokeScale;
+                smokeProps.velocity *= smokeScale * (1.0f + (objectSize * 0.2f));
                 smokeProps.velocityVariation *= smokeScale;
                 smokeProps.lifeTime = 6.0f;
 
-                const float rate = (40.0f + (150.0f * growth)) * objectSize;
+                const float rate = (20.0f + (80.0f * growth)) * objectSize;
                 scene.GetOrCreateSystem(smokeProps)->UpdateEmitter(thermo.smokeEmitterId, smokeProps, rate);
             }
 

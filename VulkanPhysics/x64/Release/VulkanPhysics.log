@@ -1,7 +1,7 @@
-﻿  ThermodynamicsSystem.cpp
+﻿  EditorUI.cpp
   Generating code
-  1 of 8084 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+  1 of 8096 functions (<0.1%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    44 functions had inline decision re-evaluated but remain unchanged
+    36 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   VulkanPhysics.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\VulkanPhysics.exe

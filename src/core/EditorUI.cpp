@@ -1,5 +1,6 @@
 #include "EditorUI.h"
 #include "imgui.h"
+#include "../rendering/ParticleLibrary.h"
 #include <algorithm>
 
 void EditorUI::Initialize(const std::string& configPath, const std::string& defaultSceneName) {
@@ -80,8 +81,52 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             entityName = registry.GetComponent<NameComponent>(e).name;
                         }
 
-                        // Using BeginMenu here creates the submenu for each entity
-                        if (ImGui::BeginMenu(entityName.c_str())) {
+                        // --- NEW: Count attached emitters & Check Burning State ---
+                        int emitterCount = 0;
+                        int fireId = -1;
+                        int smokeId = -1;
+                        bool isBurning = false;
+
+                        if (registry.HasComponent<ThermoComponent>(e)) {
+                            auto& thermo = registry.GetComponent<ThermoComponent>(e);
+                            if (thermo.state == ObjectState::BURNING) {
+                                isBurning = true;
+                            }
+                            if (thermo.fireEmitterId != -1) {
+                                emitterCount++;
+                                fireId = thermo.fireEmitterId;
+                            }
+                            if (thermo.smokeEmitterId != -1) {
+                                emitterCount++;
+                                smokeId = thermo.smokeEmitterId;
+                            }
+                        }
+
+                        // Update the label if it has emitters
+                        if (emitterCount > 0) {
+                            entityName += " [" + std::to_string(emitterCount) + " Emitters]";
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f)); // Orange/Fire Color
+                        }
+
+                        // Apply color if the object is currently burning
+                        if (isBurning) {
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f)); // Orange/Fire Color
+                        }
+
+                        // Draw the menu item
+                        bool menuOpen = ImGui::BeginMenu(entityName.c_str());
+
+                        // IMMEDIATELY pop the color so the contents inside the menu stay normal!
+                        if (isBurning) {
+                            ImGui::PopStyleColor();
+                        }
+
+                        if (emitterCount > 0) {
+                            ImGui::PopStyleColor();
+						}
+
+
+                        if (menuOpen) {
 
                             // Header for visual clarity
                             ImGui::TextDisabled("Entity Properties");
@@ -119,6 +164,52 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                 ImGui::Separator();
                                 ImGui::Text("Texture:");
                                 ImGui::TextWrapped("%s", render.texturePath.c_str());
+                            }
+
+                            // --- Display Attached Emitter Details ---
+                            if (emitterCount > 0) {
+                                ImGui::Spacing();
+                                ImGui::Separator();
+                                ImGui::TextDisabled("Attached Emitters");
+
+                                const auto& pSystems = scene.GetParticleSystems();
+
+                                auto drawAttachedEmitter = [&](int targetId, const char* label, const std::string& texturePath) {
+                                    if (targetId == -1) return;
+
+                                    bool found = false;
+                                    for (const auto& sys : pSystems) {
+                                        if (sys->GetTexturePath() != texturePath) continue;
+
+                                        for (const auto& em : sys->GetEmitters()) {
+                                            if (em.id == targetId) {
+                                                std::string menuLabel = std::string(label) + " (ID: " + std::to_string(targetId) + ")";
+                                                if (ImGui::BeginMenu(menuLabel.c_str())) {
+                                                    ImGui::Text("Rate: %.1f particles/sec", em.particlesPerSecond);
+                                                    ImGui::Text("Size: %.2f -> %.2f (Var: %.2f)", em.props.sizeBegin, em.props.sizeEnd, em.props.sizeVariation);
+                                                    ImGui::Text("Velocity: (%.1f, %.1f, %.1f)", em.props.velocity.x, em.props.velocity.y, em.props.velocity.z);
+
+                                                    ImGui::Separator();
+                                                    if (ImGui::MenuItem("Extinguish Object")) {
+                                                        scene.StopObjectFire(e);
+                                                    }
+
+                                                    ImGui::EndMenu();
+                                                }
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                        if (found) break;
+                                    }
+
+                                    if (!found) {
+                                        ImGui::MenuItem((std::string(label) + " (ID: " + std::to_string(targetId) + ") - Missing/Stale").c_str(), nullptr, false, false);
+                                    }
+                                    };
+
+                                drawAttachedEmitter(fireId, "Fire", ParticleLibrary::GetFireProps().texturePath);
+                                drawAttachedEmitter(smokeId, "Smoke", ParticleLibrary::GetSmokeProps().texturePath);
                             }
 
                             ImGui::EndMenu(); // Close the entity's submenu
