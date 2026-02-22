@@ -86,21 +86,22 @@ record position and velocity
 have a lookahead to see how many frames it stays in same position/velocity to reduce calls
 -store in local variable (int stationary_frames)
 add (save on completion)
+toggle record camera position
 
 latency calculation
 per component latency view with toggle
 calculate for recording movement (option to run 10x and average)
 
 
-marble run / plink board (drop coin in shute bouncing off pegs(in tunnels))
-
-pinball minigame
-
-roulette wheel -> betting mechanics
-mini casino
-poker chips on table, table shake
-glowing cig in ash tray
-low lighting
+minigames
+-marble run / plink board (drop coin in shute bouncing off pegs(in tunnels))
+-pinball minigame
+-roulette wheel -> betting mechanics
+--mini casino
+--poker chips on table, table shake
+--glowing cig in ash tray
+--low lighting
+-smoke,molly,frag + laser/phantomhourglass/packman style maze+util
 
 send force / wind with mouse
 rubber band flick
