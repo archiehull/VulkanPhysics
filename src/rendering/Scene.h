@@ -176,6 +176,8 @@ private:
     Entity m_EnvironmentEntity = MAX_ENTITIES;
 
     Entity AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable);
+    void CreateSimpleShadowEntity(Entity targetEntity);
+
 
     // Particle System state variables
     int m_RainEmitterId = -1;
