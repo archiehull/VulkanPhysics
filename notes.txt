@@ -101,7 +101,13 @@ minigames
 --poker chips on table, table shake
 --glowing cig in ash tray
 --low lighting
--smoke,molly,frag + laser/phantomhourglass/packman style maze+util
+-laser/phantomhourglass/pacman style
+--smoke,molly,frag 
+--maze+util puzzle game
+--blowup/burn/smoke disguse
+--throw distraction (pokedol)
+--find items/didffernt levels
+--different enemies impact from different items
 
 send force / wind with mouse
 rubber band flick
