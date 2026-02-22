@@ -42,6 +42,7 @@ lightinf config snd placer (colourpicker)
 overall lighting control / light groups
 post processing to change overall lighting hue etc (shaders)
 toggle light view
+8,16,32,64bit shader
 
 set object orbit (around coord or other object)
 add collision detectuon for path setting
