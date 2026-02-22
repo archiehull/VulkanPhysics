@@ -101,6 +101,7 @@ minigames
 --poker chips on table, table shake
 --glowing cig in ash tray
 --low lighting
+--train ai/dev naturak rando throw of object to position 
 -laser/phantomhourglass/pacman style
 --smoke,molly,frag 
 --maze+util puzzle game
