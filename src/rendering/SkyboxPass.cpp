@@ -3,6 +3,8 @@
 #include "../vulkan/PushConstantObject.h"
 #include <filesystem>
 #include <iostream>
+#include "core/ECS.h"
+#include "core/Components.h"
 
 SkyboxPass::SkyboxPass(VkDevice deviceArg, VkPhysicalDevice physicalDeviceArg, VkCommandPool commandPoolArg, VkQueue graphicsQueueArg)
     : device(deviceArg), physicalDevice(physicalDeviceArg), commandPool(commandPoolArg), graphicsQueue(graphicsQueueArg) {
@@ -94,7 +96,7 @@ void SkyboxPass::Initialize(VkRenderPass renderPass, const VkExtent2D& extent, V
     pipeline->Create();
 }
 
-void SkyboxPass::Draw(VkCommandBuffer cmd, const Scene& scene, uint32_t currentFrame, VkDescriptorSet globalDescriptorSet) const {
+void SkyboxPass::Draw(VkCommandBuffer cmd, Scene& scene, uint32_t currentFrame, VkDescriptorSet globalDescriptorSet) const {
     static_cast<void>(currentFrame);
 
     if (!pipeline || !cubemap) return;
@@ -109,19 +111,25 @@ void SkyboxPass::Draw(VkCommandBuffer cmd, const Scene& scene, uint32_t currentF
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetLayout(), 1, 1, &skySet, 0, nullptr);
 
     // Render objects marked with shadingMode = 2 (Skybox) OR 3 (Combined)
-    for (const auto& obj : scene.GetObjects()) {
+    Registry& registry = scene.GetRegistry();
+    for (Entity e : scene.GetRenderableEntities()) {
+        if (!registry.HasComponent<RenderComponent>(e) || !registry.HasComponent<TransformComponent>(e)) continue;
+
+        auto& render = registry.GetComponent<RenderComponent>(e);
+        auto& transform = registry.GetComponent<TransformComponent>(e);
+
         // UPDATE: Allow mode 3 to be drawn by this pass (for the inside view)
-        if (!obj->visible || !obj->geometry || (obj->shadingMode != 2 && obj->shadingMode != 3)) continue;
+        if (!render.visible || !render.geometry || (render.shadingMode != 2 && render.shadingMode != 3)) continue;
 
         PushConstantObject pco{};
-        pco.model = obj->transform;
+        pco.model = transform.matrix;
         // For the inside view, we force Mode 2 (Pure Skybox) look
         pco.shadingMode = 2;
 
         vkCmdPushConstants(cmd, pipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
 
-        obj->geometry->Bind(cmd);
-        obj->geometry->Draw(cmd);
+        render.geometry->Bind(cmd);
+        render.geometry->Draw(cmd);
     }
 }
 

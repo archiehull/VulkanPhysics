@@ -4,17 +4,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-enum class CameraType {
-    FREE_ROAM,
-    OUTSIDE_ORB,
-    CACTI,
-    // --- NEW TYPES ---
-    CUSTOM_1,
-    CUSTOM_2,
-    CUSTOM_3,
-    CUSTOM_4
-};
-
 class Camera final {
 public:
     Camera();

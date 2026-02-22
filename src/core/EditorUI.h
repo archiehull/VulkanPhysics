@@ -14,7 +14,7 @@ public:
     void Initialize(const std::string& configPath, const std::string& defaultSceneName = "init");
 
     // Renders the top menu bar. Returns a path if a new scene is selected.
-    std::string Draw(float deltaTime, float currentTemp, const std::string& seasonName, const Scene& scene);
+    std::string Draw(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene);
     // Returns the path determined during Initialize
     std::string GetInitialScenePath() const;
 

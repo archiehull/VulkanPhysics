@@ -34,8 +34,8 @@
     <Filter Include="Source Files\src\imgui">
       <UniqueIdentifier>{d29fe7ac-7f20-4260-81e3-0b490166d25c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\src\util">
-      <UniqueIdentifier>{352e2bb7-8180-4390-9495-c7bcb9bbf98d}</UniqueIdentifier>
+    <Filter Include="Source Files\src\systems">
+      <UniqueIdentifier>{3f196d6e-c5fa-48da-b24a-3ef0eb0da539}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -147,8 +147,29 @@
     <ClCompile Include="src\geometry\SJGLoader.cpp">
       <Filter>Source Files\src\geometry</Filter>
     </ClCompile>
-    <ClCompile Include="src\util\EditorUI.cpp">
-      <Filter>Source Files\src\util</Filter>
+    <ClCompile Include="src\core\EditorUI.cpp">
+      <Filter>Source Files\src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\OrbitSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\SimpleShadowSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\ThermodynamicsSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\TimeSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\WeatherSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\ParticleUpdateSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\CameraSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -245,8 +266,41 @@
     <ClInclude Include="src\geometry\SJGLoader.h">
       <Filter>Source Files\src\geometry</Filter>
     </ClInclude>
-    <ClInclude Include="src\util\EditorUI.h">
-      <Filter>Source Files\src\util</Filter>
+    <ClInclude Include="src\core\EditorUI.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\ECS.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\Components.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\OrbitSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\SimpleShadowSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\ISystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\ThermodynamicsSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\CoreTypes.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\TimeSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\WeatherSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\ParticleUpdateSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\CameraSystem.h">
+      <Filter>Source Files\src\systems</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
