@@ -1,5 +1,6 @@
 #include "EditorUI.h"
 #include "imgui.h"
+#include <algorithm>
 
 void EditorUI::Initialize(const std::string& configPath, const std::string& defaultSceneName) {
     m_ConfigRoot = configPath;
@@ -125,6 +126,77 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     }
                 }
                 ImGui::EndMenu(); // Close the "Objects" tab
+            }
+
+            // --- TAB: Emitters (Debug) ---
+            if (ImGui::BeginMenu("Particle Emitters")) {
+                const auto& pSystems = scene.GetParticleSystems();
+
+                // 1. Collect all emitters across all systems into a single list
+                struct EmitterDebugInfo {
+                    int id;
+                    std::string texName;
+                    ParticleSystem::ParticleEmitter emitter;
+                };
+
+                std::vector<EmitterDebugInfo> allEmitters;
+
+                for (const auto& sys : pSystems) {
+                    // Extract just the file name from the texture path
+                    std::string texName = sys->GetTexturePath();
+                    size_t slashPos = texName.find_last_of("/\\");
+                    if (slashPos != std::string::npos) {
+                        texName = texName.substr(slashPos + 1);
+                    }
+
+                    for (const auto& em : sys->GetEmitters()) {
+                        allEmitters.push_back({ em.id, texName, em });
+                    }
+                }
+
+                if (allEmitters.empty()) {
+                    ImGui::MenuItem("No Active Emitters", nullptr, false, false);
+                }
+                else {
+                    // 2. Sort them by Emitter ID so they appear in a logical order
+                    std::sort(allEmitters.begin(), allEmitters.end(), [](const EmitterDebugInfo& a, const EmitterDebugInfo& b) {
+                        return a.id < b.id;
+                        });
+
+                    // 3. Draw the menu items
+                    for (const auto& info : allEmitters) {
+                        const auto& em = info.emitter;
+
+                        // Menu label shows ID and Type: "Emitter ID: 0 (fire_01.png)"
+                        std::string emLabel = "Emitter ID: " + std::to_string(em.id) + " (" + info.texName + ")##" + std::to_string(em.id);
+
+                        if (ImGui::BeginMenu(emLabel.c_str())) {
+                            ImGui::TextDisabled("Live Stats");
+                            ImGui::Separator();
+                            ImGui::Text("Type/Texture: %s", info.texName.c_str());
+                            ImGui::Text("Rate: %.1f particles/sec", em.particlesPerSecond);
+                            ImGui::Text("Time Since Last Emit: %.4f s", em.timeSinceLastEmit);
+
+                            ImGui::Spacing();
+                            ImGui::TextDisabled("Particle Properties");
+                            ImGui::Separator();
+
+                            ImGui::Text("Pos: (%.1f, %.1f, %.1f)", em.props.position.x, em.props.position.y, em.props.position.z);
+                            ImGui::Text("Pos Var: (%.1f, %.1f, %.1f)", em.props.positionVariation.x, em.props.positionVariation.y, em.props.positionVariation.z);
+                            ImGui::Spacing();
+
+                            ImGui::Text("Vel: (%.1f, %.1f, %.1f)", em.props.velocity.x, em.props.velocity.y, em.props.velocity.z);
+                            ImGui::Text("Vel Var: (%.1f, %.1f, %.1f)", em.props.velocityVariation.x, em.props.velocityVariation.y, em.props.velocityVariation.z);
+                            ImGui::Spacing();
+
+                            ImGui::Text("Size: %.2f -> %.2f (Var: %.2f)", em.props.sizeBegin, em.props.sizeEnd, em.props.sizeVariation);
+                            ImGui::Text("Lifetime: %.2f s", em.props.lifeTime);
+
+                            ImGui::EndMenu(); // Close Emitter Info
+                        }
+                    }
+                }
+                ImGui::EndMenu(); // Close Particle Debug
             }
 
             if (ImGui::BeginMenu("Simulation")) {

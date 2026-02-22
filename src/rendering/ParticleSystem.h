@@ -24,6 +24,16 @@ struct ParticleProps {
 
 class ParticleSystem final {
 public:
+
+    struct ParticleEmitter {
+        int id;
+        ParticleProps props;
+        float particlesPerSecond = 0.0f;
+        float timeSinceLastEmit = 0.0f;
+    };
+
+    const std::vector<ParticleEmitter>& GetEmitters() const { return emitters; }
+
     ParticleSystem(VkDevice deviceArg, VkPhysicalDevice physicalDeviceArg, VkCommandPool commandPool, VkQueue graphicsQueue, uint32_t maxParticlesArg, uint32_t framesInFlightArg);
     ~ParticleSystem();
 
@@ -77,13 +87,6 @@ private:
         float lifeRemaining = 0.0f;
         bool active = false;
         float camDistance = -1.0f;
-    };
-
-    struct ParticleEmitter {
-        int id;
-        ParticleProps props;
-        float particlesPerSecond = 0.0f;
-        float timeSinceLastEmit = 0.0f;
     };
 
     int nextEmitterId = 0;

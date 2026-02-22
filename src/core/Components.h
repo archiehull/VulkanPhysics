@@ -49,6 +49,7 @@ struct OrbitComponent {
 struct ThermoComponent {
     ObjectState state = ObjectState::NORMAL;
     bool isFlammable = false;
+    bool canBurnout = true;
 
     float currentTemp = 20.0f;
     float ignitionThreshold = 100.0f;

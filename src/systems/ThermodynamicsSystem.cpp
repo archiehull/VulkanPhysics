@@ -3,22 +3,27 @@
 #include "../rendering/ParticleLibrary.h"
 #include <random>
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
 
 void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
     Entity envEntity = scene.GetEnvironmentEntity();
-    if (envEntity == MAX_ENTITIES) return;
 
-    auto& env = registry.GetComponent<EnvironmentComponent>(envEntity);
+    // FIX 1: Bulletproof Environment Fallback! 
+    // If scene logic accidentally wipes the environment, use a default so fire systems never abort.
+    EnvironmentComponent fallbackEnv;
+    EnvironmentComponent& env = (envEntity != MAX_ENTITIES)
+        ? registry.GetComponent<EnvironmentComponent>(envEntity)
+        : fallbackEnv;
 
     static std::random_device rd;
     static std::mt19937 gen(rd());
     std::uniform_real_distribution<float> chance(0.0f, 1.0f);
 
     for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+        // FIX 2: Remove RenderComponent requirement! (Allows invisible colliders to burn)
         if (!registry.HasComponent<ThermoComponent>(e) ||
-            !registry.HasComponent<TransformComponent>(e) ||
-            !registry.HasComponent<RenderComponent>(e)) {
+            !registry.HasComponent<TransformComponent>(e)) {
             continue;
         }
 
@@ -26,7 +31,11 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
         if (!thermo.isFlammable) continue;
 
         auto& transform = registry.GetComponent<TransformComponent>(e);
-        auto& render = registry.GetComponent<RenderComponent>(e);
+
+        // Safely extract render component ONLY if it exists
+        RenderComponent* render = registry.HasComponent<RenderComponent>(e)
+            ? &registry.GetComponent<RenderComponent>(e)
+            : nullptr;
 
         const glm::vec3 basePos = glm::vec3(transform.matrix[3]);
 
@@ -34,14 +43,12 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
         case ObjectState::NORMAL:
         case ObjectState::HEATING: {
             const float responseSpeed = thermo.thermalResponse;
-            const float effectiveIgnitionThreshold = 100.0f;
+            const float effectiveIgnitionThreshold = thermo.ignitionThreshold;
             float targetTemp = env.weatherIntensity;
 
-            // Use the Sun Height from the Environment Component!
             if (env.currentSunHeight > 0.1f) {
                 targetTemp += env.sunHeatBonus * env.currentSunHeight;
             }
-
             if (env.isPrecipitating) {
                 targetTemp -= 40.0f;
             }
@@ -86,20 +93,40 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
             const float growth = glm::clamp(thermo.burnTimer / (thermo.maxBurnDuration * 0.6f), 0.0f, 1.0f);
             thermo.burnFactor = glm::clamp(thermo.burnTimer / thermo.maxBurnDuration, 0.0f, 1.0f);
 
-            const float maxFireHeight = 3.0f;
-            const float currentFireHeight = 0.2f + (maxFireHeight - 0.2f) * growth;
+            float objectSize = 1.0f;
+            if (registry.HasComponent<ColliderComponent>(e)) {
+                auto& collider = registry.GetComponent<ColliderComponent>(e);
+                objectSize = std::max(collider.radius, collider.height * 0.5f);
+
+                // FIX 1: Clamp object size! This prevents giant terrain or huge models 
+                // from spawning screen-filling sprites.
+                objectSize = glm::clamp(objectSize, 0.5f, 3.0f);
+            }
+
+            const float maxFireHeight = 1.5f * objectSize; // Toned down from 3.0f
+            const float minFireHeight = 0.2f * objectSize;
+            const float currentFireHeight = minFireHeight + (maxFireHeight - minFireHeight) * growth;
 
             if (thermo.fireEmitterId != -1) {
                 ParticleProps fireProps = ParticleLibrary::GetFireProps();
                 fireProps.position = basePos;
                 fireProps.position.y += currentFireHeight * 0.5f;
-                fireProps.positionVariation = glm::vec3(0.3f, currentFireHeight * 0.4f, 0.3f);
 
-                const float particleScale = 1.0f + growth * 0.5f;
+                // Keep spread wide so it engulfs the object...
+                fireProps.positionVariation = glm::vec3(0.4f * objectSize, currentFireHeight * 0.4f, 0.4f * objectSize);
+
+                // FIX 2: Tone down the individual sprite size multiplier (was 1.5f, now 0.5f)
+                const float particleScale = objectSize * (0.1f + growth * 0.5f);
+
                 fireProps.sizeBegin *= particleScale;
                 fireProps.sizeEnd *= particleScale;
+                fireProps.sizeVariation *= particleScale;
 
-                const float rate = 50.0f + (300.0f * growth);
+                fireProps.velocity *= particleScale;
+                fireProps.velocityVariation *= particleScale;
+
+                // FIX 3: Spawn MORE particles to fill the space, rather than HUGE particles
+                const float rate = (100.0f + (400.0f * growth)) * objectSize;
                 scene.GetOrCreateSystem(fireProps)->UpdateEmitter(thermo.fireEmitterId, fireProps, rate);
             }
 
@@ -108,72 +135,90 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 smokeProps.position = basePos;
                 smokeProps.position.y += currentFireHeight;
 
-                const float smokeScale = 1.0f + growth * 2.0f;
+                const float smokeScale = objectSize * (0.1f + growth * 0.7f); // Toned down
                 smokeProps.sizeBegin *= smokeScale;
                 smokeProps.sizeEnd *= smokeScale;
-                smokeProps.lifeTime = 8.0f;
-                smokeProps.velocity.y = 3.0f;
+                smokeProps.sizeVariation *= smokeScale;
 
-                const float rate = 20.0f + (80.0f * growth);
+                smokeProps.velocity *= smokeScale;
+                smokeProps.velocityVariation *= smokeScale;
+                smokeProps.lifeTime = 6.0f;
+
+                const float rate = (40.0f + (150.0f * growth)) * objectSize;
                 scene.GetOrCreateSystem(smokeProps)->UpdateEmitter(thermo.smokeEmitterId, smokeProps, rate);
             }
 
             glm::vec3 lightPos = basePos;
             lightPos.y += currentFireHeight * 0.5f;
 
+            // FIX 3: Bulletproof ECS Reallocation Strategy
             if (thermo.fireLightEntity == -1 || thermo.fireLightEntity == MAX_ENTITIES) {
                 std::string lightName = "FireLight_" + std::to_string(e);
-                thermo.fireLightEntity = scene.AddLight(lightName, lightPos, glm::vec3(1.0f, 0.5f, 0.1f), 0.0f, 1);
+                int newLight = scene.AddLight(lightName, lightPos, glm::vec3(1.0f, 0.5f, 0.1f), 0.0f, 1);
+
+                // Adding a light resizes the ECS vectors! This turns `thermo` into a dangerous dangling pointer!
+                // Update the real memory immediately, then BREAK out of the switch!
+                // By breaking, we skip the rest of this entity's frame and safely fetch fresh references on the next frame!
+                registry.GetComponent<ThermoComponent>(e).fireLightEntity = newLight;
+                break;
             }
 
-            if (thermo.fireLightEntity != MAX_ENTITIES && registry.HasComponent<LightComponent>(thermo.fireLightEntity)) {
+            // Since we break on creation, it is mathematically guaranteed that `thermo` here is 100% memory safe.
+            if (registry.HasComponent<LightComponent>(thermo.fireLightEntity)) {
                 auto& fireLightTransform = registry.GetComponent<TransformComponent>(thermo.fireLightEntity);
                 auto& fireLightComp = registry.GetComponent<LightComponent>(thermo.fireLightEntity);
 
                 const float t = thermo.burnTimer;
                 const float flicker = 1.0f + 0.3f * std::sin(t * 15.0f) + 0.15f * std::sin(t * 37.0f);
-                const float targetIntensity = 50.05f * growth;
+                const float targetIntensity = 50.05f * growth * objectSize;
 
                 fireLightTransform.matrix[3] = glm::vec4(lightPos, 1.0f);
                 fireLightComp.intensity = targetIntensity * flicker;
             }
 
+            // Burnout logic
             if (thermo.burnTimer >= thermo.maxBurnDuration) {
-                thermo.state = ObjectState::BURNT;
+                if (thermo.canBurnout) {
+                    thermo.state = ObjectState::BURNT;
 
-                if (thermo.fireEmitterId != -1) {
-                    scene.GetOrCreateSystem(ParticleLibrary::GetFireProps())->StopEmitter(thermo.fireEmitterId);
-                    thermo.fireEmitterId = -1;
+                    if (thermo.fireEmitterId != -1) {
+                        scene.GetOrCreateSystem(ParticleLibrary::GetFireProps())->StopEmitter(thermo.fireEmitterId);
+                        thermo.fireEmitterId = -1;
+                    }
+
+                    if (thermo.fireLightEntity != MAX_ENTITIES && registry.HasComponent<LightComponent>(thermo.fireLightEntity)) {
+                        registry.GetComponent<LightComponent>(thermo.fireLightEntity).intensity = 0.0f;
+                    }
+
+                    if (thermo.smokeEmitterId != -1) {
+                        ParticleProps smolder = ParticleLibrary::GetSmokeProps();
+                        smolder.position = basePos;
+                        smolder.sizeBegin *= 0.1f;
+                        smolder.sizeEnd *= 0.2f;
+                        smolder.lifeTime = 1.5f;
+                        smolder.velocity.y = 0.5f;
+                        smolder.positionVariation = glm::vec3(0.1f);
+                        scene.GetOrCreateSystem(smolder)->UpdateEmitter(thermo.smokeEmitterId, smolder, 20.0f);
+                    }
+
+                    // Only interact with render if the object actually has a renderer
+                    if (render) {
+                        thermo.storedOriginalGeometry = render->geometry;
+                        if (scene.dustGeometryPrototype) {
+                            render->geometry = scene.dustGeometryPrototype;
+                        }
+                        render->texturePath = scene.sootTexturePath;
+                    }
+
+                    transform.matrix = glm::translate(glm::mat4(1.0f), basePos);
+                    transform.matrix = glm::scale(transform.matrix, glm::vec3(0.003f));
+
+                    thermo.regrowTimer = 0.0f;
+                    thermo.burnFactor = 0.0f;
                 }
-
-                if (thermo.fireLightEntity != MAX_ENTITIES && registry.HasComponent<LightComponent>(thermo.fireLightEntity)) {
-                    registry.GetComponent<LightComponent>(thermo.fireLightEntity).intensity = 0.0f;
+                else {
+                    thermo.burnTimer = thermo.maxBurnDuration;
                 }
-
-                if (thermo.smokeEmitterId != -1) {
-                    ParticleProps smolder = ParticleLibrary::GetSmokeProps();
-                    smolder.position = basePos;
-                    smolder.sizeBegin *= 0.1f;
-                    smolder.sizeEnd *= 0.2f;
-                    smolder.lifeTime = 1.5f;
-                    smolder.velocity.y = 0.5f;
-                    smolder.positionVariation = glm::vec3(0.1f);
-                    scene.GetOrCreateSystem(smolder)->UpdateEmitter(thermo.smokeEmitterId, smolder, 20.0f);
-                }
-
-                thermo.storedOriginalGeometry = render.geometry;
-                thermo.storedOriginalTransform = transform.matrix;
-
-                if (scene.dustGeometryPrototype) {
-                    render.geometry = scene.dustGeometryPrototype;
-                }
-                render.texturePath = scene.sootTexturePath;
-
-                transform.matrix = glm::translate(glm::mat4(1.0f), basePos);
-                transform.matrix = glm::scale(transform.matrix, glm::vec3(0.003f));
-
-                thermo.regrowTimer = 0.0f;
-                thermo.burnFactor = 0.0f;
             }
             break;
         }
@@ -201,11 +246,13 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                     thermo.regrowTimer = 0.0f;
                     thermo.currentTemp = env.weatherIntensity;
 
-                    if (thermo.storedOriginalGeometry) {
-                        render.geometry = thermo.storedOriginalGeometry;
-                        thermo.storedOriginalGeometry = nullptr;
+                    if (render) {
+                        if (thermo.storedOriginalGeometry) {
+                            render->geometry = thermo.storedOriginalGeometry;
+                            thermo.storedOriginalGeometry = nullptr;
+                        }
+                        render->texturePath = render->originalTexturePath;
                     }
-                    render.texturePath = render.originalTexturePath;
                 }
             }
             else if (thermo.state == ObjectState::REGROWING) {
