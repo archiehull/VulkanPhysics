@@ -254,6 +254,9 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         return a.id < b.id;
                         });
 
+                    Registry& registry = scene.GetRegistry();
+                    const auto& entities = scene.GetRenderableEntities();
+
                     // 3. Draw the menu items
                     for (const auto& info : allEmitters) {
                         const auto& em = info.emitter;
@@ -282,6 +285,52 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                             ImGui::Text("Size: %.2f -> %.2f (Var: %.2f)", em.props.sizeBegin, em.props.sizeEnd, em.props.sizeVariation);
                             ImGui::Text("Lifetime: %.2f s", em.props.lifeTime);
+
+                            // --- NEW: Attached Objects Section ---
+                            ImGui::Spacing();
+                            ImGui::TextDisabled("Attached Objects");
+                            ImGui::Separator();
+
+                            bool foundAttached = false;
+                            for (Entity e : entities) {
+                                bool isAttached = false;
+                                std::string attachReason = "";
+
+                                // Check ThermoComponent for fire or smoke emitters
+                                if (registry.HasComponent<ThermoComponent>(e)) {
+                                    auto& thermo = registry.GetComponent<ThermoComponent>(e);
+                                    if (thermo.fireEmitterId == em.id) {
+                                        isAttached = true;
+                                        attachReason = "Fire";
+                                    }
+                                    if (thermo.smokeEmitterId == em.id) {
+                                        isAttached = true;
+                                        attachReason += (attachReason.empty() ? "Smoke" : " & Smoke");
+                                    }
+                                }
+
+                                // Check DustCloudComponent for dust emitters
+                                if (registry.HasComponent<DustCloudComponent>(e)) {
+                                    auto& dust = registry.GetComponent<DustCloudComponent>(e);
+                                    if (dust.emitterId == em.id) {
+                                        isAttached = true;
+                                        attachReason = "Dust";
+                                    }
+                                }
+
+                                if (isAttached) {
+                                    foundAttached = true;
+                                    std::string entityName = "Entity " + std::to_string(e);
+                                    if (registry.HasComponent<NameComponent>(e)) {
+                                        entityName = registry.GetComponent<NameComponent>(e).name;
+                                    }
+                                    ImGui::Text(" %s (%s)", entityName.c_str(), attachReason.c_str());
+                                }
+                            }
+
+                            if (!foundAttached) {
+                                ImGui::Text(" None");
+                            }
 
                             ImGui::EndMenu(); // Close Emitter Info
                         }
@@ -324,6 +373,26 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("Properties")) {
+                
+                bool useSimple = scene.IsUsingSimpleShadows();
+
+                // Notice: NO '&' symbol before !useSimple
+                if (ImGui::MenuItem("Normal", nullptr, !useSimple)) {
+                    if (useSimple) {
+                        scene.ToggleSimpleShadows();
+                    }
+                }
+
+                // Notice: NO '&' symbol before useSimple
+                if (ImGui::MenuItem("Simple", nullptr, useSimple)) {
+                    if (!useSimple) {
+                        scene.ToggleSimpleShadows();
+                    }
+                }
+
+                ImGui::EndMenu();
+			}
 
             // --- TAB: Environment (Left Aligned) ---
             //if (ImGui::BeginMenu("Environment")) {

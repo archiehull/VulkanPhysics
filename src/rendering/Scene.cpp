@@ -275,20 +275,28 @@ void Scene::AddModel(const std::string& name, const glm::vec3& position, const g
     }
 }
 
-void Scene::AddSimpleShadow(const std::string& objectName, float radius) {
-    Entity targetEntity = GetEntityByName(objectName);
-    if (targetEntity == MAX_ENTITIES) return;
+void Scene::CreateSimpleShadowEntity(Entity targetEntity) {
+    if (!m_Registry.HasComponent<RenderComponent>(targetEntity)) return;
+
+    float radius = m_Registry.GetComponent<RenderComponent>(targetEntity).simpleShadowRadius;
+    if (radius <= 0.0f) return; // Doesn't need a shadow
+
+    std::string targetName = "Unknown";
+    if (m_Registry.HasComponent<NameComponent>(targetEntity)) {
+        targetName = m_Registry.GetComponent<NameComponent>(targetEntity).name;
+    }
+    std::string shadowName = targetName + "_Shadow";
 
     auto diskGeo = GeometryGenerator::CreateDisk(device, physicalDevice, radius, 16);
-    std::string shadowName = objectName + "_Shadow";
-
     Entity shadowEntity = AddObjectInternal(shadowName, std::move(diskGeo), glm::vec3(0.0f), "textures/shadow.jpg", false);
 
     auto& shadowRender = m_Registry.GetComponent<RenderComponent>(shadowEntity);
     shadowRender.castsShadow = false;
+    shadowRender.originalCastsShadow = false;
     shadowRender.receiveShadows = false;
     shadowRender.shadingMode = 0;
-    shadowRender.visible = false;
+    // Match the parent object's visibility
+    shadowRender.visible = m_Registry.GetComponent<RenderComponent>(targetEntity).visible;
 
     auto& shadowThermo = m_Registry.GetComponent<ThermoComponent>(shadowEntity);
     shadowThermo.burnFactor = 1.0f; // Force black color
@@ -296,30 +304,80 @@ void Scene::AddSimpleShadow(const std::string& objectName, float radius) {
     auto& shadowCollider = m_Registry.GetComponent<ColliderComponent>(shadowEntity);
     shadowCollider.hasCollision = false;
 
-    auto& targetRender = m_Registry.GetComponent<RenderComponent>(targetEntity);
-    targetRender.simpleShadowEntity = shadowEntity;
+    // Link it back to the parent
+    m_Registry.GetComponent<RenderComponent>(targetEntity).simpleShadowEntity = shadowEntity;
 }
 
+
+// --- 2. UPDATE: AddSimpleShadow to just register the intent ---
+void Scene::AddSimpleShadow(const std::string& objectName, float radius) {
+    Entity targetEntity = GetEntityByName(objectName);
+    if (targetEntity == MAX_ENTITIES) return;
+
+    // Just save the requested radius
+    auto& targetRender = m_Registry.GetComponent<RenderComponent>(targetEntity);
+    targetRender.simpleShadowRadius = radius;
+
+    // If shadows are ALREADY active when this object spawns, create it immediately
+    if (IsUsingSimpleShadows()) {
+        CreateSimpleShadowEntity(targetEntity);
+    }
+}
+
+
+// --- 3. UPDATE: ToggleSimpleShadows to Spawn/Destroy dynamically ---
 void Scene::ToggleSimpleShadows() {
     if (m_EnvironmentEntity == MAX_ENTITIES) return;
     auto& env = m_Registry.GetComponent<EnvironmentComponent>(m_EnvironmentEntity);
 
     env.useSimpleShadows = !env.useSimpleShadows;
 
-    for (Entity e : m_RenderableEntities) {
+    // CRITICAL: Wait for the GPU to finish its current frame before destroying geometry!
+    vkDeviceWaitIdle(device);
+
+    // Make a copy of the list because we might add/remove entities while looping
+    std::vector<Entity> entitiesToProcess = m_RenderableEntities;
+
+    for (Entity e : entitiesToProcess) {
         if (!m_Registry.HasComponent<RenderComponent>(e)) continue;
 
         auto& render = m_Registry.GetComponent<RenderComponent>(e);
-        if (render.simpleShadowEntity != MAX_ENTITIES && m_Registry.HasComponent<RenderComponent>(render.simpleShadowEntity)) {
-            auto& shadowRender = m_Registry.GetComponent<RenderComponent>(render.simpleShadowEntity);
 
-            if (env.useSimpleShadows) {
-                render.castsShadow = false;
-                shadowRender.visible = render.visible;
+        if (env.useSimpleShadows) {
+            // Turn ON Simple Shadows
+            render.castsShadow = false;
+
+            // Create the entity if it requests one but doesn't have one yet
+            if (render.simpleShadowRadius > 0.0f && render.simpleShadowEntity == MAX_ENTITIES) {
+                CreateSimpleShadowEntity(e);
             }
-            else {
-                render.castsShadow = true;
-                shadowRender.visible = false;
+        }
+        else {
+            // Turn OFF Simple Shadows
+            render.castsShadow = render.originalCastsShadow;
+
+            // Fully Destroy the simple shadow entity if it exists
+            if (render.simpleShadowEntity != MAX_ENTITIES) {
+                Entity shadowEnt = render.simpleShadowEntity;
+
+                // 1. Destroy Vulkan Geometry
+                if (m_Registry.HasComponent<RenderComponent>(shadowEnt)) {
+                    auto& sr = m_Registry.GetComponent<RenderComponent>(shadowEnt);
+                    if (sr.geometry) sr.geometry->Cleanup();
+                }
+
+                // 2. Remove from Maps & Lists
+                if (m_Registry.HasComponent<NameComponent>(shadowEnt)) {
+                    m_EntityMap.erase(m_Registry.GetComponent<NameComponent>(shadowEnt).name);
+                }
+                auto it = std::find(m_RenderableEntities.begin(), m_RenderableEntities.end(), shadowEnt);
+                if (it != m_RenderableEntities.end()) m_RenderableEntities.erase(it);
+
+                // 3. Destroy in ECS
+                m_Registry.DestroyEntity(shadowEnt);
+
+                // 4. Sever the link
+                render.simpleShadowEntity = MAX_ENTITIES;
             }
         }
     }
@@ -692,7 +750,18 @@ void Scene::Clear() {
     m_RenderableEntities.clear();
     m_LightEntities.clear();
     particleSystems.clear();
-    m_EnvironmentEntity = MAX_ENTITIES;
+
+    // 1. Recreate Environment Entity
+    m_EnvironmentEntity = m_Registry.CreateEntity();
+    m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { "GlobalEnvironment" });
+    m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
+    m_EntityMap["GlobalEnvironment"] = m_EnvironmentEntity;
+
+    // 2. Recreate Dust Cloud Entity
+    Entity dustEntity = m_Registry.CreateEntity();
+    m_Registry.AddComponent<NameComponent>(dustEntity, { "GlobalDustCloud" });
+    m_Registry.AddComponent<DustCloudComponent>(dustEntity, DustCloudComponent{});
+    m_EntityMap["GlobalDustCloud"] = dustEntity;
 }
 
 void Scene::SetObjectTransform(const std::string& name, const glm::mat4& transform) {
@@ -726,7 +795,9 @@ void Scene::SetObjectVisible(const std::string& name, bool visible) {
 void Scene::SetObjectCastsShadow(const std::string& name, bool casts) {
     Entity e = GetEntityByName(name);
     if (e != MAX_ENTITIES && m_Registry.HasComponent<RenderComponent>(e)) {
-        m_Registry.GetComponent<RenderComponent>(e).castsShadow = casts;
+        auto& render = m_Registry.GetComponent<RenderComponent>(e);
+        render.castsShadow = casts;
+        render.originalCastsShadow = casts;
     }
 }
 

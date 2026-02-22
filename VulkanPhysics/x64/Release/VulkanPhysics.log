@@ -1,7 +1,20 @@
-﻿  EditorUI.cpp
+﻿  Application.cpp
+  EditorUI.cpp
+  main.cpp
+  CameraController.cpp
+  Renderer.cpp
+  Scene.cpp
+  SkyboxPass.cpp
+  CameraSystem.cpp
+  OrbitSystem.cpp
+  ParticleUpdateSystem.cpp
+  SimpleShadowSystem.cpp
+  ThermodynamicsSystem.cpp
+  TimeSystem.cpp
+  WeatherSystem.cpp
   Generating code
-  1 of 8096 functions (<0.1%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    36 functions had inline decision re-evaluated but remain unchanged
+  338 of 8148 functions ( 4.1%) were compiled, the rest were copied from previous compilation.
+    37 functions were new in current compilation
+    198 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   VulkanPhysics.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\VulkanPhysics.exe

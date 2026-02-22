@@ -25,12 +25,14 @@ struct RenderComponent {
     std::string originalTexturePath;
     
     Entity simpleShadowEntity = MAX_ENTITIES;
+    float simpleShadowRadius = -1.0f;
 
     int shadingMode = 1;
     bool visible = true;
     bool castsShadow = true;
+    bool originalCastsShadow = true;
     bool receiveShadows = true;
-    int layerMask = SceneLayers::INSIDE;
+    int layerMask = SceneLayers::ALL;
 };
 
 // 4. Movement/Logic Data
