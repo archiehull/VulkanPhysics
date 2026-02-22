@@ -109,6 +109,9 @@ minigames
 --throw distraction (pokedol)
 --find items/didffernt levels
 --different enemies impact from different items
+-papertoss
+--office env, desk fan, bin
+
 
 send force / wind with mouse
 rubber band flick
