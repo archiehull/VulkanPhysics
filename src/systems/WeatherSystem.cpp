@@ -14,6 +14,7 @@ void WeatherSystem::PickNextWeatherDuration(EnvironmentComponent& env) {
     }
     else {
         std::uniform_real_distribution<float> dist(env.weatherConfig.minClearInterval, env.weatherConfig.maxClearInterval);
+        env.currentWeatherDurationTarget = dist(gen);
     }
 }
 

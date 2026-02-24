@@ -394,12 +394,66 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::EndMenu();
 			}
 
-            // --- TAB: Environment (Left Aligned) ---
-            //if (ImGui::BeginMenu("Environment")) {
-            //    ImGui::MenuItem((std::string("Season: ") + seasonName).c_str(), nullptr, false, false);
-            //    ImGui::MenuItem((std::string("Temp: ") + std::to_string((int)currentTemp) + " C").c_str(), nullptr, false, false);
-            //    ImGui::EndMenu();
-            //}
+            // --- TAB: Environment ---
+            if (ImGui::BeginMenu("Environment")) {
+
+                // 1. Display Environment & Weather Variables
+                ImGui::TextDisabled("Live Status");
+                ImGui::Separator();
+                ImGui::Text("Season: %s", seasonName.c_str());
+                ImGui::Text("Global Temp: %.1f C", currentTemp);
+
+                Entity envEntity = scene.GetEnvironmentEntity();
+                if (envEntity != MAX_ENTITIES) {
+                    auto& env = scene.GetRegistry().GetComponent<EnvironmentComponent>(envEntity);
+                    ImGui::Text("Sun Heat Bonus: %.1f", env.sunHeatBonus);
+                    //ImGui::Text("Weather Intensity: %.2f", env.weatherIntensity);
+                    ImGui::Text("Time Since Rain: %.1f s", env.timeSinceLastRain);
+                    ImGui::Text("Fire Suppression Timer: %.1f s", env.postRainFireSuppressionTimer);
+                }
+
+                ImGui::Spacing();
+                ImGui::TextDisabled("Controls");
+                ImGui::Separator();
+
+                // 2. Shadows Toggle (Moved from Properties)
+                bool useSimple = scene.IsUsingSimpleShadows();
+                if (ImGui::BeginMenu("Shadow Mode")) {
+                    if (ImGui::MenuItem("Normal (Dynamic Map)", nullptr, !useSimple)) {
+                        if (useSimple) scene.ToggleSimpleShadows();
+                    }
+                    if (ImGui::MenuItem("Simple (Blob Shadows)", nullptr, useSimple)) {
+                        if (!useSimple) scene.ToggleSimpleShadows();
+                    }
+                    ImGui::EndMenu();
+                }
+
+                // 3. Season Control
+                if (ImGui::MenuItem("Cycle to Next Season")) {
+                    scene.NextSeason();
+                }
+
+                // 4. Weather Control (Precipitation)
+                bool isPrecipitating = scene.IsPrecipitating();
+                std::string weatherLabel = isPrecipitating ? "Stop Weather" : "Start Weather";
+                if (ImGui::MenuItem(weatherLabel.c_str())) {
+                    scene.ToggleWeather();
+                }
+
+                // 5. Dust Cloud Control
+                bool isDustActive = scene.IsDustActive();
+                std::string dustLabel = isDustActive ? "Stop Dust Cloud" : "Spawn Dust Cloud";
+                if (ImGui::MenuItem(dustLabel.c_str())) {
+                    if (isDustActive) {
+                        scene.StopDust();
+                    }
+                    else {
+                        scene.SpawnDustCloud();
+                    }
+                }
+
+                ImGui::EndMenu();
+            }
 
             // --- RIGHT-ALIGNED STATUS AREA ---
             // 1. Prepare strings
