@@ -77,6 +77,8 @@ void CameraController::SwitchCamera(CameraType type, Scene& scene) {
             Entity target = cacti[dis(gen)];
 
             OrbitTargetObject = target;
+            std::cout << "Entity " << OrbitTargetObject << std::endl;
+
 
             glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(target).matrix[3]);
             scene.SetObjectOrbit("CactusCam", targetPos + glm::vec3(0, 3, 0), 15.0f, 0.0f, { 0,1,0 }, { 1,0,0 });

@@ -57,7 +57,7 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
             const float lerpFactor = glm::clamp(changeRate, 0.0f, 1.0f);
             thermo.currentTemp = glm::mix(thermo.currentTemp, targetTemp, lerpFactor);
 
-            if (thermo.currentTemp > 45.0f) {
+			if (thermo.currentTemp > 45.0f) { // should this be currenttemp or ignition threshold? maybe a separate "heating threshold"?
                 thermo.state = ObjectState::HEATING;
             }
             else {
@@ -73,6 +73,8 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                     thermo.burnTimer = 0.0f;
                     thermo.fireEmitterId = scene.AddFire(basePos, 0.1f);
                     thermo.smokeEmitterId = scene.AddSmoke(basePos, 0.1f);
+
+					// could this call be moved to the scene's Ignite function to ensure consistency?
                 }
             }
             break;
@@ -98,13 +100,11 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
             const float scaleY = glm::length(glm::vec3(transform.matrix[1]));
             const float scaleZ = glm::length(glm::vec3(transform.matrix[2]));
             const float maxWorldScale = std::max({ scaleX, scaleY, scaleZ });
-
             float objectSize = maxWorldScale;
             if (registry.HasComponent<ColliderComponent>(e)) {
                 auto& collider = registry.GetComponent<ColliderComponent>(e);
                 objectSize = std::max(collider.radius, collider.height * 0.5f) * maxWorldScale;
             }
-
             // Clamp so we don't spawn millions of particles for a mountain, or 0 for a pebble
             objectSize = glm::clamp(objectSize, 0.5f, 5.0f);
 
@@ -155,22 +155,16 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 const float rate = (20.0f + (80.0f * growth)) * objectSize;
                 scene.GetOrCreateSystem(smokeProps)->UpdateEmitter(thermo.smokeEmitterId, smokeProps, rate);
             }
-
             glm::vec3 lightPos = basePos;
             lightPos.y += currentFireHeight * 0.5f;
 
             // FIX 3: Bulletproof ECS Reallocation Strategy
-            if (thermo.fireLightEntity == -1 || thermo.fireLightEntity == MAX_ENTITIES) {
+            if (thermo.fireLightEntity == -1) {
                 std::string lightName = "FireLight_" + std::to_string(e);
                 int newLight = scene.AddLight(lightName, lightPos, glm::vec3(1.0f, 0.5f, 0.1f), 0.0f, 1);
 
-                // Adding a light resizes the ECS vectors! This turns `thermo` into a dangerous dangling pointer!
-                // Update the real memory immediately, then BREAK out of the switch!
-                // By breaking, we skip the rest of this entity's frame and safely fetch fresh references on the next frame!
-                registry.GetComponent<ThermoComponent>(e).fireLightEntity = newLight;
-                break;
+                thermo.fireLightEntity = newLight;
             }
-
             // Since we break on creation, it is mathematically guaranteed that `thermo` here is 100% memory safe.
             if (registry.HasComponent<LightComponent>(thermo.fireLightEntity)) {
                 auto& fireLightTransform = registry.GetComponent<TransformComponent>(thermo.fireLightEntity);
@@ -183,7 +177,6 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 fireLightTransform.matrix[3] = glm::vec4(lightPos, 1.0f);
                 fireLightComp.intensity = targetIntensity * flicker;
             }
-
             // Burnout logic
             if (thermo.burnTimer >= thermo.maxBurnDuration) {
                 if (thermo.canBurnout) {
@@ -217,6 +210,8 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                         }
                         render->texturePath = scene.sootTexturePath;
                     }
+
+                    thermo.storedOriginalTransform = transform.matrix;
 
                     transform.matrix = glm::translate(glm::mat4(1.0f), basePos);
                     transform.matrix = glm::scale(transform.matrix, glm::vec3(0.003f));

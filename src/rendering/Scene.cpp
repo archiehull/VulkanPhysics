@@ -672,8 +672,13 @@ void Scene::SetTimeConfig(const TimeConfig& config) {
 }
 
 void Scene::SetWeatherConfig(const WeatherConfig& config) {
-    if (m_EnvironmentEntity != MAX_ENTITIES)
-        m_Registry.GetComponent<EnvironmentComponent>(m_EnvironmentEntity).weatherConfig = config;
+    if (m_EnvironmentEntity != MAX_ENTITIES) {
+        auto& env = m_Registry.GetComponent<EnvironmentComponent>(m_EnvironmentEntity);
+        env.weatherConfig = config;
+
+        WeatherSystem ws;
+        ws.PickNextWeatherDuration(env);
+    }
 }
 
 void Scene::SetSeasonConfig(const SeasonConfig& config) {
