@@ -6,9 +6,11 @@
 struct Light {
     vec3 position;
     vec3 color;
+    vec3 direction;    // <-- NEW: Added to fix alignment
     float intensity;
     int type;
     int layerMask;
+    float cutoffAngle; // <-- NEW: Added to fix alignment
     float padding;
 };
 

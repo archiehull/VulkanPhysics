@@ -115,6 +115,29 @@ void CameraController::SwitchCamera(const std::string& name, Scene& scene) {
 void CameraController::Update(float deltaTime, Scene& scene, const InputManager& input) {
     if (activeCameraEntity == MAX_ENTITIES) return;
 
+    // --- NEW: Continuously track the moving target ---
+    if (OrbitTargetObject != MAX_ENTITIES) {
+        auto& registry = scene.GetRegistry();
+
+        // Ensure both the target and the camera still have the required components
+        if (registry.HasComponent<TransformComponent>(OrbitTargetObject) &&
+            registry.HasComponent<OrbitComponent>(activeCameraEntity)) {
+
+            // Get the target's current position this frame
+            glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(OrbitTargetObject).matrix[3]);
+
+            // Re-calculate the vertical offset so we look at the center of the object, not its feet
+            float yOffset = 3.0f;
+            if (registry.HasComponent<ColliderComponent>(OrbitTargetObject)) {
+                yOffset = registry.GetComponent<ColliderComponent>(OrbitTargetObject).height * 0.5f;
+            }
+
+            // Update the camera's orbit center so it follows the object!
+            registry.GetComponent<OrbitComponent>(activeCameraEntity).center = targetPos + glm::vec3(0.0f, yOffset, 0.0f);
+        }
+    }
+    // -------------------------------------------------
+
     const auto& meta = cameraMeta[activeCameraName];
 
     if (meta.type == "FreeRoam") {

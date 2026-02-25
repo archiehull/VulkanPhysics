@@ -731,6 +731,12 @@ std::vector<Light> Scene::GetLights() const {
             vLight.intensity = lightComp.intensity;
             vLight.type = lightComp.type;
             vLight.layerMask = lightComp.layerMask;
+
+            // --- NEW: Map Spotlight variables ---
+            vLight.direction = lightComp.direction;
+            // Precalculate cosine of the angle here for GPU performance!
+            vLight.cutoffAngle = glm::cos(glm::radians(lightComp.cutoffAngle));
+
             lights.push_back(vLight);
         }
     }

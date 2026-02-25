@@ -9,10 +9,12 @@ struct Light
 {
     alignas(16) glm::vec3 position;
     alignas(16) glm::vec3 color;
-    float intensity;
-    int type;
-    int layerMask;
-    float padding;
+    alignas(16) glm::vec3 direction; // NEW: Direction the spot is pointing
+    float intensity;                 // Offset 44
+    int type;                        // Offset 48
+    int layerMask;                   // Offset 52
+    float cutoffAngle;               // NEW: Precomputed cosine of the angle
+    float padding;                   // Offset 60 (Pads the struct to exactly 64 bytes!)
 };
 
 struct UniformBufferObject {

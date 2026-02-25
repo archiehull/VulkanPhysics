@@ -103,7 +103,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             entityName = registry.GetComponent<NameComponent>(e).name;
                         }
 
-                        // --- NEW: Count attached emitters & Check Burning State ---
+                        // Count attached emitters & Check Burning State
                         int emitterCount = 0;
                         int fireId = -1;
                         int smokeId = -1;
@@ -124,41 +124,57 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             }
                         }
 
-                        // Update the label if it has emitters
+                        // --- NEW: Check if this is the currently viewed object ---
+                        bool isViewing = (e == activeOrbitTarget && activeOrbitTarget != MAX_ENTITIES);
+
+                        // Update the label strings
+                        if (isViewing) {
+                            entityName += " [VIEWING]";
+                        }
                         if (emitterCount > 0) {
                             entityName += " [" + std::to_string(emitterCount) + " Emitters]";
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f)); // Orange/Fire Color
                         }
 
-                        // Apply color if the object is currently burning
-                        if (isBurning) {
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f)); // Orange/Fire Color
+                        // --- NEW: Unified Color Priority System ---
+                        int popCount = 0;
+                        if (isViewing) {
+                            // Cyan/Blue for viewing (Highest priority so you never lose your target)
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 1.0f, 1.0f));
+                            popCount++;
                         }
+                        else if (isBurning) {
+                            // Bright Orange for burning
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+                            popCount++;
+                        }
+                        else if (emitterCount > 0) {
+                            // Soft Red/Orange if it has emitters but isn't actively burning
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+                            popCount++;
+                        }
+
+                        // Create a stable ID so the menu doesn't collapse when the name changes!
+                        std::string menuLabel = entityName + "###ObjMenu_" + std::to_string(e);
 
                         // Draw the menu item
-                        bool menuOpen = ImGui::BeginMenu(entityName.c_str());
+                        bool menuOpen = ImGui::BeginMenu(menuLabel.c_str());
 
                         // IMMEDIATELY pop the color so the contents inside the menu stay normal!
-                        if (isBurning) {
-                            ImGui::PopStyleColor();
+                        if (popCount > 0) {
+                            ImGui::PopStyleColor(popCount);
                         }
-
-                        if (emitterCount > 0) {
-                            ImGui::PopStyleColor();
-						}
-
 
                         if (menuOpen) {
 
                             // Header for visual clarity
                             ImGui::TextDisabled("Entity Properties");
 
-                            // --- NEW: View Object Button ---
+                            // --- View Object Button ---
                             if (ImGui::Button("View Object", ImVec2(-1, 0))) {
                                 m_ViewRequested = e;
                             }
 
-                            // --- NEW: Ignite Object Button ---
+                            // --- Ignite Object Button ---
                             if (e == activeOrbitTarget && registry.HasComponent<ThermoComponent>(e)) {
                                 auto& thermo = registry.GetComponent<ThermoComponent>(e);
                                 if (thermo.isFlammable && thermo.state != ObjectState::BURNING) {
@@ -172,6 +188,28 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                     }
 
                                     ImGui::PopStyleColor(3);
+                                }
+                            }
+
+                            // --- Attach Light Button ---
+                            if (registry.HasComponent<NameComponent>(e)) {
+                                // If the object DOES NOT have a light, show the Attach button
+                                if (!registry.HasComponent<LightComponent>(e)) {
+                                    if (ImGui::Button("Attach Light", ImVec2(-1, 0))) {
+                                        std::string targetName = registry.GetComponent<NameComponent>(e).name;
+
+                                        glm::vec3 pos = glm::vec3(0.0f);
+                                        if (registry.HasComponent<TransformComponent>(e)) {
+                                            pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
+                                        }
+
+                                        // Attach a bright white point light (Type 1)
+                                        scene.AddLight(targetName, pos, glm::vec3(1.0f, 1.0f, 1.0f), 50.0f, 1);
+                                    }
+                                }
+                                else {
+                                    // If it already has a light, show a yellow label
+                                    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "  [Light Attached - Edit in Lights Menu]");
                                 }
                             }
 
@@ -432,12 +470,31 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         ImGui::ColorEdit3("Color", &light.color.x, ImGuiColorEditFlags_Float);
                         ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 100.0f);
 
-                        const char* lightTypes[] = { "Directional", "Point", "Spot" };
-                        if (light.type >= 0 && light.type <= 2) {
-                            ImGui::Text("Type: %s", lightTypes[light.type]);
+                        // --- Interactive Light Type Dropdown ---
+                        const char* lightTypes[] = { "Sun / Directional", "Fire (Harsh Falloff)", "Standard Point", "Spotlight" };
+
+                        int safeTypeIndex = (light.type >= 0 && light.type <= 3) ? light.type : 2;
+
+                        if (ImGui::Combo("Light Type", &safeTypeIndex, lightTypes, 4)) {
+                            light.type = safeTypeIndex;
                         }
-                        else {
-                            ImGui::Text("Type ID: %d", light.type);
+
+                        // --- NEW: Spotlight Controls ---
+                        if (light.type == 3) {
+                            ImGui::Spacing();
+                            ImGui::TextDisabled("Spotlight Settings");
+                            ImGui::Separator();
+
+                            // Drag floats for XYZ direction
+                            if (ImGui::DragFloat3("Direction", &light.direction.x, 0.05f, -1.0f, 1.0f)) {
+                                // Normalize direction on change to prevent math errors
+                                if (glm::length(light.direction) > 0.001f) {
+                                    light.direction = glm::normalize(light.direction);
+                                }
+                            }
+
+                            // Slider for cone width (1 degree to 90 degrees)
+                            ImGui::SliderFloat("Cone Angle", &light.cutoffAngle, 1.0f, 90.0f, "%.1f deg");
                         }
 
                         const char* layerName = (light.layerMask & SceneLayers::INSIDE) ? "Inside" : "Outside";
@@ -685,6 +742,53 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     }
                     else {
                         scene.SpawnDustCloud();
+                    }
+                }
+                
+                // --- Time of Day Controls ---
+                ImGui::Spacing();
+                ImGui::TextDisabled("Time of Day");
+                ImGui::Separator();
+
+                if (ImGui::Selectable("Set to Day", false, ImGuiSelectableFlags_DontClosePopups)) {
+                    Registry& registry = scene.GetRegistry();
+                    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                        if (!registry.HasComponent<OrbitComponent>(e)) continue;
+
+                        bool isSun = (registry.HasComponent<LightComponent>(e) && registry.GetComponent<LightComponent>(e).type == 0) ||
+                            (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Sun") != std::string::npos);
+
+                        bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
+
+                        if (isSun) {
+                            // Sun high in the sky
+                            registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
+                        }
+                        else if (isMoon) {
+                            // Moon hidden under the map
+                            registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
+                        }
+                    }
+                }
+
+                if (ImGui::Selectable("Set to Night", false, ImGuiSelectableFlags_DontClosePopups)) {
+                    Registry& registry = scene.GetRegistry();
+                    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                        if (!registry.HasComponent<OrbitComponent>(e)) continue;
+
+                        bool isSun = (registry.HasComponent<LightComponent>(e) && registry.GetComponent<LightComponent>(e).type == 0) ||
+                            (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Sun") != std::string::npos);
+
+                        bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
+
+                        if (isSun) {
+                            // Sun hidden under the map
+                            registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
+                        }
+                        else if (isMoon) {
+                            // Moon high in the sky
+                            registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
+                        }
                     }
                 }
 

@@ -5,9 +5,11 @@
 struct Light {
     vec3 position;
     vec3 color;
+    vec3 direction; // NEW
     float intensity;
     int type;
     int layerMask;
+    float cutoffAngle; // NEW
     float padding;
 };
 
@@ -142,27 +144,41 @@ void main() {
         vec3 normal = normalize(fragNormal);
         vec3 viewDir = normalize(ubo.viewPos - fragPos);
 
-        for(int i = 0; i < ubo.numLights; i++) {
-            if ((ubo.lights[i].layerMask & pco.layerMask) == 0) {
-                continue;
-            }   
+for(int i = 0; i < ubo.numLights; i++) {
+            if ((ubo.lights[i].layerMask & pco.layerMask) == 0) continue;
 
             float distance = length(ubo.lights[i].position - fragPos);
             float attenuation = 1.0;
             float specularStrength = 0.5;
+            float spotIntensity = 1.0; // <--- NEW
 
             if (ubo.lights[i].type == 1) {
-                // --- FIRE / POINT LIGHT ---
-                // Extreme falloff to contain the fire light
+                // Fire
                 attenuation = 1.0 / (1.0 + 15.0 * distance + 45.0 * distance * distance);
                 specularStrength = 0.05;
             } 
             else if (ubo.lights[i].type == 2) {
-                // New Standard Point Light
+                // Point Light
                 attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
             }
+            else if (ubo.lights[i].type == 3) {
+                // --- NEW: SPOTLIGHT ---
+                attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
+                
+                // Vector pointing from the light TO the fragment
+                vec3 lightDirToFrag = normalize(fragPos - ubo.lights[i].position);
+                
+                // Dot product gives us the cosine of the angle between direction and fragment
+                float theta = dot(lightDirToFrag, normalize(ubo.lights[i].direction));
+                
+                // Create a smooth soft edge for the spotlight
+                float innerCutoff = ubo.lights[i].cutoffAngle;
+                float outerCutoff = innerCutoff - 0.05; // 0.05 spread for a nice soft edge
+                
+                spotIntensity = clamp((theta - outerCutoff) / (innerCutoff - outerCutoff), 0.0, 1.0);
+            }
             else {
-                // --- SUN (Type 0) ---
+                // Sun
                 attenuation = 1.0;
                 specularStrength = 0.5;
             }
@@ -189,7 +205,7 @@ void main() {
                 lightShadow = shadow;
             }
 
-            lighting += (ambient + (1.0 - lightShadow) * (diffuse + specular)) * attenuation;
+            lighting += (ambient + (1.0 - lightShadow) * (diffuse + specular)) * attenuation * spotIntensity;
         }
     }
 

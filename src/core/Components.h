@@ -82,8 +82,12 @@ struct ColliderComponent {
 struct LightComponent {
     glm::vec3 color = glm::vec3(1.0f);
     float intensity = 1.0f;
-    int type = 0;
+    int type = 0; // 0=Sun, 1=Fire, 2=Point, 3=Spotlight
     int layerMask = SceneLayers::ALL;
+
+    // --- NEW Spotlight Variables ---
+    glm::vec3 direction = glm::vec3(0.0f, -1.0f, 0.0f); // Default points straight down
+    float cutoffAngle = 25.0f; // Cone width in degrees
 };
 
 // 8. Global Environment / Time / Weather Data
