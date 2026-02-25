@@ -2,15 +2,35 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <glm/glm.hpp>
+
 struct SceneOption {
     std::string name;
     std::string path;
 };
 
+// --- NEW: Custom Particle Configuration ---
+struct CustomParticleConfig {
+    std::string name;
+    std::string texturePath;
+    float rate = 100.0f;
+    float lifeTime = 1.0f;
+    bool isAdditive = false;
+    glm::vec3 posVar = glm::vec3(0.0f);
+    glm::vec3 vel = glm::vec3(0.0f);
+    glm::vec3 velVar = glm::vec3(0.0f);
+    glm::vec4 colorBegin = glm::vec4(1.0f);
+    glm::vec4 colorEnd = glm::vec4(1.0f);
+    glm::vec3 size = glm::vec3(1.0f, 1.0f, 0.0f); // x=begin, y=end, z=var
+};
+
+struct AttachedParticleConfig {
+    std::string particleName;
+    float duration = -1.0f; // -1 for infinite
+};
 
 // --- Entity Configuration Structs ---
-
 struct SceneObjectConfig {
     std::string name;
     std::string type;
@@ -41,9 +61,11 @@ struct SceneObjectConfig {
     glm::vec3 lightColor = glm::vec3(1.0f);
     float lightIntensity = 1.0f;
     int lightType = 0;
+
+    std::vector<AttachedParticleConfig> attachedParticles;
 };
 
-// --- NEW: Procedural Texture Configuration ---
+// --- Procedural Texture Configuration ---
 struct ProceduralTextureConfig {
     std::string name;
     std::string type; // "Checker", "Gradient", "Solid"
@@ -58,13 +80,13 @@ struct ProceduralTextureConfig {
 };
 
 struct ProceduralPlantConfig {
-    std::string modelPath;
-    std::string texturePath;
-    float frequency;
-    glm::vec3 minScale;
-    glm::vec3 maxScale;
-    glm::vec3 baseRotation;
-    bool isFlammable;
+    std::string modelPath = "";
+    std::string texturePath = "";
+    float frequency = 1.0f;
+    glm::vec3 minScale = glm::vec3(1.0f);
+    glm::vec3 maxScale = glm::vec3(1.0f);
+    glm::vec3 baseRotation = glm::vec3(0.0f);
+    bool isFlammable = false;
 };
 
 struct CustomCameraConfig {
@@ -110,6 +132,7 @@ struct AppConfig {
     std::vector<SceneObjectConfig> sceneObjects;
     std::vector<CustomCameraConfig> customCameras;
     std::vector<ProceduralTextureConfig> proceduralTextures;
+    std::vector<CustomParticleConfig> customParticles;
     std::unordered_map<std::string, std::string> inputBindings;
 };
 

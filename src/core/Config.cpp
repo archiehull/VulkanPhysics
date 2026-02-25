@@ -19,9 +19,8 @@ std::vector<SceneOption> ConfigLoader::GetAvailableScenes(const std::string& roo
     try {
         if (fs::exists(rootDir) && fs::is_directory(rootDir)) {
             for (const auto& entry : fs::directory_iterator(rootDir)) {
-                // Look for .world files instead of folders
                 if (entry.is_regular_file() && entry.path().extension() == ".world") {
-                    std::string name = entry.path().stem().string(); // e.g., "desert" from "desert.world"
+                    std::string name = entry.path().stem().string();
                     scenes.push_back({ name, entry.path().string() });
                 }
             }
@@ -37,19 +36,24 @@ std::vector<SceneOption> ConfigLoader::GetAvailableScenes(const std::string& roo
 enum class ConfigSection { None, Settings, Scene, Input };
 
 void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
+    if (!fs::exists(filepath) || !fs::is_regular_file(filepath)) {
+        std::cerr << "Error: Config file not found: " << filepath << std::endl;
+        return;
+    }
+
     std::ifstream file(filepath);
     if (!file.is_open()) {
-        std::cerr << "Warning: Could not open config file: " << filepath << std::endl;
+        std::cerr << "Error: Failed to open config file: " << filepath << std::endl;
         return;
     }
 
     std::string line;
     SceneObjectConfig* currentObject = nullptr;
     ProceduralTextureConfig* currentTexture = nullptr;
+    CustomParticleConfig* currentParticle = nullptr;
     ConfigSection currentSection = ConfigSection::None;
 
     while (std::getline(file, line)) {
-        // Trim leading/trailing whitespace
         size_t first = line.find_first_not_of(" \t\r\n");
         if (first == std::string::npos) continue;
         size_t last = line.find_last_not_of(" \t\r\n");
@@ -57,19 +61,16 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
 
         if (line.empty() || line[0] == '#' || line[0] == ';') continue;
 
-        // --- Check for Section Headers ---
         if (line == "[Settings]") { currentSection = ConfigSection::Settings; continue; }
         if (line == "[Scene]") { currentSection = ConfigSection::Scene; continue; }
         if (line == "[Input]") { currentSection = ConfigSection::Input; continue; }
 
-        // --- Parse Input Section ---
         if (currentSection == ConfigSection::Input) {
             size_t equalPos = line.find('=');
             if (equalPos != std::string::npos) {
                 std::string actionStr = line.substr(0, equalPos);
                 std::string keysStr = line.substr(equalPos + 1);
 
-                // Trim the substrings
                 actionStr.erase(actionStr.find_last_not_of(" \t") + 1);
                 size_t keyStart = keysStr.find_first_not_of(" \t");
                 if (keyStart != std::string::npos) keysStr = keysStr.substr(keyStart);
@@ -79,18 +80,18 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             continue;
         }
 
-        // --- Standard Token Parsing for Settings / Scene ---
         std::stringstream ss(line);
         std::string key;
         ss >> key;
 
-        // --- Object / Texture Blocks ---
+        // --- Object / Texture / Particle Blocks ---
         if (key == "Object") {
             SceneObjectConfig newObj;
             ss >> newObj.name;
             config.sceneObjects.push_back(newObj);
             currentObject = &config.sceneObjects.back();
             currentTexture = nullptr;
+            currentParticle = nullptr;
         }
         else if (key == "EndObject") {
             currentObject = nullptr;
@@ -101,11 +102,35 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             config.proceduralTextures.push_back(newTex);
             currentTexture = &config.proceduralTextures.back();
             currentObject = nullptr;
+            currentParticle = nullptr;
         }
         else if (key == "EndTexture") {
             currentTexture = nullptr;
         }
-        
+        else if (key == "CustomParticle") {
+            CustomParticleConfig p;
+            ss >> p.name >> p.texturePath >> p.rate >> p.lifeTime;
+            std::string addStr;
+            if (!ss.eof()) ss >> addStr;
+            p.isAdditive = (addStr == "1" || addStr == "true");
+            config.customParticles.push_back(p);
+            currentParticle = &config.customParticles.back();
+            currentObject = nullptr;
+            currentTexture = nullptr;
+        }
+        else if (key == "EndParticle") {
+            currentParticle = nullptr;
+        }
+
+        // --- Particle Fields ---
+        else if (currentParticle) {
+            if (key == "PosVar") ss >> currentParticle->posVar.x >> currentParticle->posVar.y >> currentParticle->posVar.z;
+            else if (key == "Velocity") ss >> currentParticle->vel.x >> currentParticle->vel.y >> currentParticle->vel.z;
+            else if (key == "VelVar") ss >> currentParticle->velVar.x >> currentParticle->velVar.y >> currentParticle->velVar.z;
+            else if (key == "ColorBegin") ss >> currentParticle->colorBegin.r >> currentParticle->colorBegin.g >> currentParticle->colorBegin.b >> currentParticle->colorBegin.a;
+            else if (key == "ColorEnd") ss >> currentParticle->colorEnd.r >> currentParticle->colorEnd.g >> currentParticle->colorEnd.b >> currentParticle->colorEnd.a;
+            else if (key == "Size") ss >> currentParticle->size.x >> currentParticle->size.y >> currentParticle->size.z;
+        }
         // --- Texture Fields ---
         else if (currentTexture) {
             if (key == "Type") ss >> currentTexture->type;
@@ -113,7 +138,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (key == "Color2") ss >> currentTexture->color2.r >> currentTexture->color2.g >> currentTexture->color2.b >> currentTexture->color2.a;
             else if (key == "Size") {
                 ss >> currentTexture->width;
-                currentTexture->height = currentTexture->width; // Default to square if one arg
+                currentTexture->height = currentTexture->width;
                 if (!ss.eof()) ss >> currentTexture->height;
             }
             else if (key == "CellSize") ss >> currentTexture->cellSize;
@@ -132,6 +157,13 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (key == "Rotation") ss >> currentObject->rotation.x >> currentObject->rotation.y >> currentObject->rotation.z;
             else if (key == "Scale") ss >> currentObject->scale.x >> currentObject->scale.y >> currentObject->scale.z;
             else if (key == "Params") ss >> currentObject->params.x >> currentObject->params.y >> currentObject->params.z;
+            else if (key == "AttachParticle") {
+                AttachedParticleConfig ap;
+                std::string durStr;
+                ss >> ap.particleName >> durStr;
+                ap.duration = (durStr == "inf" || durStr == "-1") ? -1.0f : std::stof(durStr);
+                currentObject->attachedParticles.push_back(ap);
+            }
             else if (key == "RenderProps") {
                 std::string castS, recvS, vis;
                 ss >> currentObject->shadingMode >> castS >> recvS >> vis >> currentObject->layerMask;

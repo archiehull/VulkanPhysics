@@ -46,9 +46,6 @@ Application::Application() {
 void Application::Run() {
     InitVulkan();
 
-    // 1. Initialize UI and find the "init" index
-    editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/config/", "desert");
 
     // 2. Load the scene that the UI has selected as default
     std::string initialPath = editorUI->GetInitialScenePath();
@@ -146,8 +143,9 @@ void Application::InitVulkan() {
 
     std::vector<std::string> camNames;
 
+    // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/config/");
+    editorUI->Initialize("src/worlds/", "desert");
 
     for (const auto& cam : config.customCameras) {
         camNames.push_back(cam.name);

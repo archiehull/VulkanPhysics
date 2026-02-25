@@ -2,9 +2,18 @@
 #include "imgui.h"
 #include "../rendering/ParticleLibrary.h"
 #include <algorithm>
+#include <filesystem>
+#include <iostream>
 
 void EditorUI::Initialize(const std::string& configPath, const std::string& defaultSceneName) {
     m_ConfigRoot = configPath;
+
+    namespace fs = std::filesystem;
+    if (!fs::exists(m_ConfigRoot) || !fs::is_directory(m_ConfigRoot)) {
+        std::cerr << "Error: EditorUI config path not found or not a directory: " << m_ConfigRoot << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
     m_SceneOptions = ConfigLoader::GetAvailableScenes(m_ConfigRoot);
 
     m_SelectedSceneIndex = 0;
@@ -124,7 +133,12 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             }
                         }
 
-                        // --- NEW: Check if this is the currently viewed object ---
+                        // Check custom attached emitters
+                        if (registry.HasComponent<AttachedEmitterComponent>(e)) {
+                            emitterCount += static_cast<int>(registry.GetComponent<AttachedEmitterComponent>(e).emitters.size());
+                        }
+
+                        // Check if this is the currently viewed object
                         bool isViewing = (e == activeOrbitTarget && activeOrbitTarget != MAX_ENTITIES);
 
                         // Update the label strings
@@ -135,133 +149,137 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             entityName += " [" + std::to_string(emitterCount) + " Emitters]";
                         }
 
-                        // --- NEW: Unified Color Priority System ---
+                        // Unified Color Priority System
                         int popCount = 0;
                         if (isViewing) {
-                            // Cyan/Blue for viewing (Highest priority so you never lose your target)
+                            // Cyan/Blue for viewing (Highest priority)
                             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 1.0f, 1.0f));
                             popCount++;
                         }
                         else if (isBurning) {
-                            // Bright Orange for burning
                             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
                             popCount++;
                         }
                         else if (emitterCount > 0) {
-                            // Soft Red/Orange if it has emitters but isn't actively burning
                             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
                             popCount++;
                         }
 
-                        // Create a stable ID so the menu doesn't collapse when the name changes!
+                        // Create a stable ID so the menu doesn't collapse
                         std::string menuLabel = entityName + "###ObjMenu_" + std::to_string(e);
 
-                        // Draw the menu item
                         bool menuOpen = ImGui::BeginMenu(menuLabel.c_str());
 
-                        // IMMEDIATELY pop the color so the contents inside the menu stay normal!
                         if (popCount > 0) {
                             ImGui::PopStyleColor(popCount);
                         }
 
                         if (menuOpen) {
 
-                            // Header for visual clarity
                             ImGui::TextDisabled("Entity Properties");
 
-                            // --- View Object Button ---
                             if (ImGui::Button("View Object", ImVec2(-1, 0))) {
                                 m_ViewRequested = e;
                             }
 
-                            // --- Ignite Object Button ---
                             if (e == activeOrbitTarget && registry.HasComponent<ThermoComponent>(e)) {
                                 auto& thermo = registry.GetComponent<ThermoComponent>(e);
                                 if (thermo.isFlammable && thermo.state != ObjectState::BURNING) {
-                                    // Use the orange/fire color for the ignite button
                                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.0f, 1.0f));
                                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
                                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.2f, 0.0f, 1.0f));
 
                                     if (ImGui::Button("Ignite Object", ImVec2(-1, 0))) {
-                                        scene.Ignite(e); // Ignite directly from the UI!
+                                        scene.Ignite(e);
                                     }
 
                                     ImGui::PopStyleColor(3);
                                 }
                             }
 
-                            // --- NEW: Custom Emitter Attachment ---
-                            ImGui::Separator();
-                            bool hasAttached = registry.HasComponent<AttachedEmitterComponent>(e) && registry.GetComponent<AttachedEmitterComponent>(e).isActive;
-
-                            if (hasAttached) {
-                                auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
-                                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
-
-                                if (ImGui::MenuItem("Remove Attached Emitter")) {
-                                    // Stop the underlying Vulkan emitter
-                                    ParticleProps props;
-                                    if (attached.effectType == 0) props = ParticleLibrary::GetSmokeProps();
-                                    else if (attached.effectType == 1) props = ParticleLibrary::GetFireProps();
-                                    else props = ParticleLibrary::GetDustProps();
-
-                                    scene.GetOrCreateSystem(props)->StopEmitter(attached.emitterId);
-                                    attached.isActive = false; // Disable the tracker
-                                }
-                                ImGui::PopStyleColor();
-                            }
-                            else {
-                                if (ImGui::BeginMenu("Attach Emitter Effect...")) {
-
-                                    // Helper lambda to assign the component and spawn the particles
-                                    auto attachFunc = [&](int type, ParticleProps props) {
-                                        if (!registry.HasComponent<AttachedEmitterComponent>(e)) {
-                                            registry.AddComponent<AttachedEmitterComponent>(e, AttachedEmitterComponent{});
-                                        }
-                                        auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
-                                        attached.isActive = true;
-                                        attached.effectType = type;
-
-                                        // Set initial spawn position
-                                        glm::vec3 pos = glm::vec3(0.0f);
-                                        if (registry.HasComponent<TransformComponent>(e)) {
-                                            pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
-                                        }
-                                        props.position = pos;
-
-                                        // Tell the Scene to build and start the emitter
-                                        attached.emitterId = scene.GetOrCreateSystem(props)->AddEmitter(props, 100.0f);
-                                        };
-
-                                    if (ImGui::MenuItem("Smoke Trail")) attachFunc(0, ParticleLibrary::GetSmokeProps());
-                                    if (ImGui::MenuItem("Fire Effect")) attachFunc(1, ParticleLibrary::GetFireProps());
-                                    if (ImGui::MenuItem("Magic Sparkles (Dust)")) attachFunc(2, ParticleLibrary::GetDustProps());
-
-                                    ImGui::EndMenu();
-                                }
-                            }
-
-                            // --- Attach Light Button ---
+                            // Attach Light Button
                             if (registry.HasComponent<NameComponent>(e)) {
-                                // If the object DOES NOT have a light, show the Attach button
                                 if (!registry.HasComponent<LightComponent>(e)) {
                                     if (ImGui::Button("Attach Light", ImVec2(-1, 0))) {
                                         std::string targetName = registry.GetComponent<NameComponent>(e).name;
-
                                         glm::vec3 pos = glm::vec3(0.0f);
                                         if (registry.HasComponent<TransformComponent>(e)) {
                                             pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
                                         }
-
-                                        // Attach a bright white point light (Type 1)
-                                        scene.AddLight(targetName, pos, glm::vec3(1.0f, 1.0f, 1.0f), 50.0f, 1);
+                                        scene.AddLight(targetName, pos, glm::vec3(1.0f, 1.0f, 1.0f), 200.0f, 2);
                                     }
                                 }
                                 else {
-                                    // If it already has a light, show a yellow label
                                     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "  [Light Attached - Edit in Lights Menu]");
                                 }
+                            }
+
+                            ImGui::Separator();
+
+                            if (!registry.HasComponent<AttachedEmitterComponent>(e)) {
+                                registry.AddComponent<AttachedEmitterComponent>(e, AttachedEmitterComponent{});
+                            }
+                            auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
+
+                            if (!attached.emitters.empty()) {
+                                ImGui::TextDisabled("Active Emitters");
+                                for (size_t i = 0; i < attached.emitters.size(); ++i) {
+                                    auto& em = attached.emitters[i];
+
+                                    ImGui::PushID(i);
+                                    std::string label = "Remove Emitter ID: " + std::to_string(em.emitterId);
+                                    if (em.duration > 0.0f) {
+                                        label += " (" + std::to_string((int)(em.duration - em.timer)) + "s left)";
+                                    }
+                                    else {
+                                        label += " (Infinite)";
+                                    }
+
+                                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+                                    if (ImGui::MenuItem(label.c_str())) {
+                                        scene.GetOrCreateSystem(em.props)->StopEmitter(em.emitterId);
+                                        attached.emitters.erase(attached.emitters.begin() + i);
+                                        ImGui::PopStyleColor();
+                                        ImGui::PopID();
+                                        break;
+                                    }
+                                    ImGui::PopStyleColor();
+                                    ImGui::PopID();
+                                }
+                                ImGui::Separator();
+                            }
+
+                            if (ImGui::BeginMenu("Attach New Emitter...")) {
+                                static float emitDuration = -1.0f;
+                                ImGui::InputFloat("Duration (s)", &emitDuration);
+                                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Set to -1 for Infinite");
+                                ImGui::Separator();
+
+                                auto attachFunc = [&](ParticleProps props, float rate) {
+                                    ActiveEmitter newEm;
+                                    newEm.props = props;
+                                    newEm.duration = emitDuration;
+                                    newEm.emissionRate = rate;
+                                    newEm.timer = 0.0f;
+
+                                    glm::vec3 pos = glm::vec3(0.0f);
+                                    if (registry.HasComponent<TransformComponent>(e)) {
+                                        pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
+                                    }
+                                    newEm.props.position = pos;
+
+                                    newEm.emitterId = scene.GetOrCreateSystem(props)->AddEmitter(props, rate);
+                                    attached.emitters.push_back(newEm);
+                                    };
+
+                                if (ImGui::MenuItem("Smoke Trail")) attachFunc(ParticleLibrary::GetSmokeProps(), 50.0f);
+                                if (ImGui::MenuItem("Fire Effect")) attachFunc(ParticleLibrary::GetFireProps(), 200.0f);
+                                if (ImGui::MenuItem("Magic Sparkles")) {
+                                    ParticleProps dust = ParticleLibrary::GetDustProps();
+                                    dust.velocityVariation = glm::vec3(2.0f);
+                                    attachFunc(dust, 150.0f);
+                                }
+                                ImGui::EndMenu();
                             }
 
                             ImGui::Separator();
@@ -300,11 +318,11 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                 ImGui::TextWrapped("%s", render.texturePath.c_str());
                             }
 
-                            // --- Display Attached Emitter Details ---
-                            if (emitterCount > 0) {
+                            // Display Attached Thermo Emitter Details
+                            if (fireId != -1 || smokeId != -1) {
                                 ImGui::Spacing();
                                 ImGui::Separator();
-                                ImGui::TextDisabled("Attached Emitters");
+                                ImGui::TextDisabled("Attached Thermodynamics");
 
                                 const auto& pSystems = scene.GetParticleSystems();
 
@@ -346,18 +364,16 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                 drawAttachedEmitter(smokeId, "Smoke", ParticleLibrary::GetSmokeProps().texturePath);
                             }
 
-                            ImGui::EndMenu(); // Close the entity's submenu
+                            ImGui::EndMenu();
                         }
                     }
                 }
-                ImGui::EndMenu(); // Close the "Objects" tab
+                ImGui::EndMenu();
             }
 
-            // --- TAB: Emitters (Debug) ---
             if (ImGui::BeginMenu("Particles")) {
                 const auto& pSystems = scene.GetParticleSystems();
 
-                // 1. Collect all emitters across all systems into a single list
                 struct EmitterDebugInfo {
                     int id;
                     std::string texName;
@@ -367,7 +383,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 std::vector<EmitterDebugInfo> allEmitters;
 
                 for (const auto& sys : pSystems) {
-                    // Extract just the file name from the texture path
                     std::string texName = sys->GetTexturePath();
                     size_t slashPos = texName.find_last_of("/\\");
                     if (slashPos != std::string::npos) {
@@ -383,7 +398,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     ImGui::MenuItem("No Active Emitters", nullptr, false, false);
                 }
                 else {
-                    // 2. Sort them by Emitter ID so they appear in a logical order
                     std::sort(allEmitters.begin(), allEmitters.end(), [](const EmitterDebugInfo& a, const EmitterDebugInfo& b) {
                         return a.id < b.id;
                         });
@@ -391,11 +405,9 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     Registry& registry = scene.GetRegistry();
                     const auto& entities = scene.GetRenderableEntities();
 
-                    // 3. Draw the menu items
                     for (const auto& info : allEmitters) {
                         const auto& em = info.emitter;
 
-                        // Menu label shows ID and Type: "Emitter ID: 0 (fire_01.png)"
                         std::string emLabel = "Emitter ID: " + std::to_string(em.id) + " (" + info.texName + ")##" + std::to_string(em.id);
 
                         if (ImGui::BeginMenu(emLabel.c_str())) {
@@ -420,7 +432,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             ImGui::Text("Size: %.2f -> %.2f (Var: %.2f)", em.props.sizeBegin, em.props.sizeEnd, em.props.sizeVariation);
                             ImGui::Text("Lifetime: %.2f s", em.props.lifeTime);
 
-                            // --- NEW: Attached Objects Section ---
                             ImGui::Spacing();
                             ImGui::TextDisabled("Attached Objects");
                             ImGui::Separator();
@@ -430,7 +441,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                 bool isAttached = false;
                                 std::string attachReason = "";
 
-                                // Check ThermoComponent for fire or smoke emitters
                                 if (registry.HasComponent<ThermoComponent>(e)) {
                                     auto& thermo = registry.GetComponent<ThermoComponent>(e);
                                     if (thermo.fireEmitterId == em.id) {
@@ -443,12 +453,22 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                     }
                                 }
 
-                                // Check DustCloudComponent for dust emitters
                                 if (registry.HasComponent<DustCloudComponent>(e)) {
                                     auto& dust = registry.GetComponent<DustCloudComponent>(e);
                                     if (dust.emitterId == em.id) {
                                         isAttached = true;
                                         attachReason = "Dust";
+                                    }
+                                }
+
+                                if (registry.HasComponent<AttachedEmitterComponent>(e)) {
+                                    auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
+                                    for (const auto& activeEm : attached.emitters) {
+                                        if (activeEm.emitterId == em.id) {
+                                            isAttached = true;
+                                            attachReason = "Custom Emitter";
+                                            break;
+                                        }
                                     }
                                 }
 
@@ -466,21 +486,108 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                 ImGui::Text(" None");
                             }
 
-                            ImGui::EndMenu(); // Close Emitter Info
+                            ImGui::EndMenu();
                         }
                     }
                 }
-                ImGui::EndMenu(); // Close Particle Debug
+                ImGui::EndMenu();
             }
 
-            // --- TAB: Lights ---
+            if (ImGui::BeginMenu("Cameras")) {
+                Registry& registry = scene.GetRegistry();
+                for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                    if (!registry.HasComponent<CameraComponent>(e)) continue;
+
+                    auto& cam = registry.GetComponent<CameraComponent>(e);
+
+                    std::string baseCamName = registry.HasComponent<NameComponent>(e) ?
+                        registry.GetComponent<NameComponent>(e).name : "Unnamed Camera";
+
+                    std::string menuLabel = baseCamName;
+
+                    if (cam.isActive) {
+                        if (activeOrbitTarget != MAX_ENTITIES) {
+                            std::string targetName = "Entity " + std::to_string(activeOrbitTarget);
+                            if (registry.HasComponent<NameComponent>(activeOrbitTarget)) {
+                                targetName = registry.GetComponent<NameComponent>(activeOrbitTarget).name;
+                            }
+                            menuLabel += " [VIEWING: " + targetName + "]";
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 1.0f, 1.0f));
+                        }
+                        else {
+                            menuLabel += " [ACTIVE]";
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f));
+                        }
+                    }
+
+                    menuLabel += "###CamMenu_" + std::to_string(e);
+
+                    if (ImGui::BeginMenu(menuLabel.c_str())) {
+                        if (cam.isActive) ImGui::PopStyleColor();
+
+                        if (registry.HasComponent<TransformComponent>(e)) {
+                            auto& transform = registry.GetComponent<TransformComponent>(e);
+                            glm::vec3 pos = glm::vec3(transform.matrix[3]);
+
+                            ImGui::TextDisabled("Spatial Data");
+                            ImGui::Separator();
+                            ImGui::Text("Position:    (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+
+                            glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2]));
+                            ImGui::Text("Front Vector: (%.2f, %.2f, %.2f)", front.x, front.y, front.z);
+
+                            glm::vec3 up = glm::normalize(glm::vec3(transform.matrix[1]));
+                            ImGui::Text("Up Vector:    (%.2f, %.2f, %.2f)", up.x, up.y, up.z);
+                        }
+
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Orientation");
+                        ImGui::Separator();
+                        ImGui::Text("Yaw:   %.2f", cam.yaw);
+                        ImGui::Text("Pitch: %.2f", cam.pitch);
+
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Lens Settings");
+                        ImGui::Separator();
+                        ImGui::Text("Field of View: %.1f deg", cam.fov);
+                        ImGui::Text("Near Plane:    %.2f", cam.nearPlane);
+                        ImGui::Text("Far Plane:     %.1f", cam.farPlane);
+                        ImGui::Text("Aspect Ratio:  %.2f", cam.aspectRatio);
+
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Movement Stats");
+                        ImGui::Separator();
+                        ImGui::DragFloat("Move Speed", &cam.moveSpeed, 0.5f, 0.1f, 500.0f);
+                        ImGui::DragFloat("Rotate Speed", &cam.rotateSpeed, 0.5f, 0.1f, 500.0f);
+
+                        ImGui::Separator();
+
+                        if (cam.isActive && activeOrbitTarget != MAX_ENTITIES) {
+                            if (ImGui::MenuItem("Stop Viewing / Free Camera")) {
+                                requestedCamera = baseCamName;
+                            }
+                        }
+                        else {
+                            if (ImGui::MenuItem("Switch to this Camera")) {
+                                requestedCamera = baseCamName;
+                            }
+                        }
+
+                        ImGui::EndMenu();
+                    }
+                    else if (cam.isActive) {
+                        ImGui::PopStyleColor();
+                    }
+                }
+                ImGui::EndMenu();
+            }
+
             if (ImGui::BeginMenu("Lights")) {
                 Registry& registry = scene.GetRegistry();
 
                 std::vector<Entity> activeLights;
                 std::vector<Entity> inactiveLights;
 
-                // 1. Categorize lights into Active and Inactive
                 for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
                     if (!registry.HasComponent<LightComponent>(e)) continue;
 
@@ -494,7 +601,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                 bool hasLights = !activeLights.empty() || !inactiveLights.empty();
 
-                // 2. Helper lambda so we don't write the UI code twice
                 auto drawLightMenu = [&](Entity e) {
                     auto& light = registry.GetComponent<LightComponent>(e);
 
@@ -521,7 +627,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         ImGui::ColorEdit3("Color", &light.color.x, ImGuiColorEditFlags_Float);
                         ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 100.0f);
 
-                        // --- Interactive Light Type Dropdown ---
                         const char* lightTypes[] = { "Sun / Directional", "Fire (Harsh Falloff)", "Standard Point", "Spotlight" };
 
                         int safeTypeIndex = (light.type >= 0 && light.type <= 3) ? light.type : 2;
@@ -530,21 +635,17 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             light.type = safeTypeIndex;
                         }
 
-                        // --- NEW: Spotlight Controls ---
                         if (light.type == 3) {
                             ImGui::Spacing();
                             ImGui::TextDisabled("Spotlight Settings");
                             ImGui::Separator();
 
-                            // Drag floats for XYZ direction
                             if (ImGui::DragFloat3("Direction", &light.direction.x, 0.05f, -1.0f, 1.0f)) {
-                                // Normalize direction on change to prevent math errors
                                 if (glm::length(light.direction) > 0.001f) {
                                     light.direction = glm::normalize(light.direction);
                                 }
                             }
 
-                            // Slider for cone width (1 degree to 90 degrees)
                             ImGui::SliderFloat("Cone Angle", &light.cutoffAngle, 1.0f, 90.0f, "%.1f deg");
                         }
 
@@ -555,7 +656,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     }
                     };
 
-                // 3. Draw Active Lights
                 if (!activeLights.empty()) {
                     ImGui::TextDisabled("Active Lights");
                     ImGui::Separator();
@@ -564,13 +664,11 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     }
                 }
 
-                // 4. Draw Inactive Lights in a Sub-Menu
                 if (!inactiveLights.empty()) {
                     if (!activeLights.empty()) {
                         ImGui::Spacing();
                     }
 
-                    // Group them in a folder so they don't clutter the main list
                     if (ImGui::BeginMenu("Inactive Lights")) {
                         ImGui::TextDisabled("Pooled / Burned-out Lights");
                         ImGui::Separator();
@@ -586,111 +684,10 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     ImGui::MenuItem("No lights in scene", nullptr, false, false);
                 }
 
-                ImGui::EndMenu(); // Close Lights tab
-            }
-
-            if (ImGui::BeginMenu("Cameras")) {
-                Registry& registry = scene.GetRegistry();
-                // Get all entities to find cameras
-                for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-                    if (!registry.HasComponent<CameraComponent>(e)) continue;
-
-                    auto& cam = registry.GetComponent<CameraComponent>(e);
-
-                    // 1. Get a safe base name (Fixes crashes if NameComponent is missing)
-                    std::string baseCamName = registry.HasComponent<NameComponent>(e) ?
-                        registry.GetComponent<NameComponent>(e).name : "Unnamed Camera";
-
-                    // 2. Build the display label separately from the ID
-                    std::string menuLabel = baseCamName;
-
-                    // Indicate which camera is currently active and if it's orbiting an object
-                    if (cam.isActive) {
-                        if (activeOrbitTarget != MAX_ENTITIES) {
-                            std::string targetName = "Entity " + std::to_string(activeOrbitTarget);
-                            if (registry.HasComponent<NameComponent>(activeOrbitTarget)) {
-                                targetName = registry.GetComponent<NameComponent>(activeOrbitTarget).name;
-                            }
-                            menuLabel += " [VIEWING: " + targetName + "]";
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 1.0f, 1.0f)); // Cyan/Blue
-                        }
-                        else {
-                            menuLabel += " [ACTIVE]";
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Green
-                        }
-                    }
-
-                    // 3. Append ### to ensure the ImGui ID NEVER changes, even when the text does!
-                    menuLabel += "###CamMenu_" + std::to_string(e);
-
-                    if (ImGui::BeginMenu(menuLabel.c_str())) {
-                        if (cam.isActive) ImGui::PopStyleColor();
-
-                        // --- 1. Spatial Data (Transform) ---
-                        if (registry.HasComponent<TransformComponent>(e)) {
-                            auto& transform = registry.GetComponent<TransformComponent>(e);
-                            glm::vec3 pos = glm::vec3(transform.matrix[3]);
-
-                            ImGui::TextDisabled("Spatial Data");
-                            ImGui::Separator();
-                            ImGui::Text("Position:    (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
-
-                            // Front vector is usually the 3rd column of the rotation matrix (inverse)
-                            glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2]));
-                            ImGui::Text("Front Vector: (%.2f, %.2f, %.2f)", front.x, front.y, front.z);
-
-                            glm::vec3 up = glm::normalize(glm::vec3(transform.matrix[1]));
-                            ImGui::Text("Up Vector:    (%.2f, %.2f, %.2f)", up.x, up.y, up.z);
-                        }
-
-                        // --- 2. Orientation (Euler Angles) ---
-                        ImGui::Spacing();
-                        ImGui::TextDisabled("Orientation");
-                        ImGui::Separator();
-                        ImGui::Text("Yaw:   %.2f", cam.yaw);
-                        ImGui::Text("Pitch: %.2f", cam.pitch);
-
-                        // --- 3. Lens & Projection ---
-                        ImGui::Spacing();
-                        ImGui::TextDisabled("Lens Settings");
-                        ImGui::Separator();
-                        ImGui::Text("Field of View: %.1f deg", cam.fov);
-                        ImGui::Text("Near Plane:    %.2f", cam.nearPlane);
-                        ImGui::Text("Far Plane:     %.1f", cam.farPlane);
-                        ImGui::Text("Aspect Ratio:  %.2f", cam.aspectRatio);
-
-                        // --- 4. Controls (Speeds) ---
-                        ImGui::Spacing();
-                        ImGui::TextDisabled("Movement Stats");
-                        ImGui::Separator();
-                        ImGui::DragFloat("Move Speed", &cam.moveSpeed, 0.5f, 0.1f, 500.0f);
-                        ImGui::DragFloat("Rotate Speed", &cam.rotateSpeed, 0.5f, 0.1f, 500.0f);
-
-                        ImGui::Separator();
-
-                        // Use the safe base name instead of querying the component again
-                        if (cam.isActive && activeOrbitTarget != MAX_ENTITIES) {
-                            if (ImGui::MenuItem("Stop Viewing / Free Camera")) {
-                                requestedCamera = baseCamName;
-                            }
-                        }
-                        else {
-                            if (ImGui::MenuItem("Switch to this Camera")) {
-                                requestedCamera = baseCamName;
-                            }
-                        }
-
-                        ImGui::EndMenu();
-                    }
-                    else if (cam.isActive) {
-                        ImGui::PopStyleColor();
-                    }
-                }
                 ImGui::EndMenu();
             }
 
             if (ImGui::BeginMenu("Simulation")) {
-                // 1. Start / Pause Toggle - Using Selectable with DontClosePopups
                 std::string pauseLabel = m_IsPaused ? "Start Simulation  [Space]" : "Pause Simulation  [Space]";
                 if (ImGui::Selectable(pauseLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
                     m_IsPaused = !m_IsPaused;
@@ -698,11 +695,9 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                 ImGui::Separator();
 
-                // 2. Step Configuration
                 ImGui::Text("Step Controls");
                 ImGui::InputFloat("Step Size (s)", &m_StepSize, 0.001f, 0.01f, "%.4f");
 
-                // Execute Step - Only active when paused, prevents menu autoclose
                 if (m_IsPaused) {
                     if (ImGui::Selectable("Execute Step  [F]", false, ImGuiSelectableFlags_DontClosePopups)) {
                         m_StepRequested = true;
@@ -714,21 +709,18 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                 ImGui::Separator();
 
-                // 3. Restart Button
                 if (ImGui::MenuItem("Restart Environment", "R")) {
                     m_RestartRequested = true;
                 }
 
                 ImGui::Separator();
 
-                // 4. TimeScale Slider - Using Logarithmic scale for massive range (e.g., up to 100x) but fine control below 1x
                 ImGui::Text("Simulation Speed (CTRL + CLICK to Type)");
                 ImGui::SliderFloat("##speed", &m_TimeScale, 0.0f, 100.0f, "%.3fx", ImGuiSliderFlags_Logarithmic);
 
                 ImGui::EndMenu();
             }
 
-            // --- TAB: Environment ---
             if (ImGui::BeginMenu("Environment")) {
 
                 ImGui::TextDisabled("Live Status");
@@ -749,7 +741,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::TextDisabled("Controls");
                 ImGui::Separator();
 
-                // --- MOVED: Background Colour Sub-menu ---
                 if (ImGui::BeginMenu("Background Colour")) {
                     ImGui::ColorPicker4("##bg_picker", m_ClearColor,
                         ImGuiColorEditFlags_PickerHueWheel |
@@ -764,7 +755,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     ImGui::EndMenu();
                 }
 
-                // 2. Shadows Toggle
                 bool useSimple = scene.IsUsingSimpleShadows();
                 if (ImGui::Checkbox("Use Simple Shadows", &useSimple)) {
                     scene.ToggleSimpleShadows();
@@ -772,19 +762,16 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                 ImGui::Spacing();
 
-                // 3. Season Control
                 if (ImGui::Selectable("Cycle to Next Season", false, ImGuiSelectableFlags_DontClosePopups)) {
                     scene.NextSeason();
                 }
 
-                // 4. Weather Control
                 bool isPrecipitating = scene.IsPrecipitating();
                 std::string weatherLabel = isPrecipitating ? "Stop Weather" : "Start Weather";
                 if (ImGui::Selectable(weatherLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
                     scene.ToggleWeather();
                 }
 
-                // 5. Dust Cloud Control
                 bool isDustActive = scene.IsDustActive();
                 std::string dustLabel = isDustActive ? "Stop Dust Cloud" : "Spawn Dust Cloud";
                 if (ImGui::Selectable(dustLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
@@ -795,8 +782,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         scene.SpawnDustCloud();
                     }
                 }
-                
-                // --- Time of Day Controls ---
+
                 ImGui::Spacing();
                 ImGui::TextDisabled("Time of Day");
                 ImGui::Separator();
@@ -812,11 +798,9 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
 
                         if (isSun) {
-                            // Sun high in the sky
                             registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
                         }
                         else if (isMoon) {
-                            // Moon hidden under the map
                             registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
                         }
                     }
@@ -833,11 +817,9 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
 
                         if (isSun) {
-                            // Sun hidden under the map
                             registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
                         }
                         else if (isMoon) {
-                            // Moon high in the sky
                             registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
                         }
                     }
@@ -846,52 +828,41 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::EndMenu();
             }
 
-            // --- RIGHT-ALIGNED STATUS AREA ---
-            // 1. Prepare strings
             std::string currentSceneName = m_SceneOptions.empty() ? "None" : m_SceneOptions[m_SelectedSceneIndex].name;
             std::string activeSceneStr = "Active Scene: " + currentSceneName;
             std::string fpsStr = std::to_string((int)(1.0f / deltaTime)) + " FPS";
 
-            // 2. Calculate total width for both items plus padding
             float spacing = 20.0f;
             float totalRightWidth = ImGui::CalcTextSize(activeSceneStr.c_str()).x +
                 ImGui::CalcTextSize(fpsStr.c_str()).x +
-                spacing + 40.0f; // Extra padding from edge
+                spacing + 40.0f;
 
-            // 3. Set cursor to push elements to the right
             ImGui::SameLine(ImGui::GetWindowWidth() - totalRightWidth);
 
-            // 4. Draw Active Scene
             ImGui::TextDisabled("Active Scene: ");
             ImGui::SameLine();
             ImGui::Text("%s", currentSceneName.c_str());
 
-            // 5. Draw FPS next to it
             ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(fpsStr.c_str()).x - 20.0f);
             ImGui::TextDisabled("%s", fpsStr.c_str());
             ImGui::EndMainMenuBar();
         }
 
         if (m_ShowControlsWindow) {
-            // Set a default size for the window so it doesn't open tiny
             ImGui::SetNextWindowSize(ImVec2(400, 500), ImGuiCond_FirstUseEver);
 
-            // Pass the boolean address so ImGui can close it via the 'X' button
             if (ImGui::Begin("Input Controls", &m_ShowControlsWindow)) {
 
                 if (m_DisplayBindings.empty()) {
                     ImGui::TextDisabled("No bindings loaded.");
                 }
                 else {
-                    // Use ImGui Tables for a clean layout
                     if (ImGui::BeginTable("ControlsTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
 
-                        // Table Headers
                         ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch, 0.6f);
                         ImGui::TableSetupColumn("Key Bound", ImGuiTableColumnFlags_WidthStretch, 0.4f);
                         ImGui::TableHeadersRow();
 
-                        // Table Rows
                         for (const auto& bind : m_DisplayBindings) {
                             ImGui::TableNextRow();
 
@@ -899,7 +870,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             ImGui::Text("%s", bind.first.c_str());
 
                             ImGui::TableNextColumn();
-                            ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "%s", bind.second.c_str()); // Greenish text for keys
+                            ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "%s", bind.second.c_str());
                         }
                         ImGui::EndTable();
                     }

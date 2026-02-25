@@ -1,0 +1,145 @@
+[Settings]
+# Window configuration
+WindowSize 1280 720
+
+# Time and Season parameters
+TimeParams 60.0 3
+SeasonTemps 25.0 10.0 15.0
+SunHeatBonus 50.0
+
+# Weather parameters
+WeatherIntervals 120.0 240.0
+WeatherDuration 10.0 20.0
+FireSuppression 15.0
+
+[Input]
+# ==========================================
+# CONTROLS
+# ==========================================
+MoveForward=W
+MoveBackward=S
+MoveLeft=A
+MoveRight=D
+LookUp=UP
+LookDown=DOWN
+LookLeft=LEFT
+LookRight=RIGHT
+MoveUp=E,PAGE_UP
+MoveDown=Q,PAGE_DOWN
+Sprint=LEFT_SHIFT,RIGHT_SHIFT
+CameraOutside=F1
+CameraOrbit=F2
+CameraRandom=F3
+IgniteTarget=F4
+ResetEnvironment=R
+TimeSpeedUp=T
+ToggleShading=Y
+ToggleShadows=U
+NextSeason=I
+ToggleWeather=O
+SpawnDustCloud=P
+PauseToggle=SPACE
+Exit=ESCAPE
+
+[Scene]
+
+# ==========================================
+# PROCEDURAL TEXTURES
+# ==========================================
+ProceduralTexture FloorTex
+Type Checker
+Color1 0.1 0.1 0.15 1.0
+Color2 0.8 0.8 0.85 1.0
+CellSize 64
+EndTexture
+
+ProceduralTexture OrbTex
+Type Solid
+Color1 0.0 1.0 0.5 1.0
+EndTexture
+
+# ==========================================
+# CUSTOM PARTICLES
+# ==========================================
+# Format: Name TexturePath Rate LifeTime isAdditive
+CustomParticle HealingAura textures/sparkle.png 150.0 2.0 1
+PosVar 1.0 1.0 1.0
+Velocity 0.0 2.0 0.0
+VelVar 1.0 0.5 1.0
+ColorBegin 0.0 1.0 0.5 1.0
+ColorEnd 0.0 0.2 0.1 0.0
+Size 1.5 0.1 0.5
+EndParticle
+
+# ==========================================
+# CAMERAS
+# ==========================================
+# Format: Name Type Bind PosX PosY PosZ [OrbitRadius TargetX TargetY TargetZ]
+Camera FreeCam FreeRoam F1 0.0 10.0 25.0
+Camera OrbitCam Orbit F2 0.0 15.0 25.0 30.0 0.0 5.0 0.0
+Camera ShowcaseCam RandomTarget F3 0.0 10.0 20.0 15.0 stone
+
+# ==========================================
+# OBJECTS & LIGHTS
+# ==========================================
+
+# 1. The Sun (Directional Light - Type 0)
+Object SunOrbit
+Type Sphere
+Texture textures/sun.png
+Position 0.0 0.0 0.0
+Scale 5.0 5.0 5.0
+RenderProps 1 0 0 0 3
+PhysicsProps 0 0
+Orbit 1 400.0 0.05 1.0 0.0
+Light 1 1.0 0.9 0.8 1.0 0
+EndObject
+
+# 2. The Checkerboard Floor
+Object ShowcaseFloor
+Type Cube
+Texture FloorTex
+Position 0.0 -2.0 0.0
+Scale 100.0 1.0 100.0
+PhysicsProps 0 1
+EndObject
+
+# 3. The Center Pedestal
+Object CenterPedestal
+Type Pedestal
+Texture textures/stone.jpg
+Position 0.0 0.0 0.0
+Scale 3.0 3.0 3.0
+PhysicsProps 0 1
+EndObject
+
+# 4. The Glowing Magic Orb (With point light and attached custom particles)
+Object MagicOrb
+Type Sphere
+Texture OrbTex
+Position 0.0 6.0 0.0
+Scale 2.0 2.0 2.0
+RenderProps 1 0 0 1 3
+PhysicsProps 0 1
+# Attach Light: isLight(1/0) R G B Intensity Type(2=Point)
+Light 1 0.0 1.0 0.5 300.0 2
+# Attach Custom Particle we defined above (inf = infinite duration)
+AttachParticle HealingAura inf
+EndObject
+
+# 5. Some flammable crates to test shadows and fire
+Object Crate1
+Type Cube
+Texture textures/wood.jpg
+Position 15.0 2.0 -5.0
+Scale 3.0 3.0 3.0
+PhysicsProps 1 1
+EndObject
+
+Object Crate2
+Type Cube
+Texture textures/wood.jpg
+Position -12.0 2.0 8.0
+Scale 3.0 3.0 3.0
+PhysicsProps 1 1
+EndObject

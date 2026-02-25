@@ -33,34 +33,36 @@ void ParticleUpdateSystem::Update(Scene& scene, float deltaTime) {
         auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
         auto& transform = registry.GetComponent<TransformComponent>(e);
 
-        if (attached.isActive && attached.emitterId != -1) {
-            ParticleProps props;
-            float rate = 100.0f;
+        // Iterate backwards or use an iterator so we can safely delete expired emitters
+        for (auto it = attached.emitters.begin(); it != attached.emitters.end(); ) {
+            auto& activeEm = *it;
 
-            // Map the effect type to the correct particle properties
-            if (attached.effectType == 0) {
-                props = ParticleLibrary::GetSmokeProps();
-                rate = 50.0f;
-            }
-            else if (attached.effectType == 1) {
-                props = ParticleLibrary::GetFireProps();
-                rate = 200.0f;
-            }
-            else {
-                props = ParticleLibrary::GetDustProps();
-                props.velocityVariation = glm::vec3(2.0f); // Tighter spread so it sticks to the object
-                rate = 150.0f;
+            // 1. Check Duration / Timers
+            if (activeEm.duration > 0.0f) {
+                activeEm.timer += deltaTime;
+                if (activeEm.timer >= activeEm.duration) {
+                    // Timer expired! Stop the Vulkan emitter and remove it from the list
+                    if (activeEm.emitterId != -1) {
+                        scene.GetOrCreateSystem(activeEm.props)->StopEmitter(activeEm.emitterId);
+                    }
+                    it = attached.emitters.erase(it);
+                    continue;
+                }
             }
 
-            // Lock the emitter position to the object's transform!
-            props.position = glm::vec3(transform.matrix[3]);
+            // 2. Sync Position
+            if (activeEm.emitterId != -1) {
+                ParticleProps props = activeEm.props;
 
-            // Add a slight vertical offset based on object size if it has a collider
-            if (registry.HasComponent<ColliderComponent>(e)) {
-                props.position.y += registry.GetComponent<ColliderComponent>(e).height * 0.5f;
+                // Lock the emitter position to the object's transform
+                props.position = glm::vec3(transform.matrix[3]);
+                if (registry.HasComponent<ColliderComponent>(e)) {
+                    props.position.y += registry.GetComponent<ColliderComponent>(e).height * 0.5f;
+                }
+
+                scene.GetOrCreateSystem(props)->UpdateEmitter(activeEm.emitterId, props, activeEm.emissionRate);
             }
-
-            scene.GetOrCreateSystem(props)->UpdateEmitter(attached.emitterId, props, rate);
+            ++it;
         }
     }
 

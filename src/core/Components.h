@@ -7,6 +7,7 @@
 #include "ECS.h"
 #include "CoreTypes.h"
 #include "../core/Config.h"
+#include "../rendering/ParticleSystem.h"
 
 // 1. Identification
 struct NameComponent {
@@ -47,11 +48,6 @@ struct OrbitComponent {
     float currentAngle = 0.0f;
 };
 
-struct AttachedEmitterComponent {
-    bool isActive = false;
-    int emitterId = -1;
-    int effectType = 0; // 0 = Smoke, 1 = Fire, 2 = Magic Dust
-};
 
 // 5. Fire/Thermodynamics State
 struct ThermoComponent {
@@ -94,6 +90,19 @@ struct LightComponent {
     // --- NEW Spotlight Variables ---
     glm::vec3 direction = glm::vec3(0.0f, -1.0f, 0.0f); // Default points straight down
     float cutoffAngle = 25.0f; // Cone width in degrees
+};
+
+struct ActiveEmitter {
+    int emitterId = -1;
+    float duration = -1.0f; // -1 means infinite
+    float timer = 0.0f;
+    float emissionRate = 100.0f;
+    ParticleProps props; // We store a full copy of the properties here!
+};
+
+// A component that can hold MULTIPLE attached emitters
+struct AttachedEmitterComponent {
+    std::vector<ActiveEmitter> emitters;
 };
 
 // 8. Global Environment / Time / Weather Data
