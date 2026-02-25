@@ -47,6 +47,12 @@ struct OrbitComponent {
     float currentAngle = 0.0f;
 };
 
+struct AttachedEmitterComponent {
+    bool isActive = false;
+    int emitterId = -1;
+    int effectType = 0; // 0 = Smoke, 1 = Fire, 2 = Magic Dust
+};
+
 // 5. Fire/Thermodynamics State
 struct ThermoComponent {
     ObjectState state = ObjectState::NORMAL;

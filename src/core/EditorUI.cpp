@@ -191,6 +191,57 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                 }
                             }
 
+                            // --- NEW: Custom Emitter Attachment ---
+                            ImGui::Separator();
+                            bool hasAttached = registry.HasComponent<AttachedEmitterComponent>(e) && registry.GetComponent<AttachedEmitterComponent>(e).isActive;
+
+                            if (hasAttached) {
+                                auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
+                                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+
+                                if (ImGui::MenuItem("Remove Attached Emitter")) {
+                                    // Stop the underlying Vulkan emitter
+                                    ParticleProps props;
+                                    if (attached.effectType == 0) props = ParticleLibrary::GetSmokeProps();
+                                    else if (attached.effectType == 1) props = ParticleLibrary::GetFireProps();
+                                    else props = ParticleLibrary::GetDustProps();
+
+                                    scene.GetOrCreateSystem(props)->StopEmitter(attached.emitterId);
+                                    attached.isActive = false; // Disable the tracker
+                                }
+                                ImGui::PopStyleColor();
+                            }
+                            else {
+                                if (ImGui::BeginMenu("Attach Emitter Effect...")) {
+
+                                    // Helper lambda to assign the component and spawn the particles
+                                    auto attachFunc = [&](int type, ParticleProps props) {
+                                        if (!registry.HasComponent<AttachedEmitterComponent>(e)) {
+                                            registry.AddComponent<AttachedEmitterComponent>(e, AttachedEmitterComponent{});
+                                        }
+                                        auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
+                                        attached.isActive = true;
+                                        attached.effectType = type;
+
+                                        // Set initial spawn position
+                                        glm::vec3 pos = glm::vec3(0.0f);
+                                        if (registry.HasComponent<TransformComponent>(e)) {
+                                            pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
+                                        }
+                                        props.position = pos;
+
+                                        // Tell the Scene to build and start the emitter
+                                        attached.emitterId = scene.GetOrCreateSystem(props)->AddEmitter(props, 100.0f);
+                                        };
+
+                                    if (ImGui::MenuItem("Smoke Trail")) attachFunc(0, ParticleLibrary::GetSmokeProps());
+                                    if (ImGui::MenuItem("Fire Effect")) attachFunc(1, ParticleLibrary::GetFireProps());
+                                    if (ImGui::MenuItem("Magic Sparkles (Dust)")) attachFunc(2, ParticleLibrary::GetDustProps());
+
+                                    ImGui::EndMenu();
+                                }
+                            }
+
                             // --- Attach Light Button ---
                             if (registry.HasComponent<NameComponent>(e)) {
                                 // If the object DOES NOT have a light, show the Attach button
