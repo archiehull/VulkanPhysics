@@ -384,6 +384,103 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::EndMenu(); // Close Particle Debug
             }
 
+            // --- TAB: Lights ---
+            if (ImGui::BeginMenu("Lights")) {
+                Registry& registry = scene.GetRegistry();
+
+                std::vector<Entity> activeLights;
+                std::vector<Entity> inactiveLights;
+
+                // 1. Categorize lights into Active and Inactive
+                for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                    if (!registry.HasComponent<LightComponent>(e)) continue;
+
+                    if (registry.GetComponent<LightComponent>(e).intensity > 0.0f) {
+                        activeLights.push_back(e);
+                    }
+                    else {
+                        inactiveLights.push_back(e);
+                    }
+                }
+
+                bool hasLights = !activeLights.empty() || !inactiveLights.empty();
+
+                // 2. Helper lambda so we don't write the UI code twice
+                auto drawLightMenu = [&](Entity e) {
+                    auto& light = registry.GetComponent<LightComponent>(e);
+
+                    std::string lightName = registry.HasComponent<NameComponent>(e) ?
+                        registry.GetComponent<NameComponent>(e).name : "Unnamed Light";
+
+                    std::string menuLabel = lightName + "###LightMenu_" + std::to_string(e);
+
+                    if (ImGui::BeginMenu(menuLabel.c_str())) {
+
+                        if (registry.HasComponent<TransformComponent>(e)) {
+                            auto& transform = registry.GetComponent<TransformComponent>(e);
+                            glm::vec3 pos = glm::vec3(transform.matrix[3]);
+
+                            ImGui::TextDisabled("Transform Data");
+                            ImGui::Separator();
+                            ImGui::Text("Position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+                            ImGui::Spacing();
+                        }
+
+                        ImGui::TextDisabled("Light Properties");
+                        ImGui::Separator();
+
+                        ImGui::ColorEdit3("Color", &light.color.x, ImGuiColorEditFlags_Float);
+                        ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 100.0f);
+
+                        const char* lightTypes[] = { "Directional", "Point", "Spot" };
+                        if (light.type >= 0 && light.type <= 2) {
+                            ImGui::Text("Type: %s", lightTypes[light.type]);
+                        }
+                        else {
+                            ImGui::Text("Type ID: %d", light.type);
+                        }
+
+                        const char* layerName = (light.layerMask & SceneLayers::INSIDE) ? "Inside" : "Outside";
+                        ImGui::Text("Layer: %s", layerName);
+
+                        ImGui::EndMenu();
+                    }
+                    };
+
+                // 3. Draw Active Lights
+                if (!activeLights.empty()) {
+                    ImGui::TextDisabled("Active Lights");
+                    ImGui::Separator();
+                    for (Entity e : activeLights) {
+                        drawLightMenu(e);
+                    }
+                }
+
+                // 4. Draw Inactive Lights in a Sub-Menu
+                if (!inactiveLights.empty()) {
+                    if (!activeLights.empty()) {
+                        ImGui::Spacing();
+                    }
+
+                    // Group them in a folder so they don't clutter the main list
+                    if (ImGui::BeginMenu("Inactive Lights")) {
+                        ImGui::TextDisabled("Pooled / Burned-out Lights");
+                        ImGui::Separator();
+
+                        for (Entity e : inactiveLights) {
+                            drawLightMenu(e);
+                        }
+                        ImGui::EndMenu();
+                    }
+                }
+
+                if (!hasLights) {
+                    ImGui::MenuItem("No lights in scene", nullptr, false, false);
+                }
+
+                ImGui::EndMenu(); // Close Lights tab
+            }
+
             if (ImGui::BeginMenu("Cameras")) {
                 Registry& registry = scene.GetRegistry();
                 // Get all entities to find cameras
