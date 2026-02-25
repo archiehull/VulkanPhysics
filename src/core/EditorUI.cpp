@@ -25,6 +25,29 @@ void EditorUI::Initialize(const std::string& configPath, const std::string& defa
     }
 
     RefreshTextureList();
+    RefreshModelList();
+}
+
+void EditorUI::RefreshModelList() {
+    m_AvailableModels.clear();
+    namespace fs = std::filesystem;
+    std::string path = "models";
+
+    if (fs::exists(path) && fs::is_directory(path)) {
+        for (const auto& entry : fs::recursive_directory_iterator(path)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+                // Support both OBJ and your custom SJG format
+                if (ext == ".obj" || ext == ".sjg") {
+                    std::string p = entry.path().string();
+                    std::replace(p.begin(), p.end(), '\\', '/');
+                    m_AvailableModels.push_back(p);
+                }
+            }
+        }
+    }
 }
 
 void EditorUI::RefreshTextureList() {
@@ -410,6 +433,40 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                     }
                                     ImGui::EndMenu();
                                 }
+                            }
+
+                            ImGui::Spacing();
+                            if (ImGui::BeginMenu("Change Geometry...")) {
+                                static int geoTypeIdx = 0;
+                                const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Bowl", "Terrain" };
+                                ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
+
+                                static std::string selectedModel = "";
+                                if (geoTypeIdx == 0) { // Model File
+                                    if (ImGui::BeginCombo("File", selectedModel.empty() ? "Select..." : selectedModel.c_str())) {
+                                        for (const auto& mod : m_AvailableModels) {
+                                            if (ImGui::Selectable(mod.c_str(), selectedModel == mod)) {
+                                                selectedModel = mod;
+                                            }
+                                        }
+                                        ImGui::EndCombo();
+                                    }
+                                    ImGui::SameLine();
+                                    if (ImGui::Button("Refresh##Models")) RefreshModelList();
+                                }
+
+                                ImGui::Spacing();
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                                if (ImGui::Button("Apply New Geometry", ImVec2(-1, 0))) {
+                                    GeometryChangeRequest req;
+                                    req.entity = e;
+                                    req.type = geoTypes[geoTypeIdx];
+                                    req.path = selectedModel;
+                                    m_GeometryRequests.push_back(req);
+                                }
+                                ImGui::PopStyleColor();
+
+                                ImGui::EndMenu();
                             }
 
                             // Display Attached Thermo Emitter Details
@@ -1035,13 +1092,19 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                             if (open && registry.HasComponent<TransformComponent>(e)) {
                                 auto& comp = registry.GetComponent<TransformComponent>(e);
-                                glm::vec3 pos = glm::vec3(comp.matrix[3]);
-                                if (ImGui::DragFloat3("Position", &pos.x, 0.1f)) {
-                                    comp.matrix[3][0] = pos.x;
-                                    comp.matrix[3][1] = pos.y;
-                                    comp.matrix[3][2] = pos.z;
+
+                                bool modified = false;
+
+                                // Directly edit the explicit TRS variables
+                                if (ImGui::DragFloat3("Position", &comp.position.x, 0.1f)) modified = true;
+                                if (ImGui::DragFloat3("Rotation", &comp.rotation.x, 1.0f)) modified = true;
+                                if (ImGui::DragFloat3("Scale", &comp.scale.x, 0.05f)) modified = true;
+
+                                // If the user dragged a slider, rebuild the matrix instantly
+                                if (modified) {
+                                    comp.UpdateMatrix();
                                 }
-                                // Note: Full TRS decomposition is required to perfectly edit rotation/scale from a mat4
+
                                 ImGui::TreePop();
                             }
                         }
@@ -1129,6 +1192,41 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                     ImGui::TreePop();
                                 }
                                 ImGui::TreePop();
+
+                                // --- CHANGE GEOMETRY ---
+                                if (ImGui::TreeNode("Change Geometry")) {
+                                    static int geoTypeIdx = 0;
+                                    const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Bowl", "Terrain" };
+                                    ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
+
+                                    static std::string selectedModel = "";
+                                    if (geoTypeIdx == 0) { // Model File
+                                        if (ImGui::BeginCombo("File", selectedModel.empty() ? "Select..." : selectedModel.c_str())) {
+                                            for (const auto& mod : m_AvailableModels) {
+                                                if (ImGui::Selectable(mod.c_str(), selectedModel == mod)) {
+                                                    selectedModel = mod;
+                                                }
+                                            }
+                                            ImGui::EndCombo();
+                                        }
+                                        ImGui::SameLine();
+                                        if (ImGui::Button("Refresh##ModelsProp")) RefreshModelList();
+                                    }
+
+                                    ImGui::Spacing();
+                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                                    if (ImGui::Button("Apply New Geometry", ImVec2(-1, 0))) {
+                                        // Send the request to the main loop to handle safe GPU buffer replacement
+                                        GeometryChangeRequest req;
+                                        req.entity = e;
+                                        req.type = geoTypes[geoTypeIdx];
+                                        req.path = selectedModel;
+                                        m_GeometryRequests.push_back(req);
+                                    }
+                                    ImGui::PopStyleColor();
+
+                                    ImGui::TreePop();
+                                }
                             }
                         }
 

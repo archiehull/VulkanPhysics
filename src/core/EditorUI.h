@@ -43,6 +43,20 @@ public:
         return reqs;
     }
 
+    // --- GEOMETRY CHANGE SYSTEM ---
+    struct GeometryChangeRequest {
+        Entity entity;
+        std::string type;
+        std::string path;
+    };
+
+    void RefreshModelList();
+    std::vector<GeometryChangeRequest> ConsumeGeometryRequests() {
+        auto reqs = m_GeometryRequests;
+        m_GeometryRequests.clear();
+        return reqs;
+    }
+
     void RefreshTextureList();
 
     float GetStepSize() const { return m_StepSize; }
@@ -63,6 +77,9 @@ private:
 
     std::vector<std::string> availableCameras;
     std::string requestedCamera = "";
+
+    std::vector<std::string> m_AvailableModels;
+    std::vector<GeometryChangeRequest> m_GeometryRequests;
 
     std::vector<std::string> m_AvailableTextures;
     std::vector<ProceduralTextureRequest> m_TextureRequests;

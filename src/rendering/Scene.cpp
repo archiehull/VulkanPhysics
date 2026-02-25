@@ -2,7 +2,7 @@
 #include "ParticleLibrary.h"
 #include "../geometry/OBJLoader.h"
 #include "../geometry/SJGLoader.h"
-#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_transform.hpp> 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/common.hpp>
 #include <iostream>
@@ -49,7 +49,8 @@ Entity Scene::AddObjectInternal(const std::string& name, std::shared_ptr<Geometr
     m_Registry.AddComponent<NameComponent>(entity, { name });
 
     TransformComponent transform;
-    transform.matrix = glm::translate(glm::mat4(1.0f), position);
+    transform.position = position;
+    transform.UpdateMatrix();
     m_Registry.AddComponent<TransformComponent>(entity, transform);
 
     RenderComponent render;
@@ -183,18 +184,13 @@ void Scene::GenerateProceduralObjects(int count, float terrainRadius, float delt
             }
 
             if (m_Registry.HasComponent<TransformComponent>(mainObj)) {
-                glm::mat4 m = glm::mat4(1.0f);
-                m = glm::translate(m, glm::vec3(x, y, z));
-                const float randomYaw = distRot(gen);
-                m = glm::rotate(m, glm::radians(randomYaw), glm::vec3(0.0f, 1.0f, 0.0f));
+                auto& transform = m_Registry.GetComponent<TransformComponent>(mainObj);
+                transform.position = glm::vec3(x, y, z);
 
-                if (glm::length(config.baseRotation) > 0.001f) {
-                    m = glm::rotate(m, glm::radians(config.baseRotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-                    m = glm::rotate(m, glm::radians(config.baseRotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-                    m = glm::rotate(m, glm::radians(config.baseRotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-                }
-                m = glm::scale(m, scale);
-                m_Registry.GetComponent<TransformComponent>(mainObj).matrix = m;
+                const float randomYaw = distRot(gen);
+                transform.rotation = config.baseRotation + glm::vec3(0.0f, randomYaw, 0.0f);
+                transform.scale = scale;
+                transform.UpdateMatrix();
             }
         }
     }
@@ -233,7 +229,8 @@ void Scene::AddCube(const std::string& name, const glm::vec3& position, const gl
     Entity entity = AddObjectInternal(name, std::move(geo), position, texturePath, false);
 
     auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
-    transform.matrix = glm::scale(transform.matrix, scale);
+    transform.scale = scale;
+    transform.UpdateMatrix();
 }
 
 void Scene::AddGrid(const std::string& name, int rows, int cols, float cellSize, const glm::vec3& position, const std::string& texturePath) {
@@ -262,13 +259,10 @@ void Scene::AddModel(const std::string& name, const glm::vec3& position, const g
         Entity entity = AddObjectInternal(name, geometry, position, texturePath, isFlammable);
 
         auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
-        glm::mat4 m = glm::translate(glm::mat4(1.0f), position);
-        m = glm::rotate(m, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-        m = glm::rotate(m, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-        m = glm::rotate(m, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-        m = glm::scale(m, scale);
-
-        transform.matrix = m;
+        transform.position = position;
+        transform.rotation = rotation;
+        transform.scale = scale;
+        transform.UpdateMatrix();
     }
     catch (const std::exception& e) {
         std::cerr << "Failed to add model '" << modelPath << "': " << e.what() << std::endl;
@@ -399,7 +393,8 @@ Entity Scene::AddLight(const std::string& name, const glm::vec3& position, const
         m_Registry.AddComponent<NameComponent>(entity, { name });
 
         TransformComponent transform;
-        transform.matrix = glm::translate(glm::mat4(1.0f), position);
+        transform.position = position;
+        transform.UpdateMatrix();
         m_Registry.AddComponent<TransformComponent>(entity, transform);
         m_Registry.AddComponent<OrbitComponent>(entity, OrbitComponent{});
     }
@@ -651,7 +646,8 @@ void Scene::SetObjectOrbit(const std::string& name, const glm::vec3& center, flo
         orbit.currentAngle = initialAngleRad;
 
         const glm::quat rotation = glm::angleAxis(orbit.initialAngle, orbit.axis);
-        transform.matrix[3] = glm::vec4(orbit.center + (rotation * orbit.startVector), 1.0f);
+        transform.position = orbit.center + (rotation * orbit.startVector);
+        transform.UpdateMatrix();
     }
 }
 
@@ -775,10 +771,14 @@ void Scene::Clear() {
     m_EntityMap["GlobalDustCloud"] = dustEntity;
 }
 
-void Scene::SetObjectTransform(const std::string& name, const glm::mat4& transform) {
+void Scene::SetObjectTransform(const std::string& name, const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale) {
     Entity e = GetEntityByName(name);
     if (e != MAX_ENTITIES && m_Registry.HasComponent<TransformComponent>(e)) {
-        m_Registry.GetComponent<TransformComponent>(e).matrix = transform;
+        auto& comp = m_Registry.GetComponent<TransformComponent>(e);
+        comp.position = pos;
+        comp.rotation = rot;
+        comp.scale = scale;
+        comp.UpdateMatrix();
     }
 }
 
@@ -906,7 +906,8 @@ void Scene::ResetEnvironment() {
                 orbit.currentAngle = orbit.initialAngle;
                 const glm::quat rotation = glm::angleAxis(orbit.currentAngle, orbit.axis);
                 const glm::vec3 offset = rotation * orbit.startVector;
-                transform.matrix[3] = glm::vec4(orbit.center + offset, 1.0f);
+                transform.position = orbit.center + offset;
+                transform.UpdateMatrix();
             }
         }
 
@@ -918,13 +919,16 @@ void Scene::ResetEnvironment() {
             if (thermo.isFlammable) {
                 StopObjectFire(e);
 
-                if (thermo.storedOriginalGeometry) {
-                    render.geometry = thermo.storedOriginalGeometry;
-                    thermo.storedOriginalGeometry = nullptr;
-                    transform.matrix = thermo.storedOriginalTransform;
-                }
-                else if (thermo.state == ObjectState::REGROWING) {
-                    transform.matrix = thermo.storedOriginalTransform;
+                if (thermo.storedOriginalGeometry || thermo.state == ObjectState::REGROWING) {
+                    if (thermo.storedOriginalGeometry) {
+                        render.geometry = thermo.storedOriginalGeometry;
+                        thermo.storedOriginalGeometry = nullptr;
+                    }
+
+                    transform.position = thermo.storedOriginalPosition;
+                    transform.rotation = thermo.storedOriginalRotation;
+                    transform.scale = thermo.storedOriginalScale;
+                    transform.UpdateMatrix();
                 }
 
                 render.texturePath = render.originalTexturePath;
@@ -955,7 +959,8 @@ Entity Scene::CreateCameraEntity(const std::string& name, const glm::vec3& pos, 
     m_Registry.AddComponent<NameComponent>(entity, { name });
 
     TransformComponent transform;
-    transform.matrix = glm::translate(glm::mat4(1.0f), pos);
+    transform.position = pos;
+    transform.UpdateMatrix();
     m_Registry.AddComponent<TransformComponent>(entity, transform);
 
     CameraComponent camera;

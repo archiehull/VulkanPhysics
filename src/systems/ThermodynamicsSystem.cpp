@@ -211,10 +211,14 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                         render->texturePath = scene.sootTexturePath;
                     }
 
-                    thermo.storedOriginalTransform = transform.matrix;
+                    // Save the explicit vectors
+                    thermo.storedOriginalPosition = transform.position;
+                    thermo.storedOriginalRotation = transform.rotation;
+                    thermo.storedOriginalScale = transform.scale;
 
-                    transform.matrix = glm::translate(glm::mat4(1.0f), basePos);
-                    transform.matrix = glm::scale(transform.matrix, glm::vec3(0.003f));
+                    // Shrink the object to a tiny pile of ash
+                    transform.scale = glm::vec3(0.003f);
+                    transform.UpdateMatrix();
 
                     thermo.regrowTimer = 0.0f;
                     thermo.burnFactor = 0.0f;
@@ -265,7 +269,11 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 t = t * t * (3.0f - 2.0f * t);
 
                 const float currentScale = glm::mix(0.003f, 1.0f, t);
-                transform.matrix = glm::scale(thermo.storedOriginalTransform, glm::vec3(currentScale));
+                // Keep original position and rotation, but slowly multiply the scale back up
+                transform.position = thermo.storedOriginalPosition;
+                transform.rotation = thermo.storedOriginalRotation;
+                transform.scale = thermo.storedOriginalScale * currentScale;
+                transform.UpdateMatrix();
 
                 if (t >= 1.0f) {
                     thermo.state = ObjectState::NORMAL;

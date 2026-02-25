@@ -6,6 +6,9 @@
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
+#include "../geometry/GeometryGenerator.h"
+#include "../geometry/OBJLoader.h"
+#include "../geometry/SJGLoader.h"
 
 // TODO:
 // refactor and decouple scene class to entity component system
@@ -422,6 +425,49 @@ void Application::MainLoop() {
                 }
                 });
         }
+
+        // --- PROCESS GEOMETRY CHANGES ---
+        auto geoRequests = editorUI->ConsumeGeometryRequests();
+        if (!geoRequests.empty()) {
+            // CRITICAL: Wait for the GPU to finish the current frame before destroying vertex buffers!
+            vkDeviceWaitIdle(vulkanDevice->GetDevice());
+            auto& registry = scene->GetRegistry();
+
+            for (const auto& req : geoRequests) {
+                if (!registry.HasComponent<RenderComponent>(req.entity)) continue;
+                auto& render = registry.GetComponent<RenderComponent>(req.entity);
+
+                // 1. Safely cleanup the old Vulkan memory
+                if (render.geometry) {
+                    render.geometry->Cleanup();
+                }
+
+                // 2. Generate or Load the new geometry
+                if (req.type == "Model File" && !req.path.empty()) {
+                    std::string ext = req.path.substr(req.path.find_last_of(".") + 1);
+                    if (ext == "sjg") {
+                        render.geometry = SJGLoader::Load(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), req.path);
+                    }
+                    else {
+                        render.geometry = OBJLoader::Load(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), req.path);
+                    }
+                }
+                else if (req.type == "Cube") {
+                    render.geometry = GeometryGenerator::CreateCube(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice());
+                }
+                else if (req.type == "Sphere") {
+                    render.geometry = GeometryGenerator::CreateSphere(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 16, 32, 1.0f);
+                }
+                else if (req.type == "Bowl") {
+                    render.geometry = GeometryGenerator::CreateBowl(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 1.0f, 32, 16);
+                }
+                else if (req.type == "Terrain") {
+                    // Default to a small terrain patch
+                    render.geometry = GeometryGenerator::CreateTerrain(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 10.0f, 64, 64, 1.5f, 0.1f);
+                }
+            }
+        }
+        // --------------------------------
 
         // 2. Calculate advancement
         float stepDelta = 0.0f;

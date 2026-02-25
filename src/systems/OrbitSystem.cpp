@@ -18,7 +18,8 @@ void OrbitSystem::Update(Scene& scene, float deltaTime) {
             const glm::quat rotation = glm::angleAxis(orbit.currentAngle, orbit.axis);
             glm::vec3 direction = glm::normalize(orbit.startVector);
             const glm::vec3 offset = rotation * direction * orbit.radius;
-            transform.matrix[3] = glm::vec4(orbit.center + offset, 1.0f);
+            transform.position = orbit.center + offset;
+            transform.UpdateMatrix();
         }
     }
 }

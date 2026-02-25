@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <string>
 #include <memory>
 #include "../geometry/Geometry.h"
@@ -8,6 +9,7 @@
 #include "CoreTypes.h"
 #include "../core/Config.h"
 #include "../rendering/ParticleSystem.h"
+
 
 // 1. Identification
 struct NameComponent {
@@ -17,6 +19,21 @@ struct NameComponent {
 // 2. Spatial Data
 struct TransformComponent {
     glm::mat4 matrix = glm::mat4(1.0f);
+
+    // Explicit Source of Truth for the UI
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 rotation = glm::vec3(0.0f); // Stored in Degrees
+    glm::vec3 scale = glm::vec3(1.0f);
+
+    // Call this whenever pos/rot/scale are changed
+    void UpdateMatrix() {
+        glm::mat4 m = glm::translate(glm::mat4(1.0f), position);
+        m = glm::rotate(m, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        m = glm::rotate(m, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        m = glm::rotate(m, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        m = glm::scale(m, scale);
+        matrix = m;
+    }
 };
 
 // 3. Visual Data
@@ -70,7 +87,9 @@ struct ThermoComponent {
     int fireLightEntity = -1;
 
     std::shared_ptr<Geometry> storedOriginalGeometry = nullptr;
-    glm::mat4 storedOriginalTransform = glm::mat4(1.0f);
+    glm::vec3 storedOriginalPosition = glm::vec3(0.0f);
+    glm::vec3 storedOriginalRotation = glm::vec3(0.0f);
+    glm::vec3 storedOriginalScale = glm::vec3(1.0f);
 };
 
 // 6. Physics
