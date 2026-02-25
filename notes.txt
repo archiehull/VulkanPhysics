@@ -1,3 +1,7 @@
+separate particle component
+separate camera Enum
+set layermask with area (sphere, cuboid) and remove enum
+
 camera menu
 list cameras drom config
 mukti caners view in 4x4

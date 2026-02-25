@@ -126,6 +126,8 @@ void Application::InitVulkan() {
     );
     renderer->Initialize();
 
+    inputManager = std::make_unique<InputManager>();
+
     scene = std::make_unique<Scene>(
         vulkanDevice->GetDevice(),
         vulkanDevice->GetPhysicalDevice()
@@ -159,6 +161,8 @@ void Application::LoadScene(const std::string& scenePath) {
 
     // 3. Load new configuration
     config = ConfigLoader::Load(scenePath);
+    auto activeBindings = inputManager->LoadFromBindings(config.inputBindings);
+    editorUI->SetInputBindings(activeBindings);
 
     // 4. Re-setup scene objects
     SetupScene();
@@ -406,7 +410,7 @@ void Application::MainLoop() {
         // 4. Update the scene with the calculated delta
         scene->Update(stepDelta);
 
-        cameraController->Update(deltaTime, *scene);
+        cameraController->Update(deltaTime, *scene, *inputManager);
 
         int currentViewMask = SceneLayers::ALL;
 
@@ -433,23 +437,91 @@ void Application::MainLoop() {
         }
 
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+        inputManager->Update();
     }
 
     renderer->WaitIdle();
 }
 
 void Application::ProcessInput() {
-    if (glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+    // --- Application / System ---
+    if (inputManager->IsActionJustPressed(InputAction::Exit)) {
         glfwSetWindowShouldClose(window->GetGLFWWindow(), true);
     }
 
-    const bool shiftPressed = glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-        glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
-    const bool ctrlPressed = glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-        glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
+    if (inputManager->IsActionJustPressed(InputAction::PauseToggle)) {
+        editorUI->SetPaused(!editorUI->IsPaused());
+    }
 
-    if (glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_T) == GLFW_PRESS) {
+    // --- Camera Switching ---
+    if (inputManager->IsActionJustPressed(InputAction::CameraOutside)) {
+        cameraController->SwitchCamera(CameraType::OUTSIDE_ORB, *scene);
+    }
+    if (inputManager->IsActionJustPressed(InputAction::CameraFreeRoam)) {
+        cameraController->SwitchCamera(CameraType::FREE_ROAM, *scene);
+    }
+    if (inputManager->IsActionJustPressed(InputAction::CameraCacti)) {
+        cameraController->SwitchCamera(CameraType::CACTI, *scene);
+    }
+    if (inputManager->IsActionJustPressed(InputAction::CameraCustom1)) {
+        cameraController->SwitchCamera(CameraType::CUSTOM_1, *scene);
+    }
+    if (inputManager->IsActionJustPressed(InputAction::CameraCustom2)) {
+        cameraController->SwitchCamera(CameraType::CUSTOM_2, *scene);
+    }
+    if (inputManager->IsActionJustPressed(InputAction::CameraCustom3)) {
+        cameraController->SwitchCamera(CameraType::CUSTOM_3, *scene);
+    }
+    if (inputManager->IsActionJustPressed(InputAction::CameraCustom4)) {
+        cameraController->SwitchCamera(CameraType::CUSTOM_4, *scene);
+    }
+
+    // --- Ignite Logic (F4) ---
+    if (inputManager->IsActionJustPressed(InputAction::IgniteTarget)) {
+        if (cameraController->GetActiveCameraType() != CameraType::CACTI) {
+            cameraController->SwitchCamera(CameraType::CACTI, *scene);
+        }
+
+        Entity camEnt = cameraController->GetActiveCameraEntity();
+        auto& reg = scene->GetRegistry();
+
+        if (camEnt != MAX_ENTITIES && reg.HasComponent<OrbitComponent>(camEnt)) {
+            Entity target = cameraController->GetOrbitTarget();
+            if (target != MAX_ENTITIES) {
+                scene->Ignite(target);
+            }
+        }
+    }
+
+    // --- Environment & Rendering Toggles ---
+    if (inputManager->IsActionJustPressed(InputAction::ToggleShading)) {
+        scene->ToggleGlobalShadingMode();
+    }
+    if (inputManager->IsActionJustPressed(InputAction::ToggleShadows)) {
+        scene->ToggleSimpleShadows();
+    }
+    if (inputManager->IsActionJustPressed(InputAction::NextSeason)) {
+        scene->NextSeason();
+    }
+    if (inputManager->IsActionJustPressed(InputAction::SpawnDustCloud)) {
+        scene->SpawnDustCloud();
+    }
+    if (inputManager->IsActionJustPressed(InputAction::ToggleWeather)) {
+        scene->ToggleWeather();
+    }
+    if (inputManager->IsActionJustPressed(InputAction::ResetEnvironment)) {
+        scene->ResetEnvironment();
+    }
+
+    // --- Time Speed (Holding T logic) ---
+    if (inputManager->IsActionHeld(InputAction::TimeSpeedUp)) {
         const float scaleChangeRate = 2.0f;
+        // Check standard GLFW keys for modifiers since they aren't explicit actions right now
+        const bool shiftPressed = glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+            glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
+        const bool ctrlPressed = glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+            glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
 
         if (ctrlPressed) {
             timeScale = 1.0f;
@@ -462,94 +534,15 @@ void Application::ProcessInput() {
             timeScale += scaleChangeRate * deltaTime;
         }
     }
-
-    //if (glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_R) == GLFW_PRESS) {
-    //    timeScale = 1.0f;
-    //    scene->ResetEnvironment();
-    //    std::cout << "Environment Reset." << std::endl;
-    //}
 }
 
 void Application::KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int action, int mods) {
     auto* const app = static_cast<Application*>(glfwGetWindowUserPointer(glfwWindow));
 
-    if (action == GLFW_PRESS) {
-        if (key == GLFW_KEY_F1) {
-            app->cameraController->SwitchCamera(CameraType::OUTSIDE_ORB, *app->scene);
-            //std::cout << "Switched to Static Camera (F1)" << std::endl;
-        }
-        else if (key == GLFW_KEY_F2) {
-            app->cameraController->SwitchCamera(CameraType::FREE_ROAM, *app->scene);
-            //std::cout << "Switched to Free Roam Camera (F2)" << std::endl;
-        }
-        else if (key == GLFW_KEY_F3) {
-            app->cameraController->SwitchCamera(CameraType::CACTI, *app->scene);
-            //std::cout << "Switched to Cactus Orbit Camera (F3)" << std::endl;
-        }
-        // F4 Ignite Logic
-        else if (key == GLFW_KEY_F4) {
-            // Switch to Cacti mode if not already there
-            if (app->cameraController->GetActiveCameraType() != CameraType::CACTI) {
-                app->cameraController->SwitchCamera(CameraType::CACTI, *app->scene);
-            }
+    app->inputManager->HandleKeyEvent(key, action);
 
-            // Use the new GetActiveCameraEntity() to find what we are looking at
-            Entity camEnt = app->cameraController->GetActiveCameraEntity(); //
-            auto& reg = app->scene->GetRegistry(); //
-
-            if (camEnt != MAX_ENTITIES && reg.HasComponent<OrbitComponent>(camEnt)) {
-                // Since the camera is orbiting an entity, we ignite the target of that orbit
-                // You might need to add a 'targetEntity' field to OrbitComponent if not there,
-                // or keep tracking it in the Controller.
-                Entity target = app->cameraController->GetOrbitTarget();
-                if (target != MAX_ENTITIES) {
-                    app->scene->Ignite(target);
-                }
-            }
-        }
-        else if (key == GLFW_KEY_F5) {
-            app->cameraController->SwitchCamera(CameraType::CUSTOM_1, *app->scene);
-        }
-        else if (key == GLFW_KEY_F6) {
-            app->cameraController->SwitchCamera(CameraType::CUSTOM_2, *app->scene);
-        }
-        else if (key == GLFW_KEY_F7) {
-            app->cameraController->SwitchCamera(CameraType::CUSTOM_3, *app->scene);
-        }
-        else if (key == GLFW_KEY_F8) {
-            app->cameraController->SwitchCamera(CameraType::CUSTOM_4, *app->scene);
-        }
-        else if (key == GLFW_KEY_Y) {
-            app->scene->ToggleGlobalShadingMode();
-        }
-        else if (key == GLFW_KEY_U) {
-            app->scene->ToggleSimpleShadows();
-        }
-        else if (key == GLFW_KEY_I) {
-            app->scene->NextSeason();
-        }
-        else if (key == GLFW_KEY_P) {
-            app->scene->SpawnDustCloud();
-        }
-        else if (key == GLFW_KEY_O) {
-            app->scene->ToggleWeather();
-        }
-        if (key == GLFW_KEY_SPACE) {
-            app->editorUI->SetPaused(!app->editorUI->IsPaused());
-        }
-        else if (key == GLFW_KEY_F && app->editorUI->IsPaused()) {
-            // Note: You may need a way to trigger StepRequest here 
-            // or simply call scene->Update(0.0166f) once.
-        }
-        // Update existing R key to also sync with UI if needed
-        else if (key == GLFW_KEY_R) {
-            app->scene->ResetEnvironment();
-        }
-
-        app->cameraController->OnKeyPress(key, true);
-    }
-    else if (action == GLFW_RELEASE) {
-        app->cameraController->OnKeyRelease(key);
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        glfwSetWindowShouldClose(glfwWindow, true);
     }
 }
 

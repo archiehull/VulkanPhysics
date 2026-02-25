@@ -171,6 +171,9 @@
     <ClCompile Include="src\systems\CameraSystem.cpp">
       <Filter>Source Files\src\systems</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\InputManager.cpp">
+      <Filter>Source Files\src\core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Window.h">
@@ -301,6 +304,9 @@
     </ClInclude>
     <ClInclude Include="src\systems\CameraSystem.h">
       <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\InputManager.h">
+      <Filter>Source Files\src\core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

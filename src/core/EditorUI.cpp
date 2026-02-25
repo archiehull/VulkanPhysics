@@ -15,6 +15,17 @@ void EditorUI::Initialize(const std::string& configPath, const std::string& defa
         }
     }
 }
+void EditorUI::SetInputBindings(const std::unordered_map<std::string, std::string>& bindings) {
+    m_DisplayBindings.clear();
+    for (const auto& pair : bindings) {
+        m_DisplayBindings.push_back({ pair.first, pair.second });
+    }
+    // Sort alphabetically by action name for a cleaner UI
+    std::sort(m_DisplayBindings.begin(), m_DisplayBindings.end(),
+        [](const auto& a, const auto& b) {
+            return a.first < b.first;
+        });
+}
 
 std::string EditorUI::GetInitialScenePath() const {
     if (m_SceneOptions.empty()) return "";
@@ -25,7 +36,23 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
     {
         std::string sceneToLoad = "";
 
+        ImGui::GetIO().FontGlobalScale = m_UIScale;
+
         if (ImGui::BeginMainMenuBar()) {
+
+            if (ImGui::BeginMenu("Settings")) {
+                ImGui::Text("UI Scale");
+                ImGui::SliderFloat("##uiscale", &m_UIScale, 0.5f, 3.0f, "%.2fx");
+                ImGui::Separator();
+                if (ImGui::Button("Reset UI Scale", ImVec2(-1, 0))) {
+                    m_UIScale = 1.0f;
+                }
+
+                ImGui::Separator();
+                ImGui::MenuItem("View Controls", nullptr, &m_ShowControlsWindow);
+
+                ImGui::EndMenu();
+            }
 
             // --- TAB: Load Scene (Left Aligned) ---
             if (ImGui::BeginMenu("Load Scene")) {
@@ -48,21 +75,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     m_SceneOptions = ConfigLoader::GetAvailableScenes(m_ConfigRoot);
                 }
 
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("Background Colour")) {
-                // We use a hidden label "##" so the picker doesn't show its own text label
-                ImGui::ColorPicker4("##bg_picker", m_ClearColor,
-                    ImGuiColorEditFlags_PickerHueWheel |
-                    ImGuiColorEditFlags_AlphaBar |
-                    ImGuiColorEditFlags_NoSidePreview);
-
-                ImGui::Separator();
-                if (ImGui::Button("Reset to Default", ImVec2(-1, 0))) {
-                    m_ClearColor[0] = 0.1f; m_ClearColor[1] = 0.1f;
-                    m_ClearColor[2] = 0.1f; m_ClearColor[3] = 1.0f;
-                }
                 ImGui::EndMenu();
             }
 
@@ -340,9 +352,9 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
             }
 
             if (ImGui::BeginMenu("Simulation")) {
-                // 1. Start / Pause Toggle
-                std::string pauseLabel = m_IsPaused ? "Start Simulation" : "Pause Simulation";
-                if (ImGui::MenuItem(pauseLabel.c_str(), "Space")) {
+                // 1. Start / Pause Toggle - Using Selectable with DontClosePopups
+                std::string pauseLabel = m_IsPaused ? "Start Simulation  [Space]" : "Pause Simulation  [Space]";
+                if (ImGui::Selectable(pauseLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
                     m_IsPaused = !m_IsPaused;
                 }
 
@@ -350,12 +362,16 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                 // 2. Step Configuration
                 ImGui::Text("Step Controls");
-
-                // InputFloat allows precise text entry for the step duration
                 ImGui::InputFloat("Step Size (s)", &m_StepSize, 0.001f, 0.01f, "%.4f");
 
-                if (ImGui::MenuItem("Execute Step", "F", false, m_IsPaused)) {
-                    m_StepRequested = true;
+                // Execute Step - Only active when paused, prevents menu autoclose
+                if (m_IsPaused) {
+                    if (ImGui::Selectable("Execute Step  [F]", false, ImGuiSelectableFlags_DontClosePopups)) {
+                        m_StepRequested = true;
+                    }
+                }
+                else {
+                    ImGui::TextDisabled("Execute Step  [F] (Pause first)");
                 }
 
                 ImGui::Separator();
@@ -367,37 +383,16 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                 ImGui::Separator();
 
-                // 4. TimeScale Slider
+                // 4. TimeScale Slider - Using Logarithmic scale for massive range (e.g., up to 100x) but fine control below 1x
                 ImGui::Text("Simulation Speed");
-                ImGui::SliderFloat("##speed", &m_TimeScale, 0.0f, 5.0f, "%.2fx");
+                ImGui::SliderFloat("##speed", &m_TimeScale, 0.0f, 100.0f, "%.3fx", ImGuiSliderFlags_Logarithmic);
 
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Properties")) {
-                
-                bool useSimple = scene.IsUsingSimpleShadows();
-
-                // Notice: NO '&' symbol before !useSimple
-                if (ImGui::MenuItem("Normal", nullptr, !useSimple)) {
-                    if (useSimple) {
-                        scene.ToggleSimpleShadows();
-                    }
-                }
-
-                // Notice: NO '&' symbol before useSimple
-                if (ImGui::MenuItem("Simple", nullptr, useSimple)) {
-                    if (!useSimple) {
-                        scene.ToggleSimpleShadows();
-                    }
-                }
-
-                ImGui::EndMenu();
-			}
 
             // --- TAB: Environment ---
             if (ImGui::BeginMenu("Environment")) {
 
-                // 1. Display Environment & Weather Variables
                 ImGui::TextDisabled("Live Status");
                 ImGui::Separator();
                 ImGui::Text("Season: %s", seasonName.c_str());
@@ -407,7 +402,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 if (envEntity != MAX_ENTITIES) {
                     auto& env = scene.GetRegistry().GetComponent<EnvironmentComponent>(envEntity);
                     ImGui::Text("Sun Heat Bonus: %.1f", env.sunHeatBonus);
-                    //ImGui::Text("Weather Intensity: %.2f", env.weatherIntensity);
+                    ImGui::Text("Weather Intensity: %.2f", env.weatherIntensity);
                     ImGui::Text("Time Since Rain: %.1f s", env.timeSinceLastRain);
                     ImGui::Text("Fire Suppression Timer: %.1f s", env.postRainFireSuppressionTimer);
                 }
@@ -416,34 +411,45 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::TextDisabled("Controls");
                 ImGui::Separator();
 
-                // 2. Shadows Toggle (Moved from Properties)
-                bool useSimple = scene.IsUsingSimpleShadows();
-                if (ImGui::BeginMenu("Shadow Mode")) {
-                    if (ImGui::MenuItem("Normal (Dynamic Map)", nullptr, !useSimple)) {
-                        if (useSimple) scene.ToggleSimpleShadows();
-                    }
-                    if (ImGui::MenuItem("Simple (Blob Shadows)", nullptr, useSimple)) {
-                        if (!useSimple) scene.ToggleSimpleShadows();
+                // --- MOVED: Background Colour Sub-menu ---
+                if (ImGui::BeginMenu("Background Colour")) {
+                    ImGui::ColorPicker4("##bg_picker", m_ClearColor,
+                        ImGuiColorEditFlags_PickerHueWheel |
+                        ImGuiColorEditFlags_AlphaBar |
+                        ImGuiColorEditFlags_NoSidePreview);
+
+                    ImGui::Separator();
+                    if (ImGui::Button("Reset to Default", ImVec2(-1, 0))) {
+                        m_ClearColor[0] = 0.1f; m_ClearColor[1] = 0.1f;
+                        m_ClearColor[2] = 0.1f; m_ClearColor[3] = 1.0f;
                     }
                     ImGui::EndMenu();
                 }
 
+                // 2. Shadows Toggle
+                bool useSimple = scene.IsUsingSimpleShadows();
+                if (ImGui::Checkbox("Use Simple Shadows", &useSimple)) {
+                    scene.ToggleSimpleShadows();
+                }
+
+                ImGui::Spacing();
+
                 // 3. Season Control
-                if (ImGui::MenuItem("Cycle to Next Season")) {
+                if (ImGui::Selectable("Cycle to Next Season", false, ImGuiSelectableFlags_DontClosePopups)) {
                     scene.NextSeason();
                 }
 
-                // 4. Weather Control (Precipitation)
+                // 4. Weather Control
                 bool isPrecipitating = scene.IsPrecipitating();
                 std::string weatherLabel = isPrecipitating ? "Stop Weather" : "Start Weather";
-                if (ImGui::MenuItem(weatherLabel.c_str())) {
+                if (ImGui::Selectable(weatherLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
                     scene.ToggleWeather();
                 }
 
                 // 5. Dust Cloud Control
                 bool isDustActive = scene.IsDustActive();
                 std::string dustLabel = isDustActive ? "Stop Dust Cloud" : "Spawn Dust Cloud";
-                if (ImGui::MenuItem(dustLabel.c_str())) {
+                if (ImGui::Selectable(dustLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
                     if (isDustActive) {
                         scene.StopDust();
                     }
@@ -479,6 +485,42 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
             ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(fpsStr.c_str()).x - 20.0f);
             ImGui::TextDisabled("%s", fpsStr.c_str());
             ImGui::EndMainMenuBar();
+        }
+
+        if (m_ShowControlsWindow) {
+            // Set a default size for the window so it doesn't open tiny
+            ImGui::SetNextWindowSize(ImVec2(400, 500), ImGuiCond_FirstUseEver);
+
+            // Pass the boolean address so ImGui can close it via the 'X' button
+            if (ImGui::Begin("Input Controls", &m_ShowControlsWindow)) {
+
+                if (m_DisplayBindings.empty()) {
+                    ImGui::TextDisabled("No bindings loaded.");
+                }
+                else {
+                    // Use ImGui Tables for a clean layout
+                    if (ImGui::BeginTable("ControlsTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+
+                        // Table Headers
+                        ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+                        ImGui::TableSetupColumn("Key Bound", ImGuiTableColumnFlags_WidthStretch, 0.4f);
+                        ImGui::TableHeadersRow();
+
+                        // Table Rows
+                        for (const auto& bind : m_DisplayBindings) {
+                            ImGui::TableNextRow();
+
+                            ImGui::TableNextColumn();
+                            ImGui::Text("%s", bind.first.c_str());
+
+                            ImGui::TableNextColumn();
+                            ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "%s", bind.second.c_str()); // Greenish text for keys
+                        }
+                        ImGui::EndTable();
+                    }
+                }
+            }
+            ImGui::End();
         }
 
         return sceneToLoad;

@@ -106,9 +106,8 @@ struct AppConfig {
     std::vector<ProceduralPlantConfig> proceduralPlants;
     std::vector<SceneObjectConfig> sceneObjects;
     std::vector<CustomCameraConfig> customCameras;
-
-    // --- NEW: Texture Registry ---
     std::vector<ProceduralTextureConfig> proceduralTextures;
+    std::unordered_map<std::string, std::string> inputBindings;
 };
 
 class ConfigLoader final {

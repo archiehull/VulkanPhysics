@@ -29,6 +29,7 @@
     <ClCompile Include="src\core\Application.cpp" />
     <ClCompile Include="src\core\Config.cpp" />
     <ClCompile Include="src\core\EditorUI.cpp" />
+    <ClCompile Include="src\core\InputManager.cpp" />
     <ClCompile Include="src\core\Window.cpp" />
     <ClCompile Include="src\geometry\Geometry.cpp" />
     <ClCompile Include="src\geometry\GeometryGenerator.cpp" />
@@ -71,6 +72,7 @@
     <ClInclude Include="src\core\CoreTypes.h" />
     <ClInclude Include="src\core\ECS.h" />
     <ClInclude Include="src\core\EditorUI.h" />
+    <ClInclude Include="src\core\InputManager.h" />
     <ClInclude Include="src\core\Window.h" />
     <ClInclude Include="src\geometry\Geometry.h" />
     <ClInclude Include="src\geometry\GeometryGenerator.h" />

@@ -1,0 +1,146 @@
+[Settings]
+# ==========================================
+# SCENE SETTINGS: Desert
+# ==========================================
+WindowSize 800 600
+TimeParams 60.0 3
+SeasonTemps 20.0 5.0 10.0
+WeatherIntervals 300.0 600.0
+WeatherDuration 0.0 0.0
+FireSuppression 15.0
+SunHeatBonus 0.0
+
+# Custom Cameras
+# Positioned high and back to see everything
+CustomCamera Main Static 0.0 20.0 40.0 0.0 0.0 0.0
+
+
+[Input]
+# ==========================================
+# CONTROLS
+# ==========================================
+# --- Movement ---
+MoveForward=W
+MoveBackward=S
+MoveLeft=A
+MoveRight=D
+LookUp=UP
+LookDown=DOWN
+LookLeft=LEFT
+LookRight=RIGHT
+MoveUp=E,PAGE_UP
+MoveDown=Q,PAGE_DOWN
+Sprint=LEFT_SHIFT,RIGHT_SHIFT
+
+
+# --- Cameras ---
+CameraOutside=F1
+CameraFreeRoam=F2
+CameraCacti=F3
+CameraCustom1=F5
+CameraCustom2=F6
+CameraCustom3=F7
+CameraCustom4=F8
+
+# --- Interactions & Environment ---
+IgniteTarget=F4
+ResetEnvironment=R
+TimeSpeedUp=T
+ToggleShading=Y
+ToggleShadows=U
+NextSeason=I
+ToggleWeather=O
+SpawnDustCloud=P
+PauseToggle=SPACE
+Exit=ESCAPE
+
+
+[Scene]
+# ==========================================
+# PROCEDURAL VEGETATION
+# ==========================================
+ProceduralObjectCount 25
+
+# Cactus
+ProceduralPlant models/cactus.obj textures/cactus.jpg 7.0 0.01 0.01 0.01 0.02 0.02 0.02 -90.0 0.0 0.0 true
+
+# Dead Tree (Small)
+ProceduralPlant models/DeadTree.obj textures/bark.jpg 5.0 0.1 0.1 0.1 0.2 0.2 0.2 0.0 0.0 0.0 true
+
+# Dead Tree (Large)
+ProceduralPlant models/DeadTree.obj textures/bark.jpg 4.0 0.25 0.25 0.25 0.35 0.35 0.35 0.0 0.0 0.0 true
+
+
+# ==========================================
+# EXPLICIT SCENE OBJECTS
+# ==========================================
+
+# --- TERRAIN ---
+Object GroundGrid
+    Type Terrain
+    Texture textures/desert2.jpg
+    Position 0.0 -75.0 0.0
+    Params 130.0 3.5 0.02
+    RenderProps 1 true true true 3
+    PhysicsProps false false
+EndObject
+
+# --- PEDESTAL ---
+Object BasePedestal
+    Type Pedestal
+    Texture textures/mahogany.jpg
+    Position 0.0 -75.0 0.0
+    Params 130.0 345.0 100.0
+    RenderProps 1 false true true 2
+    PhysicsProps false false
+EndObject
+
+# --- CELESTIAL BODIES ---
+Object Sun
+    Type Sphere
+    Texture textures/sun.png
+    Params 5.0
+    Position 0.0 0.0 0.0
+    Orbit true 275.0 -1.0 0.0 0.0
+    Light true 1.0 0.9 0.8 1.0 0
+    RenderProps 1 false false true 3
+    PhysicsProps false false
+EndObject
+
+Object Moon
+    Type Sphere
+    Texture textures/moon.jpg
+    Params 2.0
+    Position 0.0 0.0 0.0
+    Orbit true 275.0 -1.0 0.0 3.14159
+    Light true 0.1 0.1 0.3 1.5 0
+    RenderProps 1 false false true 3
+    PhysicsProps false false
+EndObject
+
+# --- AMBIENT / GLASS ---
+Object CrystalBall
+    Type Sphere
+    Params 150.0
+    Position 0.0 0.0 0.0
+    RenderProps 3 false false true 3
+    PhysicsProps false false
+EndObject
+
+Object FogShell
+    Type Sphere
+    Params 151.0
+    Position 0.0 0.0 0.0
+    RenderProps 4 false false true 3
+    PhysicsProps false false
+EndObject
+
+# --- EXTERNAL LIGHTS ---
+Object PedestalLightSphere
+    Type Sphere
+    Params 5.0
+    Position 200.0 0.0 200.0
+    Light true 1.0 0.5 0.2 5.0 1
+    RenderProps 1 true true true 2
+    PhysicsProps false false
+EndObject

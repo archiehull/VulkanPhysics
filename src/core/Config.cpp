@@ -7,17 +7,9 @@
 
 namespace fs = std::filesystem;
 
-AppConfig ConfigLoader::Load(const std::string& sceneDirectory) {
+AppConfig ConfigLoader::Load(const std::string& filepath) {
     AppConfig config;
-
-    std::string dir = sceneDirectory;
-    if (!dir.empty() && dir.back() != '/' && dir.back() != '\\') {
-        dir += "/";
-    }
-
-    ParseFile(config, dir + "settings.cfg");
-    ParseFile(config, dir + "scene.cfg");
-
+    ParseFile(config, filepath);
     return config;
 }
 
@@ -27,12 +19,10 @@ std::vector<SceneOption> ConfigLoader::GetAvailableScenes(const std::string& roo
     try {
         if (fs::exists(rootDir) && fs::is_directory(rootDir)) {
             for (const auto& entry : fs::directory_iterator(rootDir)) {
-                if (entry.is_directory()) {
-                    auto path = entry.path();
-                    // Validation: Only include folders that have the necessary config files
-                    if (fs::exists(path / "settings.cfg") && fs::exists(path / "scene.cfg")) {
-                        scenes.push_back({ path.filename().string(), path.string() + "/" });
-                    }
+                // Look for .world files instead of folders
+                if (entry.is_regular_file() && entry.path().extension() == ".world") {
+                    std::string name = entry.path().stem().string(); // e.g., "desert" from "desert.world"
+                    scenes.push_back({ name, entry.path().string() });
                 }
             }
         }
@@ -44,6 +34,8 @@ std::vector<SceneOption> ConfigLoader::GetAvailableScenes(const std::string& roo
     return scenes;
 }
 
+enum class ConfigSection { None, Settings, Scene, Input };
+
 void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
     std::ifstream file(filepath);
     if (!file.is_open()) {
@@ -53,42 +45,67 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
 
     std::string line;
     SceneObjectConfig* currentObject = nullptr;
-    ProceduralTextureConfig* currentTexture = nullptr; // New State Pointer
+    ProceduralTextureConfig* currentTexture = nullptr;
+    ConfigSection currentSection = ConfigSection::None;
 
     while (std::getline(file, line)) {
-        // Trim whitespace
-        line.erase(line.begin(), std::find_if(line.begin(), line.end(), [](unsigned char ch) {
-            return !std::isspace(ch);
-            }));
+        // Trim leading/trailing whitespace
+        size_t first = line.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos) continue;
+        size_t last = line.find_last_not_of(" \t\r\n");
+        line = line.substr(first, (last - first + 1));
 
-        if (line.empty() || line[0] == '#') continue;
+        if (line.empty() || line[0] == '#' || line[0] == ';') continue;
 
+        // --- Check for Section Headers ---
+        if (line == "[Settings]") { currentSection = ConfigSection::Settings; continue; }
+        if (line == "[Scene]") { currentSection = ConfigSection::Scene; continue; }
+        if (line == "[Input]") { currentSection = ConfigSection::Input; continue; }
+
+        // --- Parse Input Section ---
+        if (currentSection == ConfigSection::Input) {
+            size_t equalPos = line.find('=');
+            if (equalPos != std::string::npos) {
+                std::string actionStr = line.substr(0, equalPos);
+                std::string keysStr = line.substr(equalPos + 1);
+
+                // Trim the substrings
+                actionStr.erase(actionStr.find_last_not_of(" \t") + 1);
+                size_t keyStart = keysStr.find_first_not_of(" \t");
+                if (keyStart != std::string::npos) keysStr = keysStr.substr(keyStart);
+
+                config.inputBindings[actionStr] = keysStr;
+            }
+            continue;
+        }
+
+        // --- Standard Token Parsing for Settings / Scene ---
         std::stringstream ss(line);
         std::string key;
         ss >> key;
 
-        // --- Object Block ---
+        // --- Object / Texture Blocks ---
         if (key == "Object") {
             SceneObjectConfig newObj;
             ss >> newObj.name;
             config.sceneObjects.push_back(newObj);
             currentObject = &config.sceneObjects.back();
-            currentTexture = nullptr; // Ensure exclusivity
+            currentTexture = nullptr;
         }
         else if (key == "EndObject") {
             currentObject = nullptr;
         }
-        // --- Procedural Texture Block ---
         else if (key == "ProceduralTexture") {
             ProceduralTextureConfig newTex;
             ss >> newTex.name;
             config.proceduralTextures.push_back(newTex);
             currentTexture = &config.proceduralTextures.back();
-            currentObject = nullptr; // Ensure exclusivity
+            currentObject = nullptr;
         }
         else if (key == "EndTexture") {
             currentTexture = nullptr;
         }
+        
         // --- Texture Fields ---
         else if (currentTexture) {
             if (key == "Type") ss >> currentTexture->type;

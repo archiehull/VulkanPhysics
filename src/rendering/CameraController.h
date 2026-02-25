@@ -2,9 +2,10 @@
 
 #include "../core/ECS.h"
 #include "../core/Config.h"
-#include "Camera.h"      // - Needed for CameraType enum
-#include <glm/glm.hpp>    // Needed for glm::vec3 in CustomCameraInfo
+#include "Camera.h"      
+#include <glm/glm.hpp>    
 #include "../core/CoreTypes.h"
+#include "../core/InputManager.h" // Added InputManager
 #include <map>
 #include <vector>
 #include <string>
@@ -19,14 +20,14 @@ public:
     CameraController(const CameraController&) = delete;
     CameraController& operator=(const CameraController&) = delete;
 
-    void Update(float deltaTime, Scene& scene);
+    // Signature updated to take the InputManager
+    void Update(float deltaTime, Scene& scene, const InputManager& input);
     void SwitchCamera(CameraType type, Scene& scene);
 
     Entity GetActiveCameraEntity() const { return activeCameraEntity; }
     CameraType GetActiveCameraType() const { return activeCameraType; }
 
-    void OnKeyPress(int key, bool pressed);
-    inline void OnKeyRelease(int key) { OnKeyPress(key, false); }
+    // Removed OnKeyPress and OnKeyRelease entirely
 
     Entity GetOrbitTarget() const { return OrbitTargetObject; }
 private:
@@ -44,17 +45,13 @@ private:
 
     Entity OrbitTargetObject = MAX_ENTITIES;
 
-    // Input states
-    bool keyW = false, keyA = false, keyS = false, keyD = false;
-    bool keyQ = false, keyE = false;
-    bool keyUp = false, keyDown = false, keyLeft = false, keyRight = false;
-    bool keyCtrl = false;
-    bool keyShift = false;
+    // Removed all hardcoded key states (keyW, keyA, keyShift, etc.)
 
     void SetupCameras(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs);
-    void UpdateFreeRoam(float deltaTime, Scene& scene);
-    void UpdateOrbitInput(float deltaTime, Scene& scene);
 
-    // Optional: Collision clamping for free roam
+    // Signatures updated to take the InputManager
+    void UpdateFreeRoam(float deltaTime, Scene& scene, const InputManager& input);
+    void UpdateOrbitInput(float deltaTime, Scene& scene, const InputManager& input);
+
     void ClampCameraPosition(glm::vec3& pos, Scene& scene, const glm::vec3& prevPos) const;
 };

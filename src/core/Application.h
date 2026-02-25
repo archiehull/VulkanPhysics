@@ -8,6 +8,8 @@
 #include "../rendering/Scene.h"
 #include "../rendering/CameraController.h"
 #include "../core/EditorUI.h"
+#include "InputManager.h"
+
 #include "Config.h"
 
 #include <memory>
@@ -38,6 +40,7 @@ private:
     static void KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int action, int mods);
     static void FramebufferResizeCallback(GLFWwindow* glfwWindow, int width, int height);
 
+    std::unique_ptr<InputManager> inputManager;
     std::unique_ptr<Window> window;
     std::unique_ptr<VulkanContext> vulkanContext;
     std::unique_ptr<VulkanDevice> vulkanDevice;

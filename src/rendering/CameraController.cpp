@@ -1,6 +1,5 @@
 #include "CameraController.h"
 #include "Scene.h"
-#include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <iostream>
@@ -16,18 +15,15 @@ CameraController::CameraController(Scene& scene, const std::vector<CustomCameraC
 }
 
 void CameraController::SetupCameras(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs) {
-    // 1. Create Standard Entities via Scene Helper
     cameraEntities[CameraType::FREE_ROAM] = scene.CreateCameraEntity("FreeRoamCam", { 0.0f, -75.0f, 0.0f }, CameraType::FREE_ROAM);
     cameraEntities[CameraType::OUTSIDE_ORB] = scene.CreateCameraEntity("OutsideCam", { 0.0f, 60.0f, 350.0f }, CameraType::OUTSIDE_ORB);
     cameraEntities[CameraType::CACTI] = scene.CreateCameraEntity("CactusCam", { 20.0f, 10.0f, 20.0f }, CameraType::CACTI);
 
-    // 2. Setup Custom Cameras from Config
     CameraType customTypes[] = { CameraType::CUSTOM_1, CameraType::CUSTOM_2, CameraType::CUSTOM_3, CameraType::CUSTOM_4 };
     for (size_t i = 0; i < customConfigs.size() && i < 4; ++i) {
         const auto& conf = customConfigs[i];
         CameraType type = customTypes[i];
 
-        // Map "Orbit" string to the helper logic
         CameraType internalRefType = (conf.type == "Orbit") ? CameraType::OUTSIDE_ORB : CameraType::FREE_ROAM;
         Entity camEnt = scene.CreateCameraEntity(conf.name, conf.position, internalRefType);
 
@@ -46,7 +42,6 @@ void CameraController::SwitchCamera(CameraType type, Scene& scene) {
 
     auto& registry = scene.GetRegistry();
 
-    // Deactivate old camera component
     if (activeCameraEntity != MAX_ENTITIES) {
         registry.GetComponent<CameraComponent>(activeCameraEntity).isActive = false;
     }
@@ -54,13 +49,10 @@ void CameraController::SwitchCamera(CameraType type, Scene& scene) {
     activeCameraType = type;
     activeCameraEntity = cameraEntities[type];
 
-    // Activate new camera component
     auto& camComp = registry.GetComponent<CameraComponent>(activeCameraEntity);
     camComp.isActive = true;
 
-    // Logic for specific modes
     if (type == CameraType::CACTI) {
-        // Find a random cactus
         std::vector<Entity> cacti;
         for (Entity e : scene.GetRenderableEntities()) {
             if (registry.HasComponent<RenderComponent>(e)) {
@@ -79,7 +71,6 @@ void CameraController::SwitchCamera(CameraType type, Scene& scene) {
             OrbitTargetObject = target;
             std::cout << "Entity " << OrbitTargetObject << std::endl;
 
-
             glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(target).matrix[3]);
             scene.SetObjectOrbit("CactusCam", targetPos + glm::vec3(0, 3, 0), 15.0f, 0.0f, { 0,1,0 }, { 1,0,0 });
         }
@@ -91,32 +82,31 @@ void CameraController::SwitchCamera(CameraType type, Scene& scene) {
     std::cout << "Switched to Camera Entity: " << registry.GetComponent<NameComponent>(activeCameraEntity).name << std::endl;
 }
 
-void CameraController::Update(float deltaTime, Scene& scene) {
+void CameraController::Update(float deltaTime, Scene& scene, const InputManager& input) {
     if (activeCameraEntity == MAX_ENTITIES) return;
 
-    // 1. Handle Free Roam Input (Direct Transform Manipulation)
     if (activeCameraType == CameraType::FREE_ROAM ||
         (customCameraMeta.count(activeCameraType) && customCameraMeta[activeCameraType].type == "FreeRoam")) {
-        UpdateFreeRoam(deltaTime, scene);
+        UpdateFreeRoam(deltaTime, scene, input);
     }
-    // 2. Handle Orbit Input (OrbitComponent Manipulation)
     else if (activeCameraType == CameraType::CACTI || activeCameraType == CameraType::OUTSIDE_ORB ||
         (customCameraMeta.count(activeCameraType) && customCameraMeta[activeCameraType].type == "Orbit")) {
-        UpdateOrbitInput(deltaTime, scene);
+        UpdateOrbitInput(deltaTime, scene, input);
     }
 }
 
-void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene) {
+void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene, const InputManager& input) {
     auto& registry = scene.GetRegistry();
     auto& transform = registry.GetComponent<TransformComponent>(activeCameraEntity);
     auto& cam = registry.GetComponent<CameraComponent>(activeCameraEntity);
 
     // Speed constants
-    const float shiftMult = keyShift ? 3.0f : 1.0f;
+    bool sprinting = input.IsActionHeld(InputAction::Sprint);
+    const float shiftMult = sprinting ? 3.0f : 1.0f;
     const float moveSpeed = 35.0f * shiftMult;
     const float rotateSpeed = 60.0f * shiftMult;
 
-    // Calculate basis vectors from the current transform matrix
+    // Calculate basis vectors
     glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2])); // Z-Axis
     glm::vec3 right = glm::normalize(glm::vec3(transform.matrix[0]));  // X-Axis
     glm::vec3 up = { 0, 1, 0 };
@@ -125,20 +115,21 @@ void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene) {
     glm::vec3 prevPos = pos;
 
     // Translation
-    if (keyW) pos += front * moveSpeed * deltaTime;
-    if (keyS) pos -= front * moveSpeed * deltaTime;
-    if (keyA) pos -= right * moveSpeed * deltaTime;
-    if (keyD) pos += right * moveSpeed * deltaTime;
-    if (keyE) pos += up * moveSpeed * deltaTime;
-    if (keyQ) pos -= up * moveSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::MoveForward))  pos += front * moveSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::MoveBackward)) pos -= front * moveSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::MoveLeft))     pos -= right * moveSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::MoveRight))    pos += right * moveSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::MoveUp))       pos += up * moveSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::MoveDown))     pos -= up * moveSpeed * deltaTime;
 
     ClampCameraPosition(pos, scene, prevPos);
 
-    // Rotation (Update Yaw/Pitch in Component)
-    if (keyLeft)  cam.yaw += rotateSpeed * deltaTime;
-    if (keyRight) cam.yaw -= rotateSpeed * deltaTime;
-    if (keyUp)    cam.pitch += rotateSpeed * deltaTime;
-    if (keyDown)  cam.pitch -= rotateSpeed * deltaTime;
+    // Rotation (Make sure to add Look actions to your InputAction enum and configs!)
+    if (input.IsActionHeld(InputAction::LookLeft))  cam.yaw += rotateSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::LookRight)) cam.yaw -= rotateSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::LookUp))    cam.pitch += rotateSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::LookDown))  cam.pitch -= rotateSpeed * deltaTime;
+
     cam.pitch = std::clamp(cam.pitch, -89.0f, 89.0f);
 
     // Reconstruct Matrix from Pos + Euler
@@ -148,58 +139,42 @@ void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene) {
     transform.matrix = m;
 }
 
-void CameraController::UpdateOrbitInput(float deltaTime, Scene& scene) {
+void CameraController::UpdateOrbitInput(float deltaTime, Scene& scene, const InputManager& input) {
     auto& registry = scene.GetRegistry();
     if (!registry.HasComponent<OrbitComponent>(activeCameraEntity)) return;
 
     auto& orbit = registry.GetComponent<OrbitComponent>(activeCameraEntity);
 
-    // Using your exact old speeds
     const float rotateSpeed = 50.0f;
     const float zoomSpeed = 50.0f;
 
-    // 1. Yaw (Orbit Left/Right) -> A & D
-    if (keyA || keyLeft)  orbit.currentAngle -= glm::radians(rotateSpeed * deltaTime);
-    if (keyD || keyRight) orbit.currentAngle += glm::radians(rotateSpeed * deltaTime);
+    // 1. Yaw (Orbit Left/Right)
+    if (input.IsActionHeld(InputAction::MoveLeft) || input.IsActionHeld(InputAction::LookLeft))  orbit.currentAngle -= glm::radians(rotateSpeed * deltaTime);
+    if (input.IsActionHeld(InputAction::MoveRight) || input.IsActionHeld(InputAction::LookRight)) orbit.currentAngle += glm::radians(rotateSpeed * deltaTime);
 
-    // 2. Zoom (Radius) -> Q & E
-    if (keyQ)    orbit.radius -= zoomSpeed * deltaTime;
-    if (keyE)  orbit.radius += zoomSpeed * deltaTime;
+    // 2. Zoom (Radius)
+    if (input.IsActionHeld(InputAction::MoveDown)) orbit.radius -= zoomSpeed * deltaTime;
+    if (input.IsActionHeld(InputAction::MoveUp))   orbit.radius += zoomSpeed * deltaTime;
     orbit.radius = std::max(orbit.radius, 1.0f);
 
-    // 3. Pitch (Elevation Up/Down) -> Q & E
-    if (keyW || keyUp || keyS || keyDown) {
-        float deltaElev = 0.0f;
-        if (keyS || keyDown) deltaElev += glm::radians(rotateSpeed * deltaTime); // Move Up
-        if (keyW || keyUp) deltaElev -= glm::radians(rotateSpeed * deltaTime); // Move Down
+    // 3. Pitch (Elevation Up/Down)
+    if (input.IsActionHeld(InputAction::MoveForward) || input.IsActionHeld(InputAction::LookUp) ||
+        input.IsActionHeld(InputAction::MoveBackward) || input.IsActionHeld(InputAction::LookDown)) {
 
-        // Calculate the local "Right" axis to pitch the startVector up and down
+        float deltaElev = 0.0f;
+        if (input.IsActionHeld(InputAction::MoveBackward) || input.IsActionHeld(InputAction::LookDown)) deltaElev += glm::radians(rotateSpeed * deltaTime); // Move Up
+        if (input.IsActionHeld(InputAction::MoveForward) || input.IsActionHeld(InputAction::LookUp))  deltaElev -= glm::radians(rotateSpeed * deltaTime); // Move Down
+
         glm::vec3 right = glm::normalize(glm::cross(orbit.axis, orbit.startVector));
 
-        // Apply the pitch rotation to the start vector
         glm::quat pitchQuat = glm::angleAxis(deltaElev, right);
         glm::vec3 newStart = pitchQuat * orbit.startVector;
 
-        // Prevent flipping over the top/bottom poles (like std::clamp(OrbitPitch, -89, 89))
         float dot = glm::dot(glm::normalize(newStart), orbit.axis);
         if (glm::abs(dot) < 0.999f) {
             orbit.startVector = newStart;
         }
     }
-}
-
-void CameraController::OnKeyPress(int key, bool pressed) {
-    if (key == GLFW_KEY_W) keyW = pressed;
-    if (key == GLFW_KEY_A) keyA = pressed;
-    if (key == GLFW_KEY_S) keyS = pressed;
-    if (key == GLFW_KEY_D) keyD = pressed;
-    if (key == GLFW_KEY_Q) keyQ = pressed;
-    if (key == GLFW_KEY_E) keyE = pressed;
-    if (key == GLFW_KEY_UP) keyUp = pressed;
-    if (key == GLFW_KEY_DOWN) keyDown = pressed;
-    if (key == GLFW_KEY_LEFT) keyLeft = pressed;
-    if (key == GLFW_KEY_RIGHT) keyRight = pressed;
-    if (key == GLFW_KEY_LEFT_SHIFT) keyShift = pressed;
 }
 
 void CameraController::ClampCameraPosition(glm::vec3& pos, Scene& scene, const glm::vec3& prevPos) const {
@@ -244,12 +219,10 @@ void CameraController::ClampCameraPosition(glm::vec3& pos, Scene& scene, const g
         const float minSeparation = collider.radius + COLLISION_BUFFER;
 
         if (distXZ < minSeparation) {
-            // Move bufferedTop inside for local optimization (OPT.01)
             const float bufferedTop = objTop + COLLISION_BUFFER;
             const bool isInsideVertical = (pos.y > objPos.y) && (pos.y < bufferedTop);
 
             if (isInsideVertical) {
-                // Move wasAbove inside for local optimization (OPT.01)
                 const bool wasAbove = (prevPos.y >= bufferedTop);
                 if (wasAbove) {
                     pos.y = bufferedTop;
