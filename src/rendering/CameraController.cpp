@@ -4,41 +4,72 @@
 #include <algorithm>
 #include <iostream>
 #include <random>
-#include "../core/Config.h"
-#include "../systems/CameraSystem.h"
-#include "Camera.h"
 #include <glm/gtc/quaternion.hpp>
 
 CameraController::CameraController(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs) {
     SetupCameras(scene, customConfigs);
-    SwitchCamera(CameraType::OUTSIDE_ORB, scene);
-}
 
-void CameraController::SetupCameras(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs) {
-    cameraEntities[CameraType::FREE_ROAM] = scene.CreateCameraEntity("FreeRoamCam", { 0.0f, -75.0f, 0.0f }, CameraType::FREE_ROAM);
-    cameraEntities[CameraType::OUTSIDE_ORB] = scene.CreateCameraEntity("OutsideCam", { 0.0f, 60.0f, 350.0f }, CameraType::OUTSIDE_ORB);
-    cameraEntities[CameraType::CACTI] = scene.CreateCameraEntity("CactusCam", { 20.0f, 10.0f, 20.0f }, CameraType::CACTI);
-
-    CameraType customTypes[] = { CameraType::CUSTOM_1, CameraType::CUSTOM_2, CameraType::CUSTOM_3, CameraType::CUSTOM_4 };
-    for (size_t i = 0; i < customConfigs.size() && i < 4; ++i) {
-        const auto& conf = customConfigs[i];
-        CameraType type = customTypes[i];
-
-        CameraType internalRefType = (conf.type == "Orbit") ? CameraType::OUTSIDE_ORB : CameraType::FREE_ROAM;
-        Entity camEnt = scene.CreateCameraEntity(conf.name, conf.position, internalRefType);
-
-        cameraEntities[type] = camEnt;
-
-        CustomCameraInfo info;
-        info.name = conf.name;
-        info.type = conf.type;
-        info.initialTarget = conf.target;
-        customCameraMeta[type] = info;
+    // Switch to the first available camera by default
+    if (!customConfigs.empty()) {
+        SwitchCamera(customConfigs[0].name, scene);
     }
 }
 
-void CameraController::SwitchCamera(CameraType type, Scene& scene) {
-    if (cameraEntities.find(type) == cameraEntities.end()) return;
+void CameraController::SetOrbitTarget(Entity target, Scene& scene) {
+    if (target == MAX_ENTITIES) return;
+
+    OrbitTargetObject = target;
+    auto& registry = scene.GetRegistry();
+    glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(target).matrix[3]);
+
+    // If the current camera doesn't support orbiting, automatically switch to the main outside camera
+    const auto& meta = cameraMeta[activeCameraName];
+    if (meta.type != "Orbit" && meta.type != "RandomTarget") {
+        SwitchCamera("OutsideCam", scene);
+    }
+
+    // --- NEW: Dynamic Close-Up Radius ---
+    float viewRadius = 15.0f; // A tight default fallback
+    float yOffset = 3.0f;     // Default to looking slightly above the base
+
+    // If the object has a collider, frame it nicely based on its actual size
+    if (registry.HasComponent<ColliderComponent>(target)) {
+        const auto& collider = registry.GetComponent<ColliderComponent>(target);
+
+        // Make the radius ~2.5x the size of the object, ensuring a minimum distance of 10
+        viewRadius = std::max(10.0f, std::max(collider.radius, collider.height) * 2.5f);
+
+        // Look at the vertical center of the object instead of its feet
+        yOffset = collider.height * 0.5f;
+    }
+
+    // Snap the camera to orbit the object at the new close-up distance
+    scene.SetObjectOrbit(activeCameraName, targetPos + glm::vec3(0, yOffset, 0), viewRadius, 0.0f, { 0,1,0 }, { 1,0,0 });
+
+    std::cout << "Camera forced to orbit entity: " << target << " at radius: " << viewRadius << std::endl;
+}
+
+void CameraController::SetupCameras(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs) {
+    for (const auto& conf : customConfigs) {
+        Entity camEnt = scene.CreateCameraEntity(conf.name, conf.position, conf.type);
+
+        cameraEntities[conf.name] = camEnt;
+        cameraMeta[conf.name] = conf;
+
+        if (!conf.actionBind.empty()) {
+            bindToNameMap[conf.actionBind] = conf.name;
+        }
+    }
+}
+
+void CameraController::SwitchCameraByBind(const std::string& actionBind, Scene& scene) {
+    if (bindToNameMap.find(actionBind) != bindToNameMap.end()) {
+        SwitchCamera(bindToNameMap[actionBind], scene);
+    }
+}
+
+void CameraController::SwitchCamera(const std::string& name, Scene& scene) {
+    if (cameraEntities.find(name) == cameraEntities.end()) return;
 
     auto& registry = scene.GetRegistry();
 
@@ -46,51 +77,50 @@ void CameraController::SwitchCamera(CameraType type, Scene& scene) {
         registry.GetComponent<CameraComponent>(activeCameraEntity).isActive = false;
     }
 
-    activeCameraType = type;
-    activeCameraEntity = cameraEntities[type];
+    activeCameraName = name;
+    activeCameraEntity = cameraEntities[name];
+    registry.GetComponent<CameraComponent>(activeCameraEntity).isActive = true;
 
-    auto& camComp = registry.GetComponent<CameraComponent>(activeCameraEntity);
-    camComp.isActive = true;
+    const auto& meta = cameraMeta[name];
+    OrbitTargetObject = MAX_ENTITIES;
 
-    if (type == CameraType::CACTI) {
-        std::vector<Entity> cacti;
+    if (meta.type == "RandomTarget") {
+        std::vector<Entity> validTargets;
         for (Entity e : scene.GetRenderableEntities()) {
             if (registry.HasComponent<RenderComponent>(e)) {
-                if (registry.GetComponent<RenderComponent>(e).texturePath.find("cactus") != std::string::npos) {
-                    cacti.push_back(e);
+                if (registry.GetComponent<RenderComponent>(e).texturePath.find(meta.targetMatch) != std::string::npos) {
+                    validTargets.push_back(e);
                 }
             }
         }
 
-        if (!cacti.empty()) {
+        if (!validTargets.empty()) {
             static std::random_device rd;
             static std::mt19937 gen(rd());
-            std::uniform_int_distribution<> dis(0, (int)cacti.size() - 1);
-            Entity target = cacti[dis(gen)];
+            std::uniform_int_distribution<> dis(0, (int)validTargets.size() - 1);
+            Entity target = validTargets[dis(gen)];
 
             OrbitTargetObject = target;
-            std::cout << "Entity " << OrbitTargetObject << std::endl;
-
             glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(target).matrix[3]);
-            scene.SetObjectOrbit("CactusCam", targetPos + glm::vec3(0, 3, 0), 15.0f, 0.0f, { 0,1,0 }, { 1,0,0 });
+            scene.SetObjectOrbit(name, targetPos + glm::vec3(0, 3, 0), meta.orbitRadius, 0.0f, { 0,1,0 }, { 1,0,0 });
         }
     }
-    else if (type == CameraType::OUTSIDE_ORB) {
-        scene.SetObjectOrbit("OutsideCam", { 0,0,0 }, 350.0f, 0.05f, { 0,1,0 }, { 1,0,0 });
+    else if (meta.type == "Orbit") {
+        scene.SetObjectOrbit(name, meta.target, meta.orbitRadius, 0.05f, { 0,1,0 }, { 1,0,0 });
     }
 
-    std::cout << "Switched to Camera Entity: " << registry.GetComponent<NameComponent>(activeCameraEntity).name << std::endl;
+    std::cout << "Switched to Camera: " << name << std::endl;
 }
 
 void CameraController::Update(float deltaTime, Scene& scene, const InputManager& input) {
     if (activeCameraEntity == MAX_ENTITIES) return;
 
-    if (activeCameraType == CameraType::FREE_ROAM ||
-        (customCameraMeta.count(activeCameraType) && customCameraMeta[activeCameraType].type == "FreeRoam")) {
+    const auto& meta = cameraMeta[activeCameraName];
+
+    if (meta.type == "FreeRoam") {
         UpdateFreeRoam(deltaTime, scene, input);
     }
-    else if (activeCameraType == CameraType::CACTI || activeCameraType == CameraType::OUTSIDE_ORB ||
-        (customCameraMeta.count(activeCameraType) && customCameraMeta[activeCameraType].type == "Orbit")) {
+    else {
         UpdateOrbitInput(deltaTime, scene, input);
     }
 }

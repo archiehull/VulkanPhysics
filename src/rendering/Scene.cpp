@@ -942,7 +942,7 @@ void Scene::ResetEnvironment() {
     }
 }
 
-Entity Scene::CreateCameraEntity(const std::string& name, const glm::vec3& pos, CameraType type) {
+Entity Scene::CreateCameraEntity(const std::string& name, const glm::vec3& pos, const std::string& type) {
     Entity entity = m_Registry.CreateEntity();
     m_EntityMap[name] = entity;
 
@@ -955,8 +955,8 @@ Entity Scene::CreateCameraEntity(const std::string& name, const glm::vec3& pos, 
     CameraComponent camera;
     m_Registry.AddComponent<CameraComponent>(entity, camera);
 
-    // If it's an Orbit camera, we can give it an OrbitComponent right now!
-    if (type == CameraType::OUTSIDE_ORB || type == CameraType::CACTI) {
+    // If it's an Orbit or RandomTarget camera, add the OrbitComponent
+    if (type == "Orbit" || type == "RandomTarget") {
         OrbitComponent orbit;
         orbit.isOrbiting = true;
         m_Registry.AddComponent<OrbitComponent>(entity, orbit);

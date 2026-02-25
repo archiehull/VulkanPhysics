@@ -32,7 +32,17 @@ std::string EditorUI::GetInitialScenePath() const {
     return m_SceneOptions[m_SelectedSceneIndex].path;
 }
 
-std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene) {
+void EditorUI::SetAvailableCameras(const std::vector<std::string>& cameras) {
+    availableCameras = cameras;
+}
+
+std::string EditorUI::ConsumeCameraSwitchRequest() {
+    std::string req = requestedCamera;
+    requestedCamera = "";
+    return req; // Clears the request after reading it
+}
+
+std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget) {
     {
         std::string sceneToLoad = "";
 
@@ -40,7 +50,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
         if (ImGui::BeginMainMenuBar()) {
 
-            if (ImGui::BeginMenu("Settings")) {
+            if (ImGui::BeginMenu("#")) {
                 ImGui::Text("UI Scale");
                 ImGui::SliderFloat("##uiscale", &m_UIScale, 0.5f, 3.0f, "%.2fx");
                 ImGui::Separator();
@@ -142,6 +152,29 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                             // Header for visual clarity
                             ImGui::TextDisabled("Entity Properties");
+
+                            // --- NEW: View Object Button ---
+                            if (ImGui::Button("View Object", ImVec2(-1, 0))) {
+                                m_ViewRequested = e;
+                            }
+
+                            // --- NEW: Ignite Object Button ---
+                            if (e == activeOrbitTarget && registry.HasComponent<ThermoComponent>(e)) {
+                                auto& thermo = registry.GetComponent<ThermoComponent>(e);
+                                if (thermo.isFlammable && thermo.state != ObjectState::BURNING) {
+                                    // Use the orange/fire color for the ignite button
+                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.0f, 1.0f));
+                                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+                                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.2f, 0.0f, 1.0f));
+
+                                    if (ImGui::Button("Ignite Object", ImVec2(-1, 0))) {
+                                        scene.Ignite(e); // Ignite directly from the UI!
+                                    }
+
+                                    ImGui::PopStyleColor(3);
+                                }
+                            }
+
                             ImGui::Separator();
 
                             // 1. Transform / Position
@@ -350,6 +383,17 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 }
                 ImGui::EndMenu(); // Close Particle Debug
             }
+
+            if (ImGui::BeginMenu("View")) {
+                ImGui::Text("Available Cameras:");
+                ImGui::Separator();
+                for (const auto& camName : availableCameras) {
+                    if (ImGui::MenuItem(camName.c_str())) {
+                        requestedCamera = camName;
+                    }
+                }
+                ImGui::EndMenu();
+			}
 
             if (ImGui::BeginMenu("Simulation")) {
                 // 1. Start / Pause Toggle - Using Selectable with DontClosePopups

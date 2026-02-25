@@ -144,8 +144,17 @@ void Application::InitVulkan() {
 
     cameraController = std::make_unique<CameraController>(*scene, config.customCameras);
 
+    std::vector<std::string> camNames;
+
     editorUI = std::make_unique<EditorUI>();
     editorUI->Initialize("src/config/");
+
+    for (const auto& cam : config.customCameras) {
+        camNames.push_back(cam.name);
+    }
+    editorUI->SetAvailableCameras(camNames);
+
+
 }
 
 void Application::LoadScene(const std::string& scenePath) {
@@ -169,6 +178,12 @@ void Application::LoadScene(const std::string& scenePath) {
 
     // 5. Re-initialize systems that depend on the new config
     cameraController = std::make_unique<CameraController>(*scene, config.customCameras);
+    std::vector<std::string> camNames;
+    for (const auto& cam : config.customCameras) {
+        camNames.push_back(cam.name);
+    }
+    editorUI->SetAvailableCameras(camNames);
+
 
     if (renderer && scene) {
         renderer->SetupSceneParticles(*scene);
@@ -177,9 +192,6 @@ void Application::LoadScene(const std::string& scenePath) {
     std::cout << "Loaded Scene: " << scenePath << std::endl;
 }
 
-static const char* SUN_NAME = "Sun";
-static const char* MOON_NAME = "Moon";
-static const char* FOGSHELL_NAME = "FogShell";
 
 void Application::SetupScene() {
     // 1. Pass Global Configuration to Scene
@@ -367,7 +379,8 @@ void Application::MainLoop() {
         std::string nextScene = editorUI->Draw(deltaTime,
             scene->GetWeatherIntensity(),
             scene->GetSeasonName(),
-            *scene);
+            *scene,
+            cameraController->GetOrbitTarget());
 
         const float* uiColor = editorUI->GetClearColor();
         renderer->SetClearColor(glm::vec4(uiColor[0], uiColor[1], uiColor[2], uiColor[3]));
@@ -382,6 +395,16 @@ void Application::MainLoop() {
         // 1. Handle Restart
         if (editorUI->ConsumeRestartRequest()) {
             scene->ResetEnvironment();
+        }
+
+        std::string selectedCam = editorUI->ConsumeCameraSwitchRequest();
+        if (!selectedCam.empty()) {
+            cameraController->SwitchCamera(selectedCam, *scene);
+        }
+
+        Entity viewReq = editorUI->ConsumeViewRequest();
+        if (viewReq != MAX_ENTITIES) {
+            cameraController->SetOrbitTarget(viewReq, *scene);
         }
 
         // 2. Calculate advancement
@@ -454,43 +477,28 @@ void Application::ProcessInput() {
         editorUI->SetPaused(!editorUI->IsPaused());
     }
 
-    // --- Camera Switching ---
-    if (inputManager->IsActionJustPressed(InputAction::CameraOutside)) {
-        cameraController->SwitchCamera(CameraType::OUTSIDE_ORB, *scene);
-    }
-    if (inputManager->IsActionJustPressed(InputAction::CameraFreeRoam)) {
-        cameraController->SwitchCamera(CameraType::FREE_ROAM, *scene);
-    }
-    if (inputManager->IsActionJustPressed(InputAction::CameraCacti)) {
-        cameraController->SwitchCamera(CameraType::CACTI, *scene);
-    }
-    if (inputManager->IsActionJustPressed(InputAction::CameraCustom1)) {
-        cameraController->SwitchCamera(CameraType::CUSTOM_1, *scene);
-    }
-    if (inputManager->IsActionJustPressed(InputAction::CameraCustom2)) {
-        cameraController->SwitchCamera(CameraType::CUSTOM_2, *scene);
-    }
-    if (inputManager->IsActionJustPressed(InputAction::CameraCustom3)) {
-        cameraController->SwitchCamera(CameraType::CUSTOM_3, *scene);
-    }
-    if (inputManager->IsActionJustPressed(InputAction::CameraCustom4)) {
-        cameraController->SwitchCamera(CameraType::CUSTOM_4, *scene);
-    }
+    // --- Dynamic Camera Switching ---
+    // These now look up the assigned camera name from the config file using the ActionBind
+    if (inputManager->IsActionJustPressed(InputAction::Camera1)) cameraController->SwitchCameraByBind("Camera1", *scene);
+    if (inputManager->IsActionJustPressed(InputAction::Camera2)) cameraController->SwitchCameraByBind("Camera2", *scene);
+    if (inputManager->IsActionJustPressed(InputAction::Camera3)) cameraController->SwitchCameraByBind("Camera3", *scene);
+    if (inputManager->IsActionJustPressed(InputAction::Camera4)) cameraController->SwitchCameraByBind("Camera4", *scene);
+    if (inputManager->IsActionJustPressed(InputAction::Camera5)) cameraController->SwitchCameraByBind("Camera5", *scene);
+    if (inputManager->IsActionJustPressed(InputAction::Camera6)) cameraController->SwitchCameraByBind("Camera6", *scene);
+    if (inputManager->IsActionJustPressed(InputAction::Camera7)) cameraController->SwitchCameraByBind("Camera7", *scene);
+    if (inputManager->IsActionJustPressed(InputAction::Camera8)) cameraController->SwitchCameraByBind("Camera8", *scene);
 
-    // --- Ignite Logic (F4) ---
+    // --- Decoupled Ignite Logic (F4) ---
+    // Works automatically with any camera configured as "RandomTarget" or "Orbit" 
+    // that targets a specific object.
     if (inputManager->IsActionJustPressed(InputAction::IgniteTarget)) {
-        if (cameraController->GetActiveCameraType() != CameraType::CACTI) {
-            cameraController->SwitchCamera(CameraType::CACTI, *scene);
+        Entity target = cameraController->GetOrbitTarget();
+        if (target != MAX_ENTITIES) {
+            scene->Ignite(target);
+            std::cout << "Ignited Orbit Target Entity: " << target << std::endl;
         }
-
-        Entity camEnt = cameraController->GetActiveCameraEntity();
-        auto& reg = scene->GetRegistry();
-
-        if (camEnt != MAX_ENTITIES && reg.HasComponent<OrbitComponent>(camEnt)) {
-            Entity target = cameraController->GetOrbitTarget();
-            if (target != MAX_ENTITIES) {
-                scene->Ignite(target);
-            }
+        else {
+            std::cout << "No valid target in focus to ignite." << std::endl;
         }
     }
 
@@ -517,7 +525,8 @@ void Application::ProcessInput() {
     // --- Time Speed (Holding T logic) ---
     if (inputManager->IsActionHeld(InputAction::TimeSpeedUp)) {
         const float scaleChangeRate = 2.0f;
-        // Check standard GLFW keys for modifiers since they aren't explicit actions right now
+
+        // Grab modifiers directly from GLFW since they act as modifiers here
         const bool shiftPressed = glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
             glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
         const bool ctrlPressed = glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||

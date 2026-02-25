@@ -69,9 +69,12 @@ struct ProceduralPlantConfig {
 
 struct CustomCameraConfig {
     std::string name;
-    std::string type;
-    glm::vec3 position;
-    glm::vec3 target;
+    std::string type;         // "FreeRoam", "Orbit", "RandomTarget"
+    std::string actionBind;   // e.g., "Camera1", "Camera2"
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 target = glm::vec3(0.0f);     // For Orbit
+    float orbitRadius = 350.0f;             // For Orbit / RandomTarget
+    std::string targetMatch;  // For RandomTarget (e.g., "cactus")
 };
 
 struct SeasonConfig {

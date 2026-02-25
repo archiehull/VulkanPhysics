@@ -182,11 +182,17 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             plant.isFlammable = (flammableStr == "1" || flammableStr == "true");
             config.proceduralPlants.push_back(plant);
         }
-        else if (key == "CustomCamera") {
+        else if (key == "Camera") {
             CustomCameraConfig cam;
-            ss >> cam.name >> cam.type
-                >> cam.position.x >> cam.position.y >> cam.position.z
-                >> cam.target.x >> cam.target.y >> cam.target.z;
+            ss >> cam.name >> cam.type >> cam.actionBind >> cam.position.x >> cam.position.y >> cam.position.z;
+
+            if (cam.type == "Orbit") {
+                ss >> cam.orbitRadius >> cam.target.x >> cam.target.y >> cam.target.z;
+            }
+            else if (cam.type == "RandomTarget") {
+                ss >> cam.orbitRadius >> cam.targetMatch;
+            }
+
             config.customCameras.push_back(cam);
         }
     }

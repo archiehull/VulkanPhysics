@@ -16,11 +16,16 @@ public:
     void SetInputBindings(const std::unordered_map<std::string, std::string>& bindings);
 
     // Renders the top menu bar. Returns a path if a new scene is selected.
-    std::string Draw(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene);
-    // Returns the path determined during Initialize
+    std::string Draw(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget = MAX_ENTITIES);    // Returns the path determined during Initialize
     std::string GetInitialScenePath() const;
 
     const float* GetClearColor() const { return m_ClearColor; }
+
+    Entity ConsumeViewRequest() {
+        Entity req = m_ViewRequested;
+        m_ViewRequested = MAX_ENTITIES;
+        return req;
+    }
 
     float GetStepSize() const { return m_StepSize; }
     bool IsPaused() const { return m_IsPaused; }
@@ -32,7 +37,15 @@ public:
     bool ConsumeStepRequest() { bool req = m_StepRequested; m_StepRequested = false; return req; }
     bool ConsumeRestartRequest() { bool req = m_RestartRequested; m_RestartRequested = false; return req; }
 
+    void SetAvailableCameras(const std::vector<std::string>& cameras);
+    std::string ConsumeCameraSwitchRequest();
+
 private:
+    Entity m_ViewRequested = MAX_ENTITIES;
+
+    std::vector<std::string> availableCameras;
+    std::string requestedCamera = "";
+
     std::vector<SceneOption> m_SceneOptions;
 
     std::vector<std::pair<std::string, std::string>> m_DisplayBindings;

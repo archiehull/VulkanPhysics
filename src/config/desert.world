@@ -10,11 +10,6 @@ WeatherDuration 0.0 0.0
 FireSuppression 15.0
 SunHeatBonus 0.0
 
-# Custom Cameras
-# Positioned high and back to see everything
-CustomCamera Main Static 0.0 20.0 40.0 0.0 0.0 0.0
-
-
 [Input]
 # ==========================================
 # CONTROLS
@@ -32,15 +27,15 @@ MoveUp=E,PAGE_UP
 MoveDown=Q,PAGE_DOWN
 Sprint=LEFT_SHIFT,RIGHT_SHIFT
 
-
 # --- Cameras ---
-CameraOutside=F1
-CameraFreeRoam=F2
-CameraCacti=F3
-CameraCustom1=F5
-CameraCustom2=F6
-CameraCustom3=F7
-CameraCustom4=F8
+Camera1=F1
+Camera2=F2
+Camera3=F3
+Camera4=F5
+Camera5=F6
+Camera6=F7
+Camera7=F8
+Camera8=F9
 
 # --- Interactions & Environment ---
 IgniteTarget=F4
@@ -56,6 +51,17 @@ Exit=ESCAPE
 
 
 [Scene]
+# ==========================================
+# CAMERAS
+# Format: Camera <Name> <Type> <ActionBind> <PosX> <PosY> <PosZ> [Additional Params]
+#   Orbit Additions:        <OrbitRadius> <TargetX> <TargetY> <TargetZ>
+#   RandomTarget Additions: <OrbitRadius> <TargetMatchString>
+# ==========================================
+Camera OutsideCam Orbit Camera1 0.0 60.0 350.0 350.0 0.0 0.0 0.0
+Camera FreeRoamCam FreeRoam Camera2 0.0 -75.0 0.0
+Camera CactusCam RandomTarget Camera3 20.0 10.0 20.0 15.0 cactus
+Camera MainCam FreeRoam Camera4 0.0 20.0 40.0
+
 # ==========================================
 # PROCEDURAL VEGETATION
 # ==========================================
