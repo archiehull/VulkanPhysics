@@ -538,121 +538,96 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
             }
 
             if (ImGui::BeginMenu("Particles")) {
-                const auto& pSystems = scene.GetParticleSystems();
+                const auto& pSystems = scene.GetParticleSystems(); //
+                Registry& registry = scene.GetRegistry(); //
+                const auto& entities = scene.GetRenderableEntities(); //
 
-                struct EmitterDebugInfo {
-                    int id;
-                    std::string texName;
-                    ParticleSystem::ParticleEmitter emitter;
-                };
-
-                std::vector<EmitterDebugInfo> allEmitters;
-
+                bool hasEmitters = false;
                 for (const auto& sys : pSystems) {
-                    std::string texName = sys->GetTexturePath();
-                    size_t slashPos = texName.find_last_of("/\\");
-                    if (slashPos != std::string::npos) {
-                        texName = texName.substr(slashPos + 1);
-                    }
-
-                    for (const auto& em : sys->GetEmitters()) {
-                        allEmitters.push_back({ em.id, texName, em });
+                    if (!sys->GetEmitters().empty()) { //
+                        hasEmitters = true;
+                        break;
                     }
                 }
 
-                if (allEmitters.empty()) {
+                if (!hasEmitters) {
                     ImGui::MenuItem("No Active Emitters", nullptr, false, false);
                 }
                 else {
-                    std::sort(allEmitters.begin(), allEmitters.end(), [](const EmitterDebugInfo& a, const EmitterDebugInfo& b) {
-                        return a.id < b.id;
-                        });
+                    for (const auto& sys : pSystems) {
+                        std::string fullTexPath = sys->GetTexturePath(); //
+                        std::string texName = fullTexPath;
+                        size_t slashPos = texName.find_last_of("/\\");
+                        if (slashPos != std::string::npos) texName = texName.substr(slashPos + 1);
 
-                    Registry& registry = scene.GetRegistry();
-                    const auto& entities = scene.GetRenderableEntities();
+                        // Iterate through each emitter managed by this system
+                        for (const auto& em : sys->GetEmitters()) { //
+                            std::string emLabel = "Emitter ID: " + std::to_string(em.id) + " (" + texName + ")##GlobalEm_" + std::to_string(em.id);
 
-                    for (const auto& info : allEmitters) {
-                        const auto& em = info.emitter;
+                            if (ImGui::BeginMenu(emLabel.c_str())) {
+                                ImGui::TextDisabled("Live Controls");
+                                ImGui::Separator();
 
-                        std::string emLabel = "Emitter ID: " + std::to_string(em.id) + " (" + info.texName + ")##" + std::to_string(em.id);
-
-                        if (ImGui::BeginMenu(emLabel.c_str())) {
-                            ImGui::TextDisabled("Live Stats");
-                            ImGui::Separator();
-                            ImGui::Text("Type/Texture: %s", info.texName.c_str());
-                            ImGui::Text("Rate: %.1f particles/sec", em.particlesPerSecond);
-                            ImGui::Text("Time Since Last Emit: %.4f s", em.timeSinceLastEmit);
-
-                            ImGui::Spacing();
-                            ImGui::TextDisabled("Particle Properties");
-                            ImGui::Separator();
-
-                            ImGui::Text("Pos: (%.1f, %.1f, %.1f)", em.props.position.x, em.props.position.y, em.props.position.z);
-                            ImGui::Text("Pos Var: (%.1f, %.1f, %.1f)", em.props.positionVariation.x, em.props.positionVariation.y, em.props.positionVariation.z);
-                            ImGui::Spacing();
-
-                            ImGui::Text("Vel: (%.1f, %.1f, %.1f)", em.props.velocity.x, em.props.velocity.y, em.props.velocity.z);
-                            ImGui::Text("Vel Var: (%.1f, %.1f, %.1f)", em.props.velocityVariation.x, em.props.velocityVariation.y, em.props.velocityVariation.z);
-                            ImGui::Spacing();
-
-                            ImGui::Text("Size: %.2f -> %.2f (Var: %.2f)", em.props.sizeBegin, em.props.sizeEnd, em.props.sizeVariation);
-                            ImGui::Text("Lifetime: %.2f s", em.props.lifeTime);
-
-                            ImGui::Spacing();
-                            ImGui::TextDisabled("Attached Objects");
-                            ImGui::Separator();
-
-                            bool foundAttached = false;
-                            for (Entity e : entities) {
-                                bool isAttached = false;
-                                std::string attachReason = "";
-
-                                if (registry.HasComponent<ThermoComponent>(e)) {
-                                    auto& thermo = registry.GetComponent<ThermoComponent>(e);
-                                    if (thermo.fireEmitterId == em.id) {
-                                        isAttached = true;
-                                        attachReason = "Fire";
-                                    }
-                                    if (thermo.smokeEmitterId == em.id) {
-                                        isAttached = true;
-                                        attachReason += (attachReason.empty() ? "Smoke" : " & Smoke");
-                                    }
+                                // --- LOGARITHMIC EMISSION RATE ---
+                                // Provides cubic scaling (x^3) for precise control at low values
+                                float rateSlider = std::pow(em.particlesPerSecond / 1000.0f, 1.0f / 3.0f);
+                                if (ImGui::SliderFloat("Emission Rate", &rateSlider, 0.0f, 1.0f, "%.1f p/s")) {
+                                    float newRate = std::pow(rateSlider, 3.0f) * 1000.0f;
+                                    // Update the system directly using em.props
+                                    sys->UpdateEmitter(em.id, em.props, newRate);
                                 }
+                                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cubic scale for fine control at low counts.");
 
-                                if (registry.HasComponent<DustCloudComponent>(e)) {
-                                    auto& dust = registry.GetComponent<DustCloudComponent>(e);
-                                    if (dust.emitterId == em.id) {
-                                        isAttached = true;
-                                        attachReason = "Dust";
+                                ImGui::Spacing();
+                                ImGui::TextDisabled("Spatial Data");
+                                ImGui::Separator();
+                                ImGui::Text("Position: (%.1f, %.1f, %.1f)", em.props.position.x, em.props.position.y, em.props.position.z);
+
+                                ImGui::Spacing();
+                                ImGui::TextDisabled("Particle Properties");
+                                ImGui::Separator();
+                                ImGui::Text("Size: %.2f -> %.2f (Var: %.2f)", em.props.sizeBegin, em.props.sizeEnd, em.props.sizeVariation);
+                                ImGui::Text("Lifetime: %.2f s", em.props.lifeTime);
+
+                                ImGui::Spacing();
+                                ImGui::TextDisabled("Attached To");
+                                ImGui::Separator();
+
+                                // Search for entities currently linked to this specific emitter
+                                bool foundAttached = false;
+                                for (Entity e : entities) {
+                                    bool attached = false;
+                                    std::string reason = "";
+
+                                    // Check thermal-linked emitters (Fire/Smoke)
+                                    if (registry.HasComponent<ThermoComponent>(e)) {
+                                        auto& thermo = registry.GetComponent<ThermoComponent>(e);
+                                        if (thermo.fireEmitterId == em.id) { attached = true; reason = "Fire"; }
+                                        if (thermo.smokeEmitterId == em.id) { attached = true; reason += (reason.empty() ? "" : " & ") + std::string("Smoke"); }
                                     }
-                                }
 
-                                if (registry.HasComponent<AttachedEmitterComponent>(e)) {
-                                    auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
-                                    for (const auto& activeEm : attached.emitters) {
-                                        if (activeEm.emitterId == em.id) {
-                                            isAttached = true;
-                                            attachReason = "Custom Emitter";
-                                            break;
+                                    // Check general attached emitters
+                                    if (registry.HasComponent<AttachedEmitterComponent>(e)) {
+                                        for (const auto& activeEm : registry.GetComponent<AttachedEmitterComponent>(e).emitters) {
+                                            if (activeEm.emitterId == em.id) { attached = true; reason = "Custom Emitter"; break; }
                                         }
                                     }
-                                }
 
-                                if (isAttached) {
-                                    foundAttached = true;
-                                    std::string entityName = "Entity " + std::to_string(e);
-                                    if (registry.HasComponent<NameComponent>(e)) {
-                                        entityName = registry.GetComponent<NameComponent>(e).name;
+                                    if (attached) {
+                                        foundAttached = true;
+                                        std::string name = registry.HasComponent<NameComponent>(e) ? registry.GetComponent<NameComponent>(e).name : "Entity " + std::to_string(e);
+                                        ImGui::Text(" %s (%s)", name.c_str(), reason.c_str());
                                     }
-                                    ImGui::Text(" %s (%s)", entityName.c_str(), attachReason.c_str());
                                 }
-                            }
+                                if (!foundAttached) ImGui::Text(" <No Entity Link Found>");
 
-                            if (!foundAttached) {
-                                ImGui::Text(" None");
-                            }
+                                ImGui::Separator();
+                                if (ImGui::MenuItem("Stop Emitter")) {
+                                    sys->StopEmitter(em.id); //
+                                }
 
-                            ImGui::EndMenu();
+                                ImGui::EndMenu();
+                            }
                         }
                     }
                 }
@@ -750,37 +725,32 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
             if (ImGui::BeginMenu("Lights")) {
                 Registry& registry = scene.GetRegistry();
-
-                std::vector<Entity> activeLights;
-                std::vector<Entity> inactiveLights;
+                bool hasLights = false;
 
                 for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
                     if (!registry.HasComponent<LightComponent>(e)) continue;
+                    hasLights = true;
 
-                    if (registry.GetComponent<LightComponent>(e).intensity > 0.0f) {
-                        activeLights.push_back(e);
-                    }
-                    else {
-                        inactiveLights.push_back(e);
-                    }
-                }
-
-                bool hasLights = !activeLights.empty() || !inactiveLights.empty();
-
-                auto drawLightMenu = [&](Entity e) {
                     auto& light = registry.GetComponent<LightComponent>(e);
-
                     std::string lightName = registry.HasComponent<NameComponent>(e) ?
                         registry.GetComponent<NameComponent>(e).name : "Unnamed Light";
+
+                    // --- NEW: Inactive Logic ---
+                    bool isInactive = (light.intensity <= 0.001f);
+                    if (isInactive) {
+                        // Change text color to a dim grey for inactive status
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+                        lightName += " [Inactive]";
+                    }
 
                     std::string menuLabel = lightName + "###LightMenu_" + std::to_string(e);
 
                     if (ImGui::BeginMenu(menuLabel.c_str())) {
+                        if (isInactive) ImGui::PopStyleColor(); // Restore color for menu content
 
                         if (registry.HasComponent<TransformComponent>(e)) {
                             auto& transform = registry.GetComponent<TransformComponent>(e);
                             glm::vec3 pos = glm::vec3(transform.matrix[3]);
-
                             ImGui::TextDisabled("Transform Data");
                             ImGui::Separator();
                             ImGui::Text("Position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
@@ -791,12 +761,19 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         ImGui::Separator();
 
                         ImGui::ColorEdit3("Color", &light.color.x, ImGuiColorEditFlags_Float);
-                        ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 100.0f);
+
+                        // --- NEW: Logarithmic-mapped Slider (Power 3) ---
+                        // Mapping: actual_intensity = slider_val^3 * 100
+                        // This makes 50% on the slider equal to 12.5 intensity.
+                        float sliderVal = std::pow(light.intensity / 100.0f, 1.0f / 3.0f);
+                        if (ImGui::SliderFloat("Intensity", &sliderVal, 0.0f, 1.0f, "%.3f")) {
+                            light.intensity = std::pow(sliderVal, 3.0f) * 100.0f;
+                            if (light.intensity < 0.001f) light.intensity = 0.0f;
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Logarithmic scale for finer control at low values (0-100 range)");
 
                         const char* lightTypes[] = { "Sun / Directional", "Fire (Harsh Falloff)", "Standard Point", "Spotlight" };
-
                         int safeTypeIndex = (light.type >= 0 && light.type <= 3) ? light.type : 2;
-
                         if (ImGui::Combo("Light Type", &safeTypeIndex, lightTypes, 4)) {
                             light.type = safeTypeIndex;
                         }
@@ -805,13 +782,9 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             ImGui::Spacing();
                             ImGui::TextDisabled("Spotlight Settings");
                             ImGui::Separator();
-
                             if (ImGui::DragFloat3("Direction", &light.direction.x, 0.05f, -1.0f, 1.0f)) {
-                                if (glm::length(light.direction) > 0.001f) {
-                                    light.direction = glm::normalize(light.direction);
-                                }
+                                if (glm::length(light.direction) > 0.001f) light.direction = glm::normalize(light.direction);
                             }
-
                             ImGui::SliderFloat("Cone Angle", &light.cutoffAngle, 1.0f, 90.0f, "%.1f deg");
                         }
 
@@ -820,29 +793,8 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                         ImGui::EndMenu();
                     }
-                    };
-
-                if (!activeLights.empty()) {
-                    ImGui::TextDisabled("Active Lights");
-                    ImGui::Separator();
-                    for (Entity e : activeLights) {
-                        drawLightMenu(e);
-                    }
-                }
-
-                if (!inactiveLights.empty()) {
-                    if (!activeLights.empty()) {
-                        ImGui::Spacing();
-                    }
-
-                    if (ImGui::BeginMenu("Inactive Lights")) {
-                        ImGui::TextDisabled("Pooled / Burned-out Lights");
-                        ImGui::Separator();
-
-                        for (Entity e : inactiveLights) {
-                            drawLightMenu(e);
-                        }
-                        ImGui::EndMenu();
+                    else {
+                        if (isInactive) ImGui::PopStyleColor(); // Pop color if menu not open
                     }
                 }
 
@@ -1364,8 +1316,12 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                     auto& em = comp.emitters[i];
                                     ImGui::PushID((int)i);
                                     if (ImGui::TreeNodeEx(("Emitter ID: " + std::to_string(em.emitterId)).c_str())) {
-                                        ImGui::DragFloat("Emission Rate", &em.emissionRate, 1.0f, 0.0f, 1000.0f);
-                                        ImGui::DragFloat("Duration (-1 = Inf)", &em.duration, 0.1f);
+                                        float rateSlider = std::pow(em.emissionRate / 1000.0f, 1.0f / 3.0f);
+                                        if (ImGui::SliderFloat("Emission Rate", &rateSlider, 0.0f, 1.0f, "%.1f p/s")) {
+                                            em.emissionRate = std::pow(rateSlider, 3.0f) * 1000.0f;
+                                            // Notify the particle system of the change
+                                            scene.GetOrCreateSystem(em.props)->UpdateEmitter(em.emitterId, em.props, em.emissionRate);
+                                        }                                        ImGui::DragFloat("Duration (-1 = Inf)", &em.duration, 0.1f);
                                         ImGui::Text("Timer: %.2f", em.timer);
                                         ImGui::TreePop();
                                     }

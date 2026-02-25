@@ -1,114 +1,40 @@
 [Settings]
-# ==========================================
-# SCENE SETTINGS: AshWorld
-# ==========================================
-
 WindowSize 1280 720
-
-# Day Length (seconds), Days per Season
-# Fast day/night cycle to show off the lighting
 TimeParams 45.0 4
-
-# SummerBase, WinterBase, DayNightDiff
-# Extremely hot environment
 SeasonTemps 80.0 60.0 20.0
-
-# MinClearTime, MaxClearTime
-# Weather changes frequently
 WeatherIntervals 45.0 90.0
-
-# MinRainTime, MaxRainTime
-# Short bursts of precipitation
 WeatherDuration 30.0 60.0
-
-# Fire suppression is low because it's hot
 FireSuppression 5.0
-
-# Massive heat bonus from the "Sun" (Volcanic glow)
 SunHeatBonus 100.0
 
-# Custom Cameras
-CustomCamera Overlord Static 0.0 150.0 150.0 0.0 0.0 0.0
-CustomCamera GroundLevel Static 0.0 5.0 50.0 0.0 10.0 0.0
-
-[Input]
-# ==========================================
-# CONTROLS
-# ==========================================
-MoveForward=W
-MoveBackward=S
-MoveLeft=A
-MoveRight=D
-LookUp=UP
-LookDown=DOWN
-LookLeft=LEFT
-LookRight=RIGHTMoveUp=E,PAGE_UP
-MoveDown=Q,PAGE_DOWN
-Sprint=LEFT_SHIFT,RIGHT_SHIFT
-CameraOutside=F1
-CameraFreeRoam=F2
-CameraCacti=F3
-CameraCustom1=F5
-CameraCustom2=F6
-CameraCustom3=F7
-CameraCustom4=F8
-IgniteTarget=F4
-ResetEnvironment=R
-TimeSpeedUp=T
-ToggleShading=Y
-ToggleShadows=U
-NextSeason=I
-ToggleWeather=O
-SpawnDustCloud=P
-PauseToggle=SPACE
-Exit=ESCAPE
-
 [Scene]
-# ==========================================
-# PROCEDURAL VEGETATION
-# ==========================================
+Camera Overlord Static Camera1 0.0 150.0 150.0
+Camera GroundLevel Static Camera2 0.0 5.0 50.0
 
-# Sparse dead trees
 ProceduralObjectCount 40
-
-# Dead Tree (Small) - Burnt looking (using soot texture)
 ProceduralPlant models/DeadTree.obj textures/soot.jpg 3.0 0.1 0.1 0.1 0.15 0.15 0.15 0.0 0.0 0.0 true
-
-# Dead Tree (Large) - Old wood
 ProceduralPlant models/DeadTree.obj textures/bark.jpg 1.0 0.3 0.3 0.3 0.4 0.4 0.4 0.0 0.0 0.0 true
 
-
-# ==========================================
-# EXPLICIT SCENE OBJECTS
-# ==========================================
-
-# --- TERRAIN (Ash Ground) ---
 Object AshGround
     Type Terrain
-    # Using soot texture for dark ash look
     Texture textures/soot.jpg
     Position 0.0 -75.0 0.0
-    # Radius, HeightScale, NoiseFreq (Jagged terrain)
     Params 200.0 6.0 0.04
     RenderProps 1 true true true 3
     PhysicsProps false false
 EndObject
 
-# --- THE RED SUN (Volcanic Glow) ---
 Object VolcanicSun
     Type Sphere
     Texture textures/sun.png
     Params 15.0
     Position 0.0 0.0 0.0
-    # Orbit closer and faster than normal
     Orbit true 250.0 -0.5 0.0 0.0
-    # Red/Orange light, high intensity
     Light true 1.0 0.3 0.1 2.5 0
     RenderProps 1 false false true 3
     PhysicsProps false false
 EndObject
 
-# --- THE PALE MOON ---
 Object PaleMoon
     Type Sphere
     Texture textures/moon.jpg
@@ -120,24 +46,20 @@ Object PaleMoon
     PhysicsProps false false
 EndObject
 
-# --- CENTRAL MONOLITH ---
 Object Monolith
     Type Cube
     Texture textures/mahogany.jpg
-    Position 0.0 -10.0 0.0
-    # Tall and thin
+    Position 0.0 -60.0 0.0
     Scale 5.0 30.0 5.0
     RenderProps 1 true true true 3
-    PhysicsProps true false
+    PhysicsProps true true
 EndObject
 
-# --- FLOATING ARTIFACTS (Orbiting the Monolith) ---
 Object Artifact1
     Type Sphere
     Texture textures/default.png
     Params 1.0
     Position 0.0 10.0 0.0
-    # Orbiting around the center (0,0,0)
     Orbit true 15.0 1.5 0.0 0.0
     RenderProps 1 true true true 3
     PhysicsProps false false
@@ -148,19 +70,16 @@ Object Artifact2
     Texture textures/default.png
     Params 0.8
     Position 0.0 15.0 0.0
-    # Orbiting opposite direction, tilted axis (approx 45 deg)
     Orbit true 20.0 -1.0 0.7 0.0
     RenderProps 1 true true true 3
     PhysicsProps false false
 EndObject
 
-# --- LAVA POOLS (Glowing Spheres in the ground) ---
 Object LavaPool1
     Type Sphere
     Texture textures/sun.png
     Params 8.0
     Position 40.0 -70.0 40.0
-    # Light source
     Light true 1.0 0.4 0.0 3.0 1
     RenderProps 0 false false true 3
     PhysicsProps false false
@@ -171,7 +90,6 @@ Object LavaPool2
     Texture textures/sun.png
     Params 12.0
     Position -50.0 -72.0 -30.0
-    # Light source
     Light true 1.0 0.2 0.0 4.0 1
     RenderProps 0 false false true 3
     PhysicsProps false false

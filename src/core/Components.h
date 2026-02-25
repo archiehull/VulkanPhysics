@@ -28,8 +28,8 @@ struct TransformComponent {
     // Call this whenever pos/rot/scale are changed
     void UpdateMatrix() {
         glm::mat4 m = glm::translate(glm::mat4(1.0f), position);
-        m = glm::rotate(m, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
         m = glm::rotate(m, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        m = glm::rotate(m, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
         m = glm::rotate(m, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
         m = glm::scale(m, scale);
         matrix = m;

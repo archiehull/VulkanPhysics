@@ -1,145 +1,139 @@
 [Settings]
-# Window configuration
 WindowSize 1280 720
-
-# Time and Season parameters
 TimeParams 60.0 3
 SeasonTemps 25.0 10.0 15.0
 SunHeatBonus 50.0
-
-# Weather parameters
 WeatherIntervals 120.0 240.0
 WeatherDuration 10.0 20.0
 FireSuppression 15.0
-
-[Input]
-# ==========================================
-# CONTROLS
-# ==========================================
-MoveForward=W
-MoveBackward=S
-MoveLeft=A
-MoveRight=D
-LookUp=UP
-LookDown=DOWN
-LookLeft=LEFT
-LookRight=RIGHT
-MoveUp=E,PAGE_UP
-MoveDown=Q,PAGE_DOWN
-Sprint=LEFT_SHIFT,RIGHT_SHIFT
-CameraOutside=F1
-CameraOrbit=F2
-CameraRandom=F3
-IgniteTarget=F4
-ResetEnvironment=R
-TimeSpeedUp=T
-ToggleShading=Y
-ToggleShadows=U
-NextSeason=I
-ToggleWeather=O
-SpawnDustCloud=P
-PauseToggle=SPACE
-Exit=ESCAPE
+ProceduralObjectCount 5
 
 [Scene]
-
 # ==========================================
-# PROCEDURAL TEXTURES
+# 1. PROCEDURAL TEXTURES & CUSTOM PARTICLES
 # ==========================================
-ProceduralTexture FloorTex
-Type Checker
-Color1 0.1 0.1 0.15 1.0
-Color2 0.8 0.8 0.85 1.0
-CellSize 64
+ProceduralTexture GridFloor
+    Type Checker
+    Color1 0.1 0.1 0.1 1.0
+    Color2 0.3 0.3 0.3 1.0
+    CellSize 128
 EndTexture
 
-ProceduralTexture OrbTex
-Type Solid
-Color1 0.0 1.0 0.5 1.0
+ProceduralTexture SunGradient
+    Type Gradient
+    Color1 1.0 0.8 0.0 1.0
+    Color2 1.0 0.2 0.0 1.0
+    Vertical true
 EndTexture
 
-# ==========================================
-# CUSTOM PARTICLES
-# ==========================================
-# Format: Name TexturePath Rate LifeTime isAdditive
-CustomParticle HealingAura textures/sparkle.png 150.0 2.0 1
-PosVar 1.0 1.0 1.0
-Velocity 0.0 2.0 0.0
-VelVar 1.0 0.5 1.0
-ColorBegin 0.0 1.0 0.5 1.0
-ColorEnd 0.0 0.2 0.1 0.0
-Size 1.5 0.1 0.5
+CustomParticle VoidAura textures/kenney_particle-pack/transparent/smoke_04.png 80.0 4.0 0
+    PosVar 2.0 0.5 2.0
+    Velocity 0.0 0.5 0.0
+    VelVar 0.2 0.2 0.2
+    ColorBegin 0.2 0.0 0.5 0.8
+    ColorEnd 0.0 0.0 0.0 0.0
+    Size 1.0 4.0 0.5
 EndParticle
 
 # ==========================================
-# CAMERAS
+# 2. CAMERAS (Demonstrating all Types)
 # ==========================================
-# Format: Name Type Bind PosX PosY PosZ [OrbitRadius TargetX TargetY TargetZ]
-Camera FreeCam FreeRoam F1 0.0 10.0 25.0
-Camera OrbitCam Orbit F2 0.0 15.0 25.0 30.0 0.0 5.0 0.0
-Camera ShowcaseCam RandomTarget F3 0.0 10.0 20.0 15.0 stone
+# Name Type ActionBind PosX PosY PosZ [OrbitRadius TargetX TargetY TargetZ / TargetMatch]
+Camera Cinematic   Orbit        Camera1  0.0 50.0 150.0  150.0 0.0 10.0 0.0
+Camera FreeLook     FreeRoam     Camera2  0.0 20.0 40.0
+Camera TargetCactus RandomTarget Camera3  0.0 15.0 30.0   20.0 cactus
 
 # ==========================================
-# OBJECTS & LIGHTS
+# 3. ZONE: LIGHTING LABORATORY
 # ==========================================
-
-# 1. The Sun (Directional Light - Type 0)
-Object SunOrbit
-Type Sphere
-Texture textures/sun.png
-Position 0.0 0.0 0.0
-Scale 5.0 5.0 5.0
-RenderProps 1 0 0 0 3
-PhysicsProps 0 0
-Orbit 1 400.0 0.05 1.0 0.0
-Light 1 1.0 0.9 0.8 1.0 0
+# SUN LIGHT (Type 0) - Global lighting
+Object SunSphere
+    Type Sphere
+    Texture SunGradient
+    Position 0.0 100.0 0.0
+    Scale 10.0 10.0 10.0
+    Light true 1.0 0.9 0.8 1.5 0
+    RenderProps 1 false false true 2
 EndObject
 
-# 2. The Checkerboard Floor
-Object ShowcaseFloor
-Type Cube
-Texture FloorTex
-Position 0.0 -2.0 0.0
-Scale 100.0 1.0 100.0
-PhysicsProps 0 1
+# POINT LIGHT (Type 2) - Standard omni-directional
+Object BlueLantern
+    Type Sphere
+    Position -30.0 10.0 0.0
+    Light true 0.0 0.5 1.0 10.0 2
+    PhysicsProps false true
 EndObject
 
-# 3. The Center Pedestal
-Object CenterPedestal
-Type Pedestal
-Texture textures/stone.jpg
-Position 0.0 0.0 0.0
-Scale 3.0 3.0 3.0
-PhysicsProps 0 1
+# SPOTLIGHT (Type 3) - Focused cone
+Object StageSpot
+    Type Cube
+    Position 30.0 20.0 0.0
+    Rotation -45.0 0.0 0.0
+    Scale 2.0 2.0 2.0
+    Light true 1.0 1.0 1.0 20.0 3
 EndObject
 
-# 4. The Glowing Magic Orb (With point light and attached custom particles)
-Object MagicOrb
-Type Sphere
-Texture OrbTex
-Position 0.0 6.0 0.0
-Scale 2.0 2.0 2.0
-RenderProps 1 0 0 1 3
-PhysicsProps 0 1
-# Attach Light: isLight(1/0) R G B Intensity Type(2=Point)
-Light 1 0.0 1.0 0.5 300.0 2
-# Attach Custom Particle we defined above (inf = infinite duration)
-AttachParticle HealingAura inf
+# FIRE LIGHT (Type 1) - Flickering effect
+Object CampfireBase
+    Type Bowl
+    Texture textures/stone.jpg
+    Position 0.0 0.5 30.0
+    Params 5.0
+    Light true 1.0 0.5 0.2 5.0 1
+    AttachParticle Fire inf
+    AttachParticle Smoke inf
 EndObject
 
-# 5. Some flammable crates to test shadows and fire
-Object Crate1
-Type Cube
-Texture textures/wood.jpg
-Position 15.0 2.0 -5.0
-Scale 3.0 3.0 3.0
-PhysicsProps 1 1
+# ==========================================
+# 4. ZONE: GEOMETRY & PHYSICS
+# ==========================================
+# TERRAIN & COLLISION
+Object MainFloor
+    Type Terrain
+    Texture GridFloor
+    Position 0.0 0.0 0.0
+    Params 200.0 2.0 0.01
+    PhysicsProps false true
 EndObject
 
-Object Crate2
-Type Cube
-Texture textures/wood.jpg
-Position -12.0 2.0 8.0
-Scale 3.0 3.0 3.0
-PhysicsProps 1 1
+# THERMODYNAMICS (Flammable vs Non-Flammable)
+Object FlammableCrate
+    Type Cube
+    Texture textures/wood.jpg
+    Position -15.0 5.0 -40.0
+    Scale 5.0 5.0 5.0
+    PhysicsProps true true   # isFlammable = true
 EndObject
+
+Object StonePillar
+    Type Pedestal
+    Texture textures/stone.jpg
+    Position 15.0 0.0 -40.0
+    Params 2.0 4.0 15.0
+    PhysicsProps false true  # isFlammable = false
+EndObject
+
+# ==========================================
+# 5. ZONE: ORBITAL MECHANICS & LAYERS
+# ==========================================
+# ORBITING OBJECTS
+Object Satellite
+    Type Sphere
+    Position 0.0 40.0 0.0
+    Scale 2.0 2.0 2.0
+    Orbit true 30.0 1.5 0.0 0.0 # Radius, Speed, Dir, InitialAngle
+EndObject
+
+# LAYER MASKS (Visibility Testing)
+Object HiddenGhost
+    Type Sphere
+    Position 0.0 10.0 -60.0
+    # Shading, CastShadow, RecvShadow, Visible, LayerMask (1 = INSIDE ONLY)
+    RenderProps 1 true true true 1 
+    AttachParticle VoidAura inf
+EndObject
+
+# ==========================================
+# 6. PROCEDURAL VEGETATION CONFIG
+# ==========================================
+ProceduralPlant models/cactus.obj textures/cactus.jpg 10.0 0.01 0.01 0.01 0.03 0.03 0.03 0.0 0.0 -90.0 true

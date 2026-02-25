@@ -1,8 +1,4 @@
 [Settings]
-# ==========================================
-# SCENE SETTINGS: Collisions
-# ==========================================
-
 WindowSize 800 600
 TimeParams 60.0 3
 SeasonTemps 20.0 5.0 10.0
@@ -10,76 +6,33 @@ WeatherIntervals 300.0 600.0
 WeatherDuration 0.0 0.0
 FireSuppression 15.0
 SunHeatBonus 0.0
-
-# Custom Cameras
-# Positioned high and back to see everything
-CustomCamera Default FREE_ROAM 0.0 5.0 8.0 0.0 0.0 0.0
-CustomCamera Main Static 0.0 20.0 40.0 0.0 0.0 0.0
-CustomCamera CloseUp Orbit 0.0 5.0 10.0 0.0 0.0 0.0
-
-[Input]
-# ==========================================
-# CONTROLS
-# ==========================================
-MoveForward=W
-MoveBackward=S
-MoveLeft=A
-MoveRight=D
-LookUp=UP
-LookDown=DOWN
-LookLeft=LEFT
-LookRight=RIGHT
-MoveUp=E,PAGE_UP
-MoveDown=Q,PAGE_DOWN
-Sprint=LEFT_SHIFT,RIGHT_SHIFT
-CameraOutside=F1
-CameraFreeRoam=F2
-CameraCacti=F3
-CameraCustom1=F5
-CameraCustom2=F6
-CameraCustom3=F7
-CameraCustom4=F8
-IgniteTarget=F4
-ResetEnvironment=R
-TimeSpeedUp=T
-ToggleShading=Y
-ToggleShadows=U
-NextSeason=I
-ToggleWeather=O
-SpawnDustCloud=P
-PauseToggle=SPACE
-Exit=ESCAPE
+ProceduralObjectCount 0
 
 [Scene]
-# ==========================================
-# SCENE OBJECTS
-# ==========================================
-
-# --- PROCEDURAL TEXTURES ---
+Camera Default FreeRoam Camera2 0.0 5.0 8.0
+Camera Main Static Camera1 0.0 20.0 40.0
+Camera CloseUp Orbit Camera3 0.0 5.0 10.0 10.0 0.0 0.0 0.0
 
 ProceduralTexture tex_checker_floor
     Type Checker
-    Color1 1.0 0.0 0.0 1.0   # Red
-    Color2 0.0 0.0 1.0 1.0   # Blue
+    Color1 1.0 0.0 0.0 1.0
+    Color2 0.0 0.0 1.0 1.0
     Size 512
     CellSize 64
 EndTexture
 
 ProceduralTexture tex_gradient_sphere
     Type Gradient
-    Color1 0.5 0.0 0.5 1.0   # Purple
-    Color2 0.0 1.0 0.0 1.0   # Green
+    Color1 0.5 0.0 0.5 1.0
+    Color2 0.0 1.0 0.0 1.0
     Size 512
     Vertical true
 EndTexture
 
-# --- OBJECTS ---
-
-# 1. The Plane (Floor) - Uses Red/Blue Checker
 Object FloorPlane
     Type Model
     Model models/plane.sjg
-    Texture tex_checker_floor  <-- Referenced here
+    Texture tex_checker_floor
     Position 0.0 0.0 0.0
     Rotation -90.0 0.0 0.0 
     Scale 3.0 3.0 3.0
@@ -87,30 +40,25 @@ Object FloorPlane
     PhysicsProps false true
 EndObject
 
-# 2. The SJG Sphere (Center) - Uses Purple/Green Gradient
 Object SphereSJG
     Type Model
     Model models/sphere.sjg
-    Texture tex_gradient_sphere <-- Referenced here
+    Texture tex_gradient_sphere
     Position 0.0 5.0 0.0
     Scale 2.0 2.0 2.0
     RenderProps 1 true true true 3
     PhysicsProps false true
 EndObject
 
-# 3. Extra Test Sphere - Uses Purple/Green Gradient
 Object SphereBuiltin
     Type Sphere
-    Texture tex_gradient_sphere <-- Referenced here
+    Texture tex_gradient_sphere
     Params 2.0
     Position 10.0 5.0 0.0
     RenderProps 1 true true true 3
     PhysicsProps false true
 EndObject
 
-# --- LIGHTS ---
-
-# Center Light (Type 2 = Point Light with standard falloff)
 Object MainLight
     Type Sphere
     Params 0.5
@@ -120,7 +68,6 @@ Object MainLight
     PhysicsProps false false
 EndObject
 
-# Corner Light 1 (Red-ish)
 Object LightRed
     Type Sphere
     Params 0.5
@@ -130,7 +77,6 @@ Object LightRed
     PhysicsProps false false
 EndObject
 
-# Corner Light 2 (Blue-ish)
 Object LightBlue
     Type Sphere
     Params 0.5
