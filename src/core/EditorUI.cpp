@@ -384,7 +384,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::EndMenu(); // Close Particle Debug
             }
 
-            // --- Inside EditorUI::Draw() ---
             if (ImGui::BeginMenu("Cameras")) {
                 Registry& registry = scene.GetRegistry();
                 // Get all entities to find cameras
@@ -392,16 +391,34 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     if (!registry.HasComponent<CameraComponent>(e)) continue;
 
                     auto& cam = registry.GetComponent<CameraComponent>(e);
-                    std::string camName = registry.HasComponent<NameComponent>(e) ?
+
+                    // 1. Get a safe base name (Fixes crashes if NameComponent is missing)
+                    std::string baseCamName = registry.HasComponent<NameComponent>(e) ?
                         registry.GetComponent<NameComponent>(e).name : "Unnamed Camera";
 
-                    // Indicate which camera is currently active
+                    // 2. Build the display label separately from the ID
+                    std::string menuLabel = baseCamName;
+
+                    // Indicate which camera is currently active and if it's orbiting an object
                     if (cam.isActive) {
-                        camName += " [ACTIVE]";
-                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Green for active
+                        if (activeOrbitTarget != MAX_ENTITIES) {
+                            std::string targetName = "Entity " + std::to_string(activeOrbitTarget);
+                            if (registry.HasComponent<NameComponent>(activeOrbitTarget)) {
+                                targetName = registry.GetComponent<NameComponent>(activeOrbitTarget).name;
+                            }
+                            menuLabel += " [VIEWING: " + targetName + "]";
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 1.0f, 1.0f)); // Cyan/Blue
+                        }
+                        else {
+                            menuLabel += " [ACTIVE]";
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Green
+                        }
                     }
 
-                    if (ImGui::BeginMenu(camName.c_str())) {
+                    // 3. Append ### to ensure the ImGui ID NEVER changes, even when the text does!
+                    menuLabel += "###CamMenu_" + std::to_string(e);
+
+                    if (ImGui::BeginMenu(menuLabel.c_str())) {
                         if (cam.isActive) ImGui::PopStyleColor();
 
                         // --- 1. Spatial Data (Transform) ---
@@ -445,8 +462,17 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         ImGui::DragFloat("Rotate Speed", &cam.rotateSpeed, 0.5f, 0.1f, 500.0f);
 
                         ImGui::Separator();
-                        if (ImGui::MenuItem("Switch to this Camera")) {
-                            requestedCamera = registry.GetComponent<NameComponent>(e).name;
+
+                        // Use the safe base name instead of querying the component again
+                        if (cam.isActive && activeOrbitTarget != MAX_ENTITIES) {
+                            if (ImGui::MenuItem("Stop Viewing / Free Camera")) {
+                                requestedCamera = baseCamName;
+                            }
+                        }
+                        else {
+                            if (ImGui::MenuItem("Switch to this Camera")) {
+                                requestedCamera = baseCamName;
+                            }
                         }
 
                         ImGui::EndMenu();
@@ -491,7 +517,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::Separator();
 
                 // 4. TimeScale Slider - Using Logarithmic scale for massive range (e.g., up to 100x) but fine control below 1x
-                ImGui::Text("Simulation Speed");
+                ImGui::Text("Simulation Speed (CTRL + CLICK to Type)");
                 ImGui::SliderFloat("##speed", &m_TimeScale, 0.0f, 100.0f, "%.3fx", ImGuiSliderFlags_Logarithmic);
 
                 ImGui::EndMenu();
