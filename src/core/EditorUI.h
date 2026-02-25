@@ -27,6 +27,24 @@ public:
         return req;
     }
 
+    enum class ProcTexType { SOLID, CHECKERBOARD, GRADIENT_VERT, GRADIENT_HORIZ };
+
+    struct ProceduralTextureRequest {
+        std::string name;
+        ProcTexType type;
+        glm::vec4 color1;
+        glm::vec4 color2;
+        int cellSize;
+    };
+
+    std::vector<ProceduralTextureRequest> ConsumeTextureRequests() {
+        auto reqs = m_TextureRequests;
+        m_TextureRequests.clear();
+        return reqs;
+    }
+
+    void RefreshTextureList();
+
     float GetStepSize() const { return m_StepSize; }
     bool IsPaused() const { return m_IsPaused; }
     void SetPaused(bool paused) { m_IsPaused = paused; }
@@ -46,6 +64,8 @@ private:
     std::vector<std::string> availableCameras;
     std::string requestedCamera = "";
 
+    std::vector<std::string> m_AvailableTextures;
+    std::vector<ProceduralTextureRequest> m_TextureRequests;
     std::vector<SceneOption> m_SceneOptions;
 
     std::vector<std::pair<std::string, std::string>> m_DisplayBindings;

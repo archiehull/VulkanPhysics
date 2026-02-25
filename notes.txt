@@ -46,6 +46,9 @@ lightinf config snd placer (colourpicker)
 overall lighting control / light groups
 post processing to change overall lighting hue etc (shaders)
 toggle light view
+change object shininess/shader lighting logic
+swap skybox and enable skybox on inside object
+
 8,16,32,64bit shader
 
 set object orbit (around coord or other object)

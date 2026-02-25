@@ -23,7 +23,32 @@ void EditorUI::Initialize(const std::string& configPath, const std::string& defa
             break;
         }
     }
+
+    RefreshTextureList();
 }
+
+void EditorUI::RefreshTextureList() {
+    m_AvailableTextures.clear();
+    namespace fs = std::filesystem;
+    std::string path = "textures";
+
+    if (fs::exists(path) && fs::is_directory(path)) {
+        for (const auto& entry : fs::recursive_directory_iterator(path)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                // Convert extension to lowercase for safe comparison
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
+                    std::string p = entry.path().string();
+                    std::replace(p.begin(), p.end(), '\\', '/'); // Standardize slashes
+                    m_AvailableTextures.push_back(p);
+                }
+            }
+        }
+    }
+}
+
 void EditorUI::SetInputBindings(const std::unordered_map<std::string, std::string>& bindings) {
     m_DisplayBindings.clear();
     for (const auto& pair : bindings) {
@@ -259,18 +284,33 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                                 auto attachFunc = [&](ParticleProps props, float rate) {
                                     ActiveEmitter newEm;
-                                    // ... [keep the existing attachFunc logic] ...
-                                    newEm.emitterId = scene.GetOrCreateSystem(props)->AddEmitter(props, rate);
+                                    newEm.props = props;
+                                    newEm.duration = emitDuration;
+                                    newEm.emissionRate = rate;
+                                    newEm.timer = 0.0f;
+
+                                    glm::vec3 pos = glm::vec3(0.0f);
+                                    if (registry.HasComponent<TransformComponent>(e)) {
+                                        pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
+                                    }
+
+                                    // 1. Assign the 3D position to our local copy
+                                    newEm.props.position = pos;
+
+                                    // 2. Pass the local copy (newEm.props) to the engine
+                                    newEm.emitterId = scene.GetOrCreateSystem(newEm.props)->AddEmitter(newEm.props, rate);
+
+                                    // 3. Save it to the component
                                     attached.emitters.push_back(newEm);
                                     };
 
+                                // Dynamically load all presets from the library
                                 auto presets = ParticleLibrary::GetAllPresets();
                                 for (const auto& [name, props] : presets) {
                                     if (ImGui::MenuItem(name.c_str())) {
                                         attachFunc(props, 100.0f);
                                     }
                                 }
-
                                 ImGui::EndMenu();
                             }
 
@@ -306,8 +346,70 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             if (registry.HasComponent<RenderComponent>(e)) {
                                 auto& render = registry.GetComponent<RenderComponent>(e);
                                 ImGui::Separator();
+                                ImGui::TextDisabled("Material");
+
+                                // --- Dynamic Texture Dropdown ---
                                 ImGui::Text("Texture:");
-                                ImGui::TextWrapped("%s", render.texturePath.c_str());
+                                // Using a unique ID '##ObjTex' to prevent conflicts with the Properties Window
+                                if (ImGui::BeginCombo("##ObjTexCombo", render.texturePath.c_str())) {
+                                    for (const auto& texPath : m_AvailableTextures) {
+                                        bool isSelected = (render.texturePath == texPath);
+                                        if (ImGui::Selectable(texPath.c_str(), isSelected)) {
+                                            render.texturePath = texPath;
+                                        }
+                                        if (isSelected) {
+                                            ImGui::SetItemDefaultFocus();
+                                        }
+                                    }
+                                    ImGui::EndCombo();
+                                }
+
+                                ImGui::SameLine();
+                                if (ImGui::Button("Refresh##ObjTex")) {
+                                    RefreshTextureList();
+                                }
+
+                                char texBuf[256];
+                                strncpy_s(texBuf, render.texturePath.c_str(), sizeof(texBuf));
+                                texBuf[sizeof(texBuf) - 1] = '\0';
+                                if (ImGui::InputText("Manual Path / ID##Obj", texBuf, sizeof(texBuf))) {
+                                    render.texturePath = std::string(texBuf);
+                                }
+
+                                // Procedural Texture Generator (Using BeginMenu instead of TreeNode)
+                                if (ImGui::BeginMenu("Generate Procedural Texture##Obj")) {
+                                    static char procName[64] = "custom_tex_1";
+                                    static int procType = 1; // Default to Checkerboard
+                                    static glm::vec4 color1(1.0f, 1.0f, 1.0f, 1.0f);
+                                    static glm::vec4 color2(0.2f, 0.2f, 0.2f, 1.0f);
+                                    static int cellSize = 32;
+
+                                    ImGui::InputText("Name ID", procName, sizeof(procName));
+
+                                    const char* procTypes[] = { "Solid Color", "Checkerboard", "Gradient (Vert)", "Gradient (Horiz)" };
+                                    ImGui::Combo("Type", &procType, procTypes, IM_ARRAYSIZE(procTypes));
+
+                                    ImGui::ColorEdit4("Color 1", &color1.x);
+                                    if (procType > 0) { // Checkerboard and Gradients use a second color
+                                        ImGui::ColorEdit4("Color 2", &color2.x);
+                                    }
+                                    if (procType == 1) { // Checkerboard uses cell size
+                                        ImGui::InputInt("Cell Size", &cellSize);
+                                    }
+
+                                    if (ImGui::Button("Generate & Apply", ImVec2(-1, 0))) {
+                                        ProceduralTextureRequest req;
+                                        req.name = std::string(procName);
+                                        req.type = static_cast<ProcTexType>(procType);
+                                        req.color1 = color1;
+                                        req.color2 = color2;
+                                        req.cellSize = cellSize;
+                                        m_TextureRequests.push_back(req);
+
+                                        render.texturePath = req.name;
+                                    }
+                                    ImGui::EndMenu();
+                                }
                             }
 
                             // Display Attached Thermo Emitter Details
@@ -898,6 +1000,12 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     if (ImGui::CollapsingHeader(entityName.c_str())) {
                         ImGui::Indent();
 
+                        ImGui::Spacing();
+                        if (ImGui::Button("View Object", ImVec2(-1, 0))) {
+                            m_ViewRequested = e;
+                        }
+                        ImGui::Spacing();
+
                         ImGui::TextDisabled("Attached Components");
                         ImGui::Separator();
 
@@ -953,8 +1061,73 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                 const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
                                 ImGui::Combo("Shading Mode", &comp.shadingMode, modes, IM_ARRAYSIZE(modes));
 
-                                ImGui::Text("Texture: %s", comp.texturePath.c_str());
-                                ImGui::Text("Layer Mask: %d", comp.layerMask);
+                                // Direct Layer Mask Editor
+                                ImGui::InputInt("Layer Mask", &comp.layerMask);
+
+                                // --- Dynamic Texture Dropdown ---
+                                ImGui::Text("Texture:");
+                                if (ImGui::BeginCombo("##TextureCombo", comp.texturePath.c_str())) {
+                                    for (const auto& texPath : m_AvailableTextures) {
+                                        bool isSelected = (comp.texturePath == texPath);
+                                        if (ImGui::Selectable(texPath.c_str(), isSelected)) {
+                                            comp.texturePath = texPath;
+                                        }
+                                        if (isSelected) {
+                                            ImGui::SetItemDefaultFocus();
+                                        }
+                                    }
+                                    ImGui::EndCombo();
+                                }
+
+                                ImGui::SameLine();
+                                if (ImGui::Button("Refresh##Tex")) {
+                                    RefreshTextureList();
+                                }
+
+                                // We keep the Manual input so you can still type Procedural Texture Names (like "custom_tex_1")
+                                char texBuf[256];
+                                strncpy_s(texBuf, comp.texturePath.c_str(), sizeof(texBuf));
+                                texBuf[sizeof(texBuf) - 1] = '\0';
+                                if (ImGui::InputText("Manual Path / ID", texBuf, sizeof(texBuf))) {
+                                    comp.texturePath = std::string(texBuf);
+                                }
+
+                                // Procedural Texture Generator
+                                if (ImGui::TreeNode("Generate Procedural Texture")) {
+                                    static char procName[64] = "custom_tex_1";
+                                    static int procType = 1; // Default to Checkerboard
+                                    static glm::vec4 color1(1.0f, 1.0f, 1.0f, 1.0f);
+                                    static glm::vec4 color2(0.2f, 0.2f, 0.2f, 1.0f);
+                                    static int cellSize = 32;
+
+                                    ImGui::InputText("Name ID", procName, sizeof(procName));
+
+                                    const char* procTypes[] = { "Solid Color", "Checkerboard", "Gradient (Vert)", "Gradient (Horiz)" };
+                                    ImGui::Combo("Type", &procType, procTypes, IM_ARRAYSIZE(procTypes));
+
+                                    ImGui::ColorEdit4("Color 1", &color1.x);
+                                    if (procType > 0) { // Checkerboard and Gradients use a second color
+                                        ImGui::ColorEdit4("Color 2", &color2.x);
+                                    }
+                                    if (procType == 1) { // Checkerboard uses cell size
+                                        ImGui::InputInt("Cell Size", &cellSize);
+                                    }
+
+                                    if (ImGui::Button("Generate & Apply", ImVec2(-1, 0))) {
+                                        // 1. Queue the request for the main loop
+                                        ProceduralTextureRequest req;
+                                        req.name = std::string(procName);
+                                        req.type = static_cast<ProcTexType>(procType);
+                                        req.color1 = color1;
+                                        req.color2 = color2;
+                                        req.cellSize = cellSize;
+                                        m_TextureRequests.push_back(req);
+
+                                        // 2. Instantly update the entity to use the new texture name
+                                        comp.texturePath = req.name;
+                                    }
+                                    ImGui::TreePop();
+                                }
                                 ImGui::TreePop();
                             }
                         }
@@ -1012,79 +1185,108 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                                 ImGui::DragFloat("Current Temp", &comp.currentTemp, 1.0f);
                                 ImGui::DragFloat("Ignition Threshold", &comp.ignitionThreshold, 1.0f);
                                 ImGui::DragFloat("Burn Timer", &comp.burnTimer, 0.1f);
-                                ImGui::Text("State: %d", (int)comp.state);
+
+                                // Show human-readable state
+                                const char* states[] = { "NORMAL", "HEATING", "BURNING", "BURNT_OUT" };
+                                int stateIdx = (int)comp.state;
+                                if (stateIdx >= 0 && stateIdx <= 3) {
+                                    ImGui::Text("State: %s", states[stateIdx]);
+                                }
+                                else {
+                                    ImGui::Text("State: %d", stateIdx);
+                                }
+
+                                // --- Show Hidden Fire Data & Controls ---
+                                ImGui::Spacing();
+                                if (comp.state == ObjectState::BURNING) {
+                                    ImGui::TextDisabled("Active Fire Data");
+                                    ImGui::Separator();
+                                    ImGui::Text("Fire Emitter ID: %d", comp.fireEmitterId);
+                                    ImGui::Text("Smoke Emitter ID: %d", comp.smokeEmitterId);
+                                    ImGui::Text("Light Entity ID: %d", comp.fireLightEntity);
+
+                                    ImGui::Spacing();
+                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 1.0f, 1.0f));
+                                    if (ImGui::Button("Extinguish Fire", ImVec2(-1, 0))) {
+                                        scene.StopObjectFire(e);
+                                    }
+                                    ImGui::PopStyleColor();
+                                }
+                                else if (comp.isFlammable) {
+                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+                                    if (ImGui::Button("Ignite Object", ImVec2(-1, 0))) {
+                                        scene.Ignite(e);
+                                    }
+                                    ImGui::PopStyleColor();
+                                }
+
                                 ImGui::TreePop();
                             }
                         }
 
+                        // --- Attached Emitter Component ---
                         if (registry.HasComponent<AttachedEmitterComponent>(e)) {
                             bool open = ImGui::TreeNodeEx("AttachedEmitterComponent", ImGuiTreeNodeFlags_DefaultOpen);
                             ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
                             if (ImGui::Button("Remove##Emitter")) registry.RemoveComponent<AttachedEmitterComponent>(e);
 
-                            // --- Attached Emitter Component ---
-                            if (registry.HasComponent<AttachedEmitterComponent>(e)) {
-                                bool open = ImGui::TreeNodeEx("AttachedEmitterComponent", ImGuiTreeNodeFlags_DefaultOpen);
-                                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
-                                if (ImGui::Button("Remove##Emitter")) registry.RemoveComponent<AttachedEmitterComponent>(e);
+                            if (open && registry.HasComponent<AttachedEmitterComponent>(e)) {
+                                auto& comp = registry.GetComponent<AttachedEmitterComponent>(e);
 
-                                if (open && registry.HasComponent<AttachedEmitterComponent>(e)) {
-                                    auto& comp = registry.GetComponent<AttachedEmitterComponent>(e);
+                                ImGui::Text("Active Emitters: %d", (int)comp.emitters.size());
 
-                                    ImGui::Text("Active Emitters: %d", (int)comp.emitters.size());
-
-                                    for (size_t i = 0; i < comp.emitters.size(); ++i) {
-                                        auto& em = comp.emitters[i];
-                                        ImGui::PushID((int)i);
-                                        if (ImGui::TreeNodeEx(("Emitter ID: " + std::to_string(em.emitterId)).c_str())) {
-                                            ImGui::DragFloat("Emission Rate", &em.emissionRate, 1.0f, 0.0f, 1000.0f);
-                                            ImGui::DragFloat("Duration (-1 = Inf)", &em.duration, 0.1f);
-                                            ImGui::Text("Timer: %.2f", em.timer);
-                                            ImGui::TreePop();
-                                        }
-                                        ImGui::PopID();
+                                for (size_t i = 0; i < comp.emitters.size(); ++i) {
+                                    auto& em = comp.emitters[i];
+                                    ImGui::PushID((int)i);
+                                    if (ImGui::TreeNodeEx(("Emitter ID: " + std::to_string(em.emitterId)).c_str())) {
+                                        ImGui::DragFloat("Emission Rate", &em.emissionRate, 1.0f, 0.0f, 1000.0f);
+                                        ImGui::DragFloat("Duration (-1 = Inf)", &em.duration, 0.1f);
+                                        ImGui::Text("Timer: %.2f", em.timer);
+                                        ImGui::TreePop();
                                     }
-
-                                    // --- FULLY FUNCTIONAL ATTACH MENU ---
-                                    // --- FULLY FUNCTIONAL ATTACH MENU ---
-                                    if (ImGui::BeginMenu("Attach New Emitter...")) {
-                                        static float emitDuration = -1.0f;
-                                        ImGui::InputFloat("Duration (s)", &emitDuration);
-                                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Set to -1 for Infinite");
-                                        ImGui::Separator();
-
-                                        // Local lambda to handle registration with the Scene/ParticleSystem
-                                        auto attachFunc = [&](ParticleProps props, float rate) {
-                                            ActiveEmitter newEm;
-                                            newEm.props = props;
-                                            newEm.duration = emitDuration;
-                                            newEm.emissionRate = rate;
-                                            newEm.timer = 0.0f;
-
-                                            glm::vec3 pos = glm::vec3(0.0f);
-                                            if (registry.HasComponent<TransformComponent>(e)) {
-                                                pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
-                                            }
-                                            newEm.props.position = pos;
-
-                                            newEm.emitterId = scene.GetOrCreateSystem(props)->AddEmitter(props, rate);
-                                            comp.emitters.push_back(newEm);
-                                            };
-
-                                        // DYNAMICALLY GENERATE MENU ITEMS
-                                        auto presets = ParticleLibrary::GetAllPresets();
-                                        for (const auto& [name, props] : presets) {
-                                            if (ImGui::MenuItem(name.c_str())) {
-                                                // Attach with a default rate of 100 particles/sec
-                                                // (You can adjust this rate via the properties menu later)
-                                                attachFunc(props, 100.0f);
-                                            }
-                                        }
-
-                                        ImGui::EndMenu();
-                                    }
+                                    ImGui::PopID();
                                 }
-                            }                              
+
+                                if (ImGui::BeginMenu("Attach New Emitter...")) {
+                                    static float emitDuration = -1.0f;
+                                    ImGui::InputFloat("Duration (s)", &emitDuration);
+                                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Set to -1 for Infinite");
+                                    ImGui::Separator();
+
+                                    auto attachFunc = [&](ParticleProps props, float rate) {
+                                        ActiveEmitter newEm;
+                                        newEm.props = props;
+                                        newEm.duration = emitDuration;
+                                        newEm.emissionRate = rate;
+                                        newEm.timer = 0.0f;
+
+                                        glm::vec3 pos = glm::vec3(0.0f);
+                                        if (registry.HasComponent<TransformComponent>(e)) {
+                                            pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
+                                        }
+
+                                        // We update the position on our copy
+                                        newEm.props.position = pos;
+
+                                        // Use the copy to register the emitter!
+                                        newEm.emitterId = scene.GetOrCreateSystem(newEm.props)->AddEmitter(newEm.props, rate);
+
+                                        // Note: use `attached.emitters.push_back(newEm);` if in the Objects menu
+                                        // or `comp.emitters.push_back(newEm);` if in the Entity Properties menu
+                                        comp.emitters.push_back(newEm);
+                                     };
+
+                                    auto presets = ParticleLibrary::GetAllPresets();
+                                    for (const auto& [name, props] : presets) {
+                                        if (ImGui::MenuItem(name.c_str())) {
+                                            attachFunc(props, 100.0f);
+                                        }
+                                    }
+
+                                    ImGui::EndMenu();
+                                }
+                                ImGui::TreePop();
+                            }
                         }
 
                         // --- 7. Camera Component ---

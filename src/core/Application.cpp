@@ -405,6 +405,24 @@ void Application::MainLoop() {
             cameraController->SetOrbitTarget(viewReq, *scene);
         }
 
+        auto texRequests = editorUI->ConsumeTextureRequests();
+        for (const auto& req : texRequests) {
+            renderer->RegisterProceduralTexture(req.name, [req](Texture& tex) {
+                if (req.type == EditorUI::ProcTexType::SOLID) {
+                    tex.GenerateSolidColor(req.color1);
+                }
+                else if (req.type == EditorUI::ProcTexType::CHECKERBOARD) {
+                    tex.GenerateCheckerboard(512, 512, req.color1, req.color2, req.cellSize);
+                }
+                else if (req.type == EditorUI::ProcTexType::GRADIENT_VERT) {
+                    tex.GenerateGradient(512, 512, req.color1, req.color2, true);
+                }
+                else if (req.type == EditorUI::ProcTexType::GRADIENT_HORIZ) {
+                    tex.GenerateGradient(512, 512, req.color1, req.color2, false);
+                }
+                });
+        }
+
         // 2. Calculate advancement
         float stepDelta = 0.0f;
         float currentTimeScale = editorUI->GetTimeScale();
