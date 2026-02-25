@@ -265,7 +265,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
             }
 
             // --- TAB: Emitters (Debug) ---
-            if (ImGui::BeginMenu("Particle Emitters")) {
+            if (ImGui::BeginMenu("Particles")) {
                 const auto& pSystems = scene.GetParticleSystems();
 
                 // 1. Collect all emitters across all systems into a single list
@@ -384,16 +384,79 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::EndMenu(); // Close Particle Debug
             }
 
-            if (ImGui::BeginMenu("View")) {
-                ImGui::Text("Available Cameras:");
-                ImGui::Separator();
-                for (const auto& camName : availableCameras) {
-                    if (ImGui::MenuItem(camName.c_str())) {
-                        requestedCamera = camName;
+            // --- Inside EditorUI::Draw() ---
+            if (ImGui::BeginMenu("Cameras")) {
+                Registry& registry = scene.GetRegistry();
+                // Get all entities to find cameras
+                for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                    if (!registry.HasComponent<CameraComponent>(e)) continue;
+
+                    auto& cam = registry.GetComponent<CameraComponent>(e);
+                    std::string camName = registry.HasComponent<NameComponent>(e) ?
+                        registry.GetComponent<NameComponent>(e).name : "Unnamed Camera";
+
+                    // Indicate which camera is currently active
+                    if (cam.isActive) {
+                        camName += " [ACTIVE]";
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Green for active
+                    }
+
+                    if (ImGui::BeginMenu(camName.c_str())) {
+                        if (cam.isActive) ImGui::PopStyleColor();
+
+                        // --- 1. Spatial Data (Transform) ---
+                        if (registry.HasComponent<TransformComponent>(e)) {
+                            auto& transform = registry.GetComponent<TransformComponent>(e);
+                            glm::vec3 pos = glm::vec3(transform.matrix[3]);
+
+                            ImGui::TextDisabled("Spatial Data");
+                            ImGui::Separator();
+                            ImGui::Text("Position:    (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+
+                            // Front vector is usually the 3rd column of the rotation matrix (inverse)
+                            glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2]));
+                            ImGui::Text("Front Vector: (%.2f, %.2f, %.2f)", front.x, front.y, front.z);
+
+                            glm::vec3 up = glm::normalize(glm::vec3(transform.matrix[1]));
+                            ImGui::Text("Up Vector:    (%.2f, %.2f, %.2f)", up.x, up.y, up.z);
+                        }
+
+                        // --- 2. Orientation (Euler Angles) ---
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Orientation");
+                        ImGui::Separator();
+                        ImGui::Text("Yaw:   %.2f", cam.yaw);
+                        ImGui::Text("Pitch: %.2f", cam.pitch);
+
+                        // --- 3. Lens & Projection ---
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Lens Settings");
+                        ImGui::Separator();
+                        ImGui::Text("Field of View: %.1f deg", cam.fov);
+                        ImGui::Text("Near Plane:    %.2f", cam.nearPlane);
+                        ImGui::Text("Far Plane:     %.1f", cam.farPlane);
+                        ImGui::Text("Aspect Ratio:  %.2f", cam.aspectRatio);
+
+                        // --- 4. Controls (Speeds) ---
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Movement Stats");
+                        ImGui::Separator();
+                        ImGui::DragFloat("Move Speed", &cam.moveSpeed, 0.5f, 0.1f, 500.0f);
+                        ImGui::DragFloat("Rotate Speed", &cam.rotateSpeed, 0.5f, 0.1f, 500.0f);
+
+                        ImGui::Separator();
+                        if (ImGui::MenuItem("Switch to this Camera")) {
+                            requestedCamera = registry.GetComponent<NameComponent>(e).name;
+                        }
+
+                        ImGui::EndMenu();
+                    }
+                    else if (cam.isActive) {
+                        ImGui::PopStyleColor();
                     }
                 }
                 ImGui::EndMenu();
-			}
+            }
 
             if (ImGui::BeginMenu("Simulation")) {
                 // 1. Start / Pause Toggle - Using Selectable with DontClosePopups

@@ -133,8 +133,8 @@ void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene, const Input
     // Speed constants
     bool sprinting = input.IsActionHeld(InputAction::Sprint);
     const float shiftMult = sprinting ? 3.0f : 1.0f;
-    const float moveSpeed = 35.0f * shiftMult;
-    const float rotateSpeed = 60.0f * shiftMult;
+    const float moveSpeed = cam.moveSpeed * shiftMult;
+    const float rotateSpeed = cam.rotateSpeed * shiftMult;
 
     // Calculate basis vectors
     glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2])); // Z-Axis
@@ -171,12 +171,11 @@ void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene, const Input
 
 void CameraController::UpdateOrbitInput(float deltaTime, Scene& scene, const InputManager& input) {
     auto& registry = scene.GetRegistry();
-    if (!registry.HasComponent<OrbitComponent>(activeCameraEntity)) return;
-
+    auto& cam = registry.GetComponent<CameraComponent>(activeCameraEntity);
     auto& orbit = registry.GetComponent<OrbitComponent>(activeCameraEntity);
 
-    const float rotateSpeed = 50.0f;
-    const float zoomSpeed = 50.0f;
+    const float rotateSpeed = cam.rotateSpeed;
+    const float zoomSpeed = cam.moveSpeed;
 
     // 1. Yaw (Orbit Left/Right)
     if (input.IsActionHeld(InputAction::MoveLeft) || input.IsActionHeld(InputAction::LookLeft))  orbit.currentAngle -= glm::radians(rotateSpeed * deltaTime);

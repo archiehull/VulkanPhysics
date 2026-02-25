@@ -132,10 +132,12 @@ struct CameraComponent {
     glm::mat4 projectionMatrix = glm::mat4(1.0f);
 
     int viewMask = SceneLayers::ALL;
-
     bool isActive = false;
 
-    // Euler angles for Free Roam (can be moved to a separate Control component later)
+    // Euler angles for Free Roam
     float yaw = -90.0f;
     float pitch = 0.0f;
+
+    float moveSpeed = 35.0f;
+    float rotateSpeed = 60.0f;
 };
