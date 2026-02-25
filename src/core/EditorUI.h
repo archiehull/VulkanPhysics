@@ -49,7 +49,9 @@ private:
     std::vector<SceneOption> m_SceneOptions;
 
     std::vector<std::pair<std::string, std::string>> m_DisplayBindings;
+
     bool m_ShowControlsWindow = false;
+    bool m_ShowEntityPropertiesWindow = false;
 
     float m_UIScale = 1.0f;
 

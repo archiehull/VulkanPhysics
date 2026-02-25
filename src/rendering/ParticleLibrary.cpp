@@ -134,4 +134,15 @@ namespace ParticleLibrary {
         return props;
     }
 
+    std::vector<std::pair<std::string, ParticleProps>> GetAllPresets() {
+        return {
+            {"Fire", GetFireProps()},
+            {"Smoke", GetSmokeProps()},
+            {"Rain", GetRainProps()},
+            {"Snow", GetSnowProps()},
+            {"Dust", GetDustProps()},
+            {"Dust Storm", GetDustStormProps()}
+        };
+    }
+
 } // namespace ParticleLibrary

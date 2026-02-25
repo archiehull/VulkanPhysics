@@ -70,6 +70,8 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::Separator();
                 ImGui::MenuItem("View Controls", nullptr, &m_ShowControlsWindow);
 
+                ImGui::MenuItem("Entity Properties", nullptr, &m_ShowEntityPropertiesWindow);
+
                 ImGui::EndMenu();
             }
 
@@ -257,28 +259,18 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                                 auto attachFunc = [&](ParticleProps props, float rate) {
                                     ActiveEmitter newEm;
-                                    newEm.props = props;
-                                    newEm.duration = emitDuration;
-                                    newEm.emissionRate = rate;
-                                    newEm.timer = 0.0f;
-
-                                    glm::vec3 pos = glm::vec3(0.0f);
-                                    if (registry.HasComponent<TransformComponent>(e)) {
-                                        pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
-                                    }
-                                    newEm.props.position = pos;
-
+                                    // ... [keep the existing attachFunc logic] ...
                                     newEm.emitterId = scene.GetOrCreateSystem(props)->AddEmitter(props, rate);
                                     attached.emitters.push_back(newEm);
                                     };
 
-                                if (ImGui::MenuItem("Smoke Trail")) attachFunc(ParticleLibrary::GetSmokeProps(), 50.0f);
-                                if (ImGui::MenuItem("Fire Effect")) attachFunc(ParticleLibrary::GetFireProps(), 200.0f);
-                                if (ImGui::MenuItem("Magic Sparkles")) {
-                                    ParticleProps dust = ParticleLibrary::GetDustProps();
-                                    dust.velocityVariation = glm::vec3(2.0f);
-                                    attachFunc(dust, 150.0f);
+                                auto presets = ParticleLibrary::GetAllPresets();
+                                for (const auto& [name, props] : presets) {
+                                    if (ImGui::MenuItem(name.c_str())) {
+                                        attachFunc(props, 100.0f);
+                                    }
                                 }
+
                                 ImGui::EndMenu();
                             }
 
@@ -874,6 +866,284 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         }
                         ImGui::EndTable();
                     }
+                }
+            }
+            ImGui::End();
+        }
+
+        if (m_ShowEntityPropertiesWindow) {
+            ImGui::SetNextWindowSize(ImVec2(500, 700), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Entity Properties", &m_ShowEntityPropertiesWindow)) {
+
+                Registry& registry = scene.GetRegistry();
+                Entity count = registry.GetEntityCount();
+
+                // Helper lambda to cleanly draw the menu items to add new components
+                auto addMenuItem = [&](auto type_dummy, const char* name, Entity e) {
+                    using T = typename std::remove_pointer<decltype(type_dummy)>::type;
+                    if (!registry.HasComponent<T>(e)) {
+                        if (ImGui::MenuItem(name)) {
+                            registry.AddComponent<T>(e, T{});
+                        }
+                    }
+                    };
+
+                for (Entity e = 0; e < count; ++e) {
+                    std::string entityName = "Entity " + std::to_string(e);
+                    if (registry.HasComponent<NameComponent>(e)) {
+                        entityName += " (" + registry.GetComponent<NameComponent>(e).name + ")";
+                    }
+
+                    ImGui::PushID(e);
+                    if (ImGui::CollapsingHeader(entityName.c_str())) {
+                        ImGui::Indent();
+
+                        ImGui::TextDisabled("Attached Components");
+                        ImGui::Separator();
+
+                        // --- 1. Name Component ---
+                        if (registry.HasComponent<NameComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("NameComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Name")) registry.RemoveComponent<NameComponent>(e);
+
+                            if (open && registry.HasComponent<NameComponent>(e)) {
+                                auto& comp = registry.GetComponent<NameComponent>(e);
+                                char buf[256];
+                                strncpy_s(buf, comp.name.c_str(), sizeof(buf));
+                                buf[sizeof(buf) - 1] = '\0';
+                                if (ImGui::InputText("Name", buf, sizeof(buf))) {
+                                    comp.name = std::string(buf);
+                                }
+                                ImGui::TreePop();
+                            }
+                        }
+
+                        // --- 2. Transform Component ---
+                        if (registry.HasComponent<TransformComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("TransformComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Transform")) registry.RemoveComponent<TransformComponent>(e);
+
+                            if (open && registry.HasComponent<TransformComponent>(e)) {
+                                auto& comp = registry.GetComponent<TransformComponent>(e);
+                                glm::vec3 pos = glm::vec3(comp.matrix[3]);
+                                if (ImGui::DragFloat3("Position", &pos.x, 0.1f)) {
+                                    comp.matrix[3][0] = pos.x;
+                                    comp.matrix[3][1] = pos.y;
+                                    comp.matrix[3][2] = pos.z;
+                                }
+                                // Note: Full TRS decomposition is required to perfectly edit rotation/scale from a mat4
+                                ImGui::TreePop();
+                            }
+                        }
+
+                        // --- 3. Render Component ---
+                        if (registry.HasComponent<RenderComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("RenderComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Render")) registry.RemoveComponent<RenderComponent>(e);
+
+                            if (open && registry.HasComponent<RenderComponent>(e)) {
+                                auto& comp = registry.GetComponent<RenderComponent>(e);
+                                ImGui::Checkbox("Visible", &comp.visible);
+                                ImGui::Checkbox("Casts Shadow", &comp.castsShadow);
+                                ImGui::Checkbox("Receives Shadows", &comp.receiveShadows);
+
+                                const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
+                                ImGui::Combo("Shading Mode", &comp.shadingMode, modes, IM_ARRAYSIZE(modes));
+
+                                ImGui::Text("Texture: %s", comp.texturePath.c_str());
+                                ImGui::Text("Layer Mask: %d", comp.layerMask);
+                                ImGui::TreePop();
+                            }
+                        }
+
+                        // --- 4. Light Component ---
+                        if (registry.HasComponent<LightComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("LightComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Light")) registry.RemoveComponent<LightComponent>(e);
+
+                            if (open && registry.HasComponent<LightComponent>(e)) {
+                                auto& comp = registry.GetComponent<LightComponent>(e);
+                                ImGui::ColorEdit3("Color", &comp.color.x, ImGuiColorEditFlags_Float);
+                                ImGui::DragFloat("Intensity", &comp.intensity, 0.1f, 0.0f, 1000.0f);
+
+                                const char* lightTypes[] = { "Sun", "Fire", "Point", "Spotlight" };
+                                ImGui::Combo("Type", &comp.type, lightTypes, IM_ARRAYSIZE(lightTypes));
+
+                                if (comp.type == 3) { // Spotlight
+                                    ImGui::DragFloat3("Direction", &comp.direction.x, 0.05f, -1.0f, 1.0f);
+                                    ImGui::SliderFloat("Cutoff Angle", &comp.cutoffAngle, 1.0f, 90.0f);
+                                }
+                                ImGui::TreePop();
+                            }
+                        }
+
+                        // --- 5. Orbit Component ---
+                        if (registry.HasComponent<OrbitComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("OrbitComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Orbit")) registry.RemoveComponent<OrbitComponent>(e);
+
+                            if (open && registry.HasComponent<OrbitComponent>(e)) {
+                                auto& comp = registry.GetComponent<OrbitComponent>(e);
+                                ImGui::Checkbox("Is Orbiting", &comp.isOrbiting);
+                                ImGui::DragFloat3("Center", &comp.center.x, 0.1f);
+                                ImGui::DragFloat("Radius", &comp.radius, 0.1f);
+                                ImGui::DragFloat("Speed", &comp.speed, 0.01f);
+                                ImGui::DragFloat3("Axis", &comp.axis.x, 0.1f);
+                                ImGui::DragFloat("Current Angle", &comp.currentAngle, 0.01f);
+                                ImGui::TreePop();
+                            }
+                        }
+
+                        // --- 6. Thermo Component ---
+                        if (registry.HasComponent<ThermoComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("ThermoComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Thermo")) registry.RemoveComponent<ThermoComponent>(e);
+
+                            if (open && registry.HasComponent<ThermoComponent>(e)) {
+                                auto& comp = registry.GetComponent<ThermoComponent>(e);
+                                ImGui::Checkbox("Is Flammable", &comp.isFlammable);
+                                ImGui::Checkbox("Can Burnout", &comp.canBurnout);
+                                ImGui::DragFloat("Current Temp", &comp.currentTemp, 1.0f);
+                                ImGui::DragFloat("Ignition Threshold", &comp.ignitionThreshold, 1.0f);
+                                ImGui::DragFloat("Burn Timer", &comp.burnTimer, 0.1f);
+                                ImGui::Text("State: %d", (int)comp.state);
+                                ImGui::TreePop();
+                            }
+                        }
+
+                        if (registry.HasComponent<AttachedEmitterComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("AttachedEmitterComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Emitter")) registry.RemoveComponent<AttachedEmitterComponent>(e);
+
+                            // --- Attached Emitter Component ---
+                            if (registry.HasComponent<AttachedEmitterComponent>(e)) {
+                                bool open = ImGui::TreeNodeEx("AttachedEmitterComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                                if (ImGui::Button("Remove##Emitter")) registry.RemoveComponent<AttachedEmitterComponent>(e);
+
+                                if (open && registry.HasComponent<AttachedEmitterComponent>(e)) {
+                                    auto& comp = registry.GetComponent<AttachedEmitterComponent>(e);
+
+                                    ImGui::Text("Active Emitters: %d", (int)comp.emitters.size());
+
+                                    for (size_t i = 0; i < comp.emitters.size(); ++i) {
+                                        auto& em = comp.emitters[i];
+                                        ImGui::PushID((int)i);
+                                        if (ImGui::TreeNodeEx(("Emitter ID: " + std::to_string(em.emitterId)).c_str())) {
+                                            ImGui::DragFloat("Emission Rate", &em.emissionRate, 1.0f, 0.0f, 1000.0f);
+                                            ImGui::DragFloat("Duration (-1 = Inf)", &em.duration, 0.1f);
+                                            ImGui::Text("Timer: %.2f", em.timer);
+                                            ImGui::TreePop();
+                                        }
+                                        ImGui::PopID();
+                                    }
+
+                                    // --- FULLY FUNCTIONAL ATTACH MENU ---
+                                    // --- FULLY FUNCTIONAL ATTACH MENU ---
+                                    if (ImGui::BeginMenu("Attach New Emitter...")) {
+                                        static float emitDuration = -1.0f;
+                                        ImGui::InputFloat("Duration (s)", &emitDuration);
+                                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Set to -1 for Infinite");
+                                        ImGui::Separator();
+
+                                        // Local lambda to handle registration with the Scene/ParticleSystem
+                                        auto attachFunc = [&](ParticleProps props, float rate) {
+                                            ActiveEmitter newEm;
+                                            newEm.props = props;
+                                            newEm.duration = emitDuration;
+                                            newEm.emissionRate = rate;
+                                            newEm.timer = 0.0f;
+
+                                            glm::vec3 pos = glm::vec3(0.0f);
+                                            if (registry.HasComponent<TransformComponent>(e)) {
+                                                pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
+                                            }
+                                            newEm.props.position = pos;
+
+                                            newEm.emitterId = scene.GetOrCreateSystem(props)->AddEmitter(props, rate);
+                                            comp.emitters.push_back(newEm);
+                                            };
+
+                                        // DYNAMICALLY GENERATE MENU ITEMS
+                                        auto presets = ParticleLibrary::GetAllPresets();
+                                        for (const auto& [name, props] : presets) {
+                                            if (ImGui::MenuItem(name.c_str())) {
+                                                // Attach with a default rate of 100 particles/sec
+                                                // (You can adjust this rate via the properties menu later)
+                                                attachFunc(props, 100.0f);
+                                            }
+                                        }
+
+                                        ImGui::EndMenu();
+                                    }
+                                }
+                            }                              
+                        }
+
+                        // --- 7. Camera Component ---
+                        if (registry.HasComponent<CameraComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("CameraComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Camera")) registry.RemoveComponent<CameraComponent>(e);
+
+                            if (open && registry.HasComponent<CameraComponent>(e)) {
+                                auto& comp = registry.GetComponent<CameraComponent>(e);
+                                ImGui::Checkbox("Is Active", &comp.isActive);
+                                ImGui::DragFloat("FOV", &comp.fov, 1.0f, 10.0f, 150.0f);
+                                ImGui::DragFloat("Move Speed", &comp.moveSpeed, 0.5f);
+                                ImGui::DragFloat("Rotate Speed", &comp.rotateSpeed, 0.5f);
+                                ImGui::DragFloat("Yaw", &comp.yaw, 1.0f);
+                                ImGui::DragFloat("Pitch", &comp.pitch, 1.0f);
+                                ImGui::TreePop();
+                            }
+                        }
+
+                        // --- 8. Collider Component ---
+                        if (registry.HasComponent<ColliderComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("ColliderComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Collider")) registry.RemoveComponent<ColliderComponent>(e);
+
+                            if (open && registry.HasComponent<ColliderComponent>(e)) {
+                                auto& comp = registry.GetComponent<ColliderComponent>(e);
+                                ImGui::Checkbox("Has Collision", &comp.hasCollision);
+                                ImGui::DragFloat("Radius", &comp.radius, 0.1f, 0.0f, 100.0f);
+                                ImGui::DragFloat("Height", &comp.height, 0.1f, 0.0f, 100.0f);
+                                ImGui::TreePop();
+                            }
+                        }
+
+                        
+
+                        ImGui::Spacing();
+
+                        // 2. Dropdown to Add New Components
+                        if (ImGui::BeginMenu("Add Component...")) {
+                            addMenuItem((NameComponent*)nullptr, "NameComponent", e);
+                            addMenuItem((TransformComponent*)nullptr, "TransformComponent", e);
+                            addMenuItem((RenderComponent*)nullptr, "RenderComponent", e);
+                            addMenuItem((OrbitComponent*)nullptr, "OrbitComponent", e);
+                            addMenuItem((ThermoComponent*)nullptr, "ThermoComponent", e);
+                            addMenuItem((ColliderComponent*)nullptr, "ColliderComponent", e);
+                            addMenuItem((LightComponent*)nullptr, "LightComponent", e);
+                            addMenuItem((CameraComponent*)nullptr, "CameraComponent", e);
+                            addMenuItem((AttachedEmitterComponent*)nullptr, "AttachedEmitterComponent", e);
+                            addMenuItem((EnvironmentComponent*)nullptr, "EnvironmentComponent", e);
+                            addMenuItem((DustCloudComponent*)nullptr, "DustCloudComponent", e);
+
+                            ImGui::EndMenu();
+                        }
+
+                        ImGui::Unindent();
+                    }
+                    ImGui::PopID();
                 }
             }
             ImGui::End();

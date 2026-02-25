@@ -1,7 +1,13 @@
 ﻿  Application.cpp
+  EditorUI.cpp
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\EditorUI.cpp(231,51): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+  ParticleLibrary.cpp
+  Scene.cpp
+  ParticleUpdateSystem.cpp
+  ThermodynamicsSystem.cpp
   Generating code
-  1 of 9605 functions (<0.1%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    44 functions had inline decision re-evaluated but remain unchanged
+  174 of 9699 functions ( 1.8%) were compiled, the rest were copied from previous compilation.
+    60 functions were new in current compilation
+    333 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   VulkanPhysics.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\VulkanPhysics.exe
