@@ -30,7 +30,7 @@ void CameraController::SetOrbitTarget(Entity target, Scene& scene) {
 
     // --- NEW: Dynamic Close-Up Radius ---
     float viewRadius = 15.0f; // A tight default fallback
-    float yOffset = 3.0f;     // Default to looking slightly above the base
+    float yOffset = 0.0f;     // Default to looking slightly above the base
 
     // If the object has a collider, frame it nicely based on its actual size
     if (registry.HasComponent<ColliderComponent>(target)) {

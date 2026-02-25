@@ -117,8 +117,23 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                 ImGui::Separator();
                 ImGui::MenuItem("View Controls", nullptr, &m_ShowControlsWindow);
-
                 ImGui::MenuItem("Entity Properties", nullptr, &m_ShowEntityPropertiesWindow);
+
+                // --- NEW: Create Entity Button ---
+                ImGui::Separator();
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Make it green
+                if (ImGui::MenuItem("Create New Entity")) {
+                    static int newEntityCount = 1;
+                    std::string name = "NewEntity_" + std::to_string(newEntityCount++);
+
+                    // Spawn a default 1x1 cube. AddCube safely registers it in the 
+                    // Scene's Renderable arrays and attaches all base components!
+                    scene.AddCube(name, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f), "");
+
+                    // Force open the properties window so the user can edit it
+                    m_ShowEntityPropertiesWindow = true;
+                }
+                ImGui::PopStyleColor();
 
                 ImGui::EndMenu();
             }
@@ -1095,12 +1110,24 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                                 bool modified = false;
 
-                                // Directly edit the explicit TRS variables
                                 if (ImGui::DragFloat3("Position", &comp.position.x, 0.1f)) modified = true;
                                 if (ImGui::DragFloat3("Rotation", &comp.rotation.x, 1.0f)) modified = true;
-                                if (ImGui::DragFloat3("Scale", &comp.scale.x, 0.05f)) modified = true;
 
-                                // If the user dragged a slider, rebuild the matrix instantly
+                                ImGui::Spacing();
+
+                                // --- NEW: Uniform Scaling ---
+                                // Grab the X scale as the baseline for the uniform slider
+                                float uniformScale = comp.scale.x;
+                                if (ImGui::DragFloat("Uniform Scale", &uniformScale, 0.05f)) {
+                                    // If dragged, apply to all 3 axes instantly
+                                    comp.scale = glm::vec3(uniformScale);
+                                    modified = true;
+                                }
+
+                                // Keep the individual axes slider for precise stretching
+                                if (ImGui::DragFloat3("Axis Scale", &comp.scale.x, 0.05f)) modified = true;
+
+                                // Rebuild the matrix if anything moved
                                 if (modified) {
                                     comp.UpdateMatrix();
                                 }
