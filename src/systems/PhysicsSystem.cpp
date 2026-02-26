@@ -1,15 +1,26 @@
 #include "PhysicsSystem.h"
 #include "../core/Components.h"
-#include "../rendering/Scene.h"                     
-#include "../../SimulationStaticLib/Sphere.h"          
-#include "../../SimulationStaticLib/PhysicsHelper.h"   
+#include "../rendering/Scene.h"
+#include "../../SimulationStaticLib/Sphere.h"
 #include "../../SimulationStaticLib/Plane.h"
+#include "../../SimulationStaticLib/PhysicsHelper.h"
+
+// Default settings
+int PhysicsSystem::subSteps = 4;
+IntegrationMethod PhysicsSystem::currentMethod = IntegrationMethod::SemiImplicitEuler;
+bool PhysicsSystem::applyGravity = true;
 
 void PhysicsSystem::Update(Scene& scene, float deltaTime) {
-    auto& registry = scene.GetRegistry(); // Extract registry from the scene
+    auto& registry = scene.GetRegistry();
 
-    Integrate(registry, deltaTime);
-    ResolveCollisions(registry);
+    // Calculate the fixed timestep for each substep
+    float dt = deltaTime / static_cast<float>(subSteps);
+
+    // Run the simulation multiple times per frame
+    for (int i = 0; i < subSteps; ++i) {
+        Integrate(registry, dt);
+        ResolveCollisions(registry);
+    }
 }
 
 void PhysicsSystem::Integrate(Registry& registry, float dt) {
@@ -21,13 +32,24 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
             auto& physics = registry.GetComponent<PhysicsComponent>(i);
 
             if (!physics.isStatic) {
-                // Apply Gravity
-                physics.velocity.y -= 9.81f * dt;
+                // Determine acceleration (Gravity or 0 for the lab test)
+                glm::vec3 acceleration = applyGravity ? glm::vec3(0.0f, -9.81f, 0.0f) : glm::vec3(0.0f);
 
-                // Apply velocity
-                transform.position += physics.velocity * dt;
+                // --- INTEGRATION METHODS ---
+                if (currentMethod == IntegrationMethod::ExplicitEuler) {
+                    // 1. Position updated using CURRENT velocity
+                    transform.position += physics.velocity * dt;
+                    // 2. Velocity updated using acceleration
+                    physics.velocity += acceleration * dt;
+                }
+                else if (currentMethod == IntegrationMethod::SemiImplicitEuler) {
+                    // 1. Velocity updated using acceleration FIRST
+                    physics.velocity += acceleration * dt;
+                    // 2. Position updated using NEW velocity
+                    transform.position += physics.velocity * dt;
+                }
 
-                // FIX: Use 0.999f for light air drag instead of heavy friction
+                // Apply light air resistance
                 physics.velocity *= std::pow(0.999f, dt * 60.0f);
 
                 transform.UpdateMatrix();

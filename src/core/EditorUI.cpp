@@ -1,6 +1,7 @@
 #include "EditorUI.h"
 #include "imgui.h"
 #include "../rendering/ParticleLibrary.h"
+#include "../systems/PhysicsSystem.h"
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
@@ -835,6 +836,27 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                 ImGui::Text("Simulation Speed (CTRL + CLICK to Type)");
                 ImGui::SliderFloat("##speed", &m_TimeScale, 0.0f, 100.0f, "%.3fx", ImGuiSliderFlags_Logarithmic);
+
+                if (ImGui::CollapsingHeader("Physics Engine", ImGuiTreeNodeFlags_DefaultOpen)) {
+
+                    ImGui::Text("Time Step & Substepping");
+                    // Slider to control how many times the physics loop runs per frame
+                    ImGui::SliderInt("Substeps per Frame", &PhysicsSystem::subSteps, 1, 16);
+
+                    ImGui::Spacing();
+                    ImGui::Text("Integration Method");
+
+                    // Dropdown for Integration Method
+                    int currentMethodIdx = static_cast<int>(PhysicsSystem::currentMethod);
+                    const char* methods[] = { "Explicit Euler", "Semi-Implicit Euler" };
+                    if (ImGui::Combo("Algorithm", &currentMethodIdx, methods, IM_ARRAYSIZE(methods))) {
+                        PhysicsSystem::currentMethod = static_cast<IntegrationMethod>(currentMethodIdx);
+                    }
+
+                    ImGui::Spacing();
+                    // Checkbox to disable gravity to prove the zero-acceleration lab requirement
+                    ImGui::Checkbox("Apply Gravity", &PhysicsSystem::applyGravity);
+                }
 
                 ImGui::EndMenu();
             }
