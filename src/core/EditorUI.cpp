@@ -848,7 +848,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                     // Dropdown for Integration Method
                     int currentMethodIdx = static_cast<int>(PhysicsSystem::currentMethod);
-                    const char* methods[] = { "Explicit Euler", "Semi-Implicit Euler" };
+                    const char* methods[] = { "Explicit Euler", "Semi-Implicit Euler", "RK4" };
                     if (ImGui::Combo("Algorithm", &currentMethodIdx, methods, IM_ARRAYSIZE(methods))) {
                         PhysicsSystem::currentMethod = static_cast<IntegrationMethod>(currentMethodIdx);
                     }

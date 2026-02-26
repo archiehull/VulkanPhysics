@@ -6,7 +6,8 @@
 
 enum class IntegrationMethod {
     ExplicitEuler,
-    SemiImplicitEuler
+    SemiImplicitEuler,
+    RK4
 };
 
 class PhysicsSystem : public ISystem {

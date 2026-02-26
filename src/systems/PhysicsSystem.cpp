@@ -25,31 +25,53 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
 
 void PhysicsSystem::Integrate(Registry& registry, float dt) {
     for (Entity i = 0; i < registry.GetEntityCount(); ++i) {
-        if (registry.HasComponent<TransformComponent>(i) &&
-            registry.HasComponent<PhysicsComponent>(i)) {
+        if (registry.HasComponent<TransformComponent>(i) && registry.HasComponent<PhysicsComponent>(i)) {
 
             auto& transform = registry.GetComponent<TransformComponent>(i);
             auto& physics = registry.GetComponent<PhysicsComponent>(i);
 
-            if (!physics.isStatic) {
-                // Determine acceleration (Gravity or 0 for the lab test)
-                glm::vec3 acceleration = applyGravity ? glm::vec3(0.0f, -9.81f, 0.0f) : glm::vec3(0.0f);
+            if (!physics.isStatic && physics.inverseMass > 0.0f) {
 
-                // --- INTEGRATION METHODS ---
+                // 1. Accumulate Forces (Gravity: F = mg)
+                if (applyGravity) {
+                    glm::vec3 gravityForce = glm::vec3(0.0f, -9.81f, 0.0f) * physics.mass;
+                    physics.forceAccumulator += gravityForce;
+                }
+
+                // 2. Calculate Acceleration (a = F / m)
+                glm::vec3 acceleration = physics.forceAccumulator * physics.inverseMass;
+
+                // 3. Integration Methods
                 if (currentMethod == IntegrationMethod::ExplicitEuler) {
-                    // 1. Position updated using CURRENT velocity
                     transform.position += physics.velocity * dt;
-                    // 2. Velocity updated using acceleration
                     physics.velocity += acceleration * dt;
                 }
                 else if (currentMethod == IntegrationMethod::SemiImplicitEuler) {
-                    // 1. Velocity updated using acceleration FIRST
                     physics.velocity += acceleration * dt;
-                    // 2. Position updated using NEW velocity
                     transform.position += physics.velocity * dt;
                 }
+                else if (currentMethod == IntegrationMethod::RK4) {
+                    // RK4 Implementation for constant acceleration
+                    glm::vec3 k1_v = acceleration;
+                    glm::vec3 k1_x = physics.velocity;
 
-                // Apply light air resistance
+                    glm::vec3 k2_v = acceleration; // Assuming constant acceleration over dt
+                    glm::vec3 k2_x = physics.velocity + k1_v * (dt * 0.5f);
+
+                    glm::vec3 k3_v = acceleration;
+                    glm::vec3 k3_x = physics.velocity + k2_v * (dt * 0.5f);
+
+                    glm::vec3 k4_v = acceleration;
+                    glm::vec3 k4_x = physics.velocity + k3_v * dt;
+
+                    physics.velocity += (k1_v + 2.0f * k2_v + 2.0f * k3_v + k4_v) * (dt / 6.0f);
+                    transform.position += (k1_x + 2.0f * k2_x + 2.0f * k3_x + k4_x) * (dt / 6.0f);
+                }
+
+                // 4. Clear the accumulator for the next frame
+                physics.forceAccumulator = glm::vec3(0.0f);
+
+                // (Optional: Apply air resistance here)
                 physics.velocity *= std::pow(0.999f, dt * 60.0f);
 
                 transform.UpdateMatrix();

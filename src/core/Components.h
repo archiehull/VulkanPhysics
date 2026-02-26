@@ -95,11 +95,28 @@ struct ThermoComponent {
 // 6. Physics
 struct PhysicsComponent {
     glm::vec3 velocity = glm::vec3(0.0f);
+    glm::vec3 forceAccumulator = glm::vec3(0.0f); // Stores all forces for the current frame
+
     float mass = 1.0f;
-    bool isStatic = true; // If true, it won't move but others can bounce off it
-    float friction = 0.98f; // Simple air/ground friction
-	float restitution = 1.0f; // Elasticity: 1.0 = perfect bounce, 0.0 = no bounce
+    float inverseMass = 1.0f; // Always ensure this is 1.0f / mass!
+
+    bool isStatic = true;
+    float friction = 0.98f;
+    float restitution = 1.0f;
+
+    // Helper to safely set mass and update inverse mass
+    void SetMass(float newMass) {
+        if (newMass <= 0.0f) {
+            mass = 0.0f;
+            inverseMass = 0.0f; // Infinite mass (static object)
+        }
+        else {
+            mass = newMass;
+            inverseMass = 1.0f / mass;
+        }
+    }
 };
+
 
 struct ColliderComponent {
     bool hasCollision = true;
