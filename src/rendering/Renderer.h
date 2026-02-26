@@ -55,6 +55,8 @@ public:
     void SetClearColor(const glm::vec4& color) { m_ClearColor = color; }
 
 private:
+    std::map<std::string, std::function<void(Texture&)>> proceduralGenerators;
+
     glm::vec4 m_ClearColor = { 0.1f, 0.1f, 0.1f, 1.0f };
 
     // --- 1. Pointers & Smart Pointers (8-byte aligned) ---

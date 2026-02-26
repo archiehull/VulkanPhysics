@@ -50,6 +50,11 @@ void Renderer::Initialize() {
     CreateTextureDescriptorPool();
     CreateDefaultTexture();
 
+    auto generatorsCopy = proceduralGenerators; // Copy to avoid modifying map during iteration
+    for (const auto& [name, generator] : generatorsCopy) {
+        RegisterProceduralTexture(name, generator);
+    }
+
     // Global Descriptor Set (UBOs)
     descriptorSet = std::make_unique<VulkanDescriptorSet>(device->GetDevice());
     descriptorSet->CreateDescriptorSetLayout();
@@ -347,6 +352,8 @@ void Renderer::CreateTextureDescriptorPool() {
 }
 
 void Renderer::RegisterProceduralTexture(const std::string& name, const std::function<void(Texture&)>& generator) {
+    proceduralGenerators[name] = generator;
+
     auto tex = std::make_unique<Texture>(
         device->GetDevice(), device->GetPhysicalDevice(),
         commandBuffer->GetCommandPool(), device->GetGraphicsQueue());
