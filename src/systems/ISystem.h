@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/ECS.h"
+#include "../core/ECS.h"
 
 class Scene;
 

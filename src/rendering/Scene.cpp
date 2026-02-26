@@ -18,7 +18,39 @@
 #include "../systems/WeatherSystem.h"
 #include "../systems/ParticleUpdateSystem.h"
 #include "../systems/CameraSystem.h"
+#include "../systems/PhysicsSystem.h"
 
+// 3. Add the helper implementations anywhere in Scene.cpp
+void Scene::SetObjectPhysics(const std::string& name, bool isStatic, float mass) {
+    Entity e = GetEntityByName(name);
+    if (e != MAX_ENTITIES && m_Registry.HasComponent<PhysicsComponent>(e)) {
+        auto& phys = m_Registry.GetComponent<PhysicsComponent>(e);
+        phys.isStatic = isStatic;
+        phys.mass = mass;
+    }
+}
+
+void Scene::SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity) {
+    static int ballCount = 0;
+    std::string name = "DynamicBall_" + std::to_string(ballCount++);
+
+    // Create a visual sphere with radius 1.0
+    AddSphere(name, 16, 16, 1.0f, pos, "textures/default.jpg"); // Use whatever default texture you have
+
+    Entity e = GetEntityByName(name);
+
+    // Configure Physics
+    auto& phys = m_Registry.GetComponent<PhysicsComponent>(e);
+    phys.isStatic = false;
+    phys.velocity = velocity;
+    phys.restitution = 0.8f; // Bouncy!
+    phys.mass = 2.0f;
+
+    // Configure Collider
+    auto& col = m_Registry.GetComponent<ColliderComponent>(e);
+    col.radius = 1.0f;
+    col.hasCollision = true;
+}
 
 Entity Scene::GetEntityByName(const std::string& name) const {
     auto it = m_EntityMap.find(name);
@@ -68,6 +100,7 @@ Entity Scene::AddObjectInternal(const std::string& name, std::shared_ptr<Geometr
 
     m_Registry.AddComponent<ColliderComponent>(entity, ColliderComponent{});
     m_Registry.AddComponent<OrbitComponent>(entity, OrbitComponent{});
+    m_Registry.AddComponent<PhysicsComponent>(entity, PhysicsComponent{});
 
     return entity;
 }
@@ -116,6 +149,7 @@ void Scene::Initialize() {
     m_Systems.push_back(std::make_unique<ParticleUpdateSystem>());
     m_Systems.push_back(std::make_unique<SimpleShadowSystem>());
     m_Systems.push_back(std::make_unique<ThermodynamicsSystem>());
+    m_Systems.push_back(std::make_unique<PhysicsSystem>());
 }
 
 void Scene::RegisterProceduralObject(const std::string& modelPath, const std::string& texturePath, float frequency, const glm::vec3& minScale, const glm::vec3& maxScale, const glm::vec3& baseRotation, bool isFlammable) {
@@ -414,6 +448,16 @@ void Scene::SetObjectCollision(const std::string& name, bool enabled) {
     Entity e = GetEntityByName(name);
     if (e != MAX_ENTITIES && m_Registry.HasComponent<ColliderComponent>(e)) {
         m_Registry.GetComponent<ColliderComponent>(e).hasCollision = enabled;
+    }
+}
+
+void Scene::SetObjectCollider(const std::string& name, int type, float radius, const glm::vec3& normal) {
+    Entity e = GetEntityByName(name);
+    if (e != MAX_ENTITIES && m_Registry.HasComponent<ColliderComponent>(e)) {
+        auto& col = m_Registry.GetComponent<ColliderComponent>(e);
+        col.type = type;
+        col.radius = radius;
+        col.normal = glm::normalize(normal);
     }
 }
 

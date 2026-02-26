@@ -1,0 +1,127 @@
+[Settings]
+WindowSize 800 600
+TimeParams 60.0 3
+SeasonTemps 20.0 5.0 10.0
+WeatherIntervals 300.0 600.0
+WeatherDuration 0.0 0.0
+FireSuppression 15.0
+SunHeatBonus 0.0
+ProceduralObjectCount 0
+
+[Scene]
+Camera Default FreeRoam Camera2 0.0 40.0 40.0 0.0 -25.0
+
+ProceduralTexture tex_checker_floor
+    Type Checker
+    Color1 0.2 0.2 0.2 1.0
+    Color2 0.8 0.8 0.8 1.0
+    Size 512
+    CellSize 64
+EndTexture
+
+ProceduralTexture tex_ramp
+    Type Solid
+    Color1 0.2 0.6 1.0 1.0
+EndTexture
+
+ProceduralTexture tex_ball
+    Type Gradient
+    Color1 1.0 0.2 0.2 1.0
+    Color2 1.0 0.8 0.0 1.0
+    Size 512
+    Vertical true
+EndTexture
+
+# --- STATIC ENVIRONMENT ---
+
+Object FloorPlane
+    Type Model
+    Model models/plane.sjg
+    Texture tex_checker_floor
+    Position 0.0 0.0 0.0
+    Rotation -90.0 0.0 0.0 
+    Scale 5.0 5.0 5.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true true
+    ColliderProps 1 0.0 1.0 0.0 500.0
+EndObject
+
+Object BackWall
+    Type Model
+    Model models/plane.sjg
+    Texture tex_checker_floor
+    Position 0.0 10.0 -20.0
+    Rotation 0.0 0.0 0.0 
+    Scale 5.0 5.0 5.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true true
+    ColliderProps 1 0.0 0.0 1.0 500.0
+EndObject
+
+Object LeftRamp
+    Type Model
+    Model models/plane.sjg
+    Texture tex_ramp
+    Position -15.0 10.0 0.0
+    Rotation -45.0 90.0 0.0 
+    Scale 5.0 5.0 5.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true true
+    ColliderProps 1 0.707 0.707 0.0 500.0
+EndObject
+
+Object RightRamp
+    Type Model
+    Model models/plane.sjg
+    Texture tex_ramp
+    Position 15.0 10.0 0.0
+    Rotation -45.0 -90.0 0.0 
+    Scale 5.0 5.0 5.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true true
+    ColliderProps 1 -0.707 0.707 0.0 500.0
+EndObject
+
+# --- DYNAMIC BALLS ---
+
+Object Ball1
+    Type Sphere
+    Texture tex_ball
+    Position -16.0 30.0 0.0
+    Scale 2.0 2.0 2.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false
+    ColliderProps 0 2.0
+EndObject
+
+Object Ball2
+    Type Sphere
+    Texture tex_ball
+    Position 16.0 25.0 0.0
+    Scale 2.0 2.0 2.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false
+    ColliderProps 0 2.0
+EndObject
+
+Object Ball3
+    Type Sphere
+    Texture tex_ball
+    Position 0.0 40.0 0.0
+    Scale 2.0 2.0 2.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false
+    ColliderProps 0 2.0
+EndObjectrProps 0 2.0
+EndObject
+
+# --- LIGHTING ---
+
+Object MainSun
+    Type Sphere
+    Params 0.5
+    Position 0.0 50.0 40.0
+    Light true 1.0 1.0 1.0 2.0 0
+    RenderProps 1 false false false 3
+    PhysicsProps false false true
+EndObject

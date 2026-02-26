@@ -89,6 +89,7 @@
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalIncludeDirectories>$(SolutionDir)Additional Libraries\imgui-1.89.9;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\include;$(SolutionDir)Additional Libraries\;C:\VulkanSDK\1.4.313.2\Include;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\include;$(ProjectDir)src;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glm-master;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\glm-master;$(SolutionDir)SimulationStaticLib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -103,6 +104,7 @@
   <ItemGroup>
     <ClCompile Include="ColliderTests.cpp" />
     <ClCompile Include="CylinderTests.cpp" />
+    <ClCompile Include="PhysicsIntegration.cpp" />
     <ClCompile Include="PlaneTests.cpp" />
     <ClCompile Include="PhysicsTests.cpp" />
     <ClCompile Include="SphereTests.cpp" />

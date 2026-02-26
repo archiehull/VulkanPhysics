@@ -172,10 +172,34 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 currentObject->visible = (vis == "true" || vis == "1");
             }
             else if (key == "PhysicsProps") {
-                std::string flamStr, colStr;
+                std::string flamStr, colStr, staticStr;
+
+                // Read the original two parameters
                 ss >> flamStr >> colStr;
                 currentObject->isFlammable = (flamStr == "true" || flamStr == "1");
                 currentObject->hasCollision = (colStr == "true" || colStr == "1");
+
+                // Backwards Compatibility: Only try to read isStatic if it exists
+                if (!ss.eof()) {
+                    ss >> staticStr;
+                    currentObject->isStatic = (staticStr == "true" || staticStr == "1");
+                }
+            }
+            else if (key == "ColliderProps") {
+                ss >> currentObject->colliderType;
+                if (currentObject->colliderType == 1) { // Plane
+                    ss >> currentObject->colliderNormal.x >> currentObject->colliderNormal.y >> currentObject->colliderNormal.z;
+
+                    if (!ss.eof()) {
+                        ss >> currentObject->colliderRadius;
+                    }
+                    else {
+                        currentObject->colliderRadius = 0.0f; // 0 = Infinite
+                    }
+                }
+                else { // Sphere
+                    ss >> currentObject->colliderRadius;
+                }
             }
             else if (key == "Orbit") {
                 std::string orbitStr;
@@ -224,8 +248,13 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (cam.type == "RandomTarget") {
                 ss >> cam.orbitRadius >> cam.targetMatch;
             }
+            else if (cam.type == "FreeRoam") {
+                // --- ADD THIS: Read Yaw and Pitch if they exist ---
+                if (!ss.eof()) ss >> cam.yaw;
+                if (!ss.eof()) ss >> cam.pitch;
+            }
 
             config.customCameras.push_back(cam);
-        }
+            }
     }
 }

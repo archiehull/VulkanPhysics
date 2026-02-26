@@ -49,7 +49,12 @@ struct SceneObjectConfig {
     int layerMask = 3;
 
     bool hasCollision = true;
+    bool isStatic = true;
     bool isFlammable = false;
+
+    int colliderType = 0; // 0 = Sphere, 1 = Plane
+    float colliderRadius = 2.0f;
+    glm::vec3 colliderNormal = glm::vec3(0.0f, 1.0f, 0.0f);
 
     bool hasOrbit = false;
     float orbitRadius = 0.0f;
@@ -97,6 +102,8 @@ struct CustomCameraConfig {
     glm::vec3 target = glm::vec3(0.0f);     // For Orbit
     float orbitRadius = 350.0f;             // For Orbit / RandomTarget
     std::string targetMatch;  // For RandomTarget (e.g., "cactus")
+    float yaw = 0.0f;
+    float pitch = 0.0f;
 };
 
 struct SeasonConfig {

@@ -93,9 +93,19 @@ struct ThermoComponent {
 };
 
 // 6. Physics
+struct PhysicsComponent {
+    glm::vec3 velocity = glm::vec3(0.0f);
+    float mass = 1.0f;
+    bool isStatic = true; // If true, it won't move but others can bounce off it
+    float friction = 0.98f; // Simple air/ground friction
+	float restitution = 1.0f; // Elasticity: 1.0 = perfect bounce, 0.0 = no bounce
+};
+
 struct ColliderComponent {
     bool hasCollision = true;
-    float radius = 2.0f;
+    int type = 0; // 0 = Sphere, 1 = Plane
+    float radius = 2.0f; // Used if type == 0
+    glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f); // Used if type == 1
     float height = 5.0f;
 };
 

@@ -53,6 +53,12 @@ void CameraController::SetupCameras(Scene& scene, const std::vector<CustomCamera
     for (const auto& conf : customConfigs) {
         Entity camEnt = scene.CreateCameraEntity(conf.name, conf.position, conf.type);
 
+        if (conf.type == "FreeRoam" && scene.GetRegistry().HasComponent<CameraComponent>(camEnt)) {
+            auto& camComp = scene.GetRegistry().GetComponent<CameraComponent>(camEnt);
+            camComp.yaw = conf.yaw;
+            camComp.pitch = conf.pitch;
+        }
+
         cameraEntities[conf.name] = camEnt;
         cameraMeta[conf.name] = conf;
 

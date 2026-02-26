@@ -1,0 +1,8 @@
+﻿  PhysicsIntegration.cpp
+  PhysicsTests.cpp
+  SphereTests.cpp
+C:\Users\Ell\Documents\repos\VulkanPhysics\CPP-GoogleTest\SphereTests.cpp(169,17): warning C4305: 'initializing': truncation from 'double' to 'float'
+  (compiling source file '/SphereTests.cpp')
+  
+  Generating Code...
+  CPP-GoogleTest.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\CPP-GoogleTest.exe

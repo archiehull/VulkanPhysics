@@ -162,7 +162,12 @@ public:
     float GetSunHeatBonus() const;
     float GetPostRainFireSuppressionTimer() const;
     const TimeConfig& GetTimeConfig() const;
-    bool IsDustActive() const; // Reads from DustCloudComponent now!
+    bool IsDustActive() const;
+
+    void SetObjectPhysics(const std::string& name, bool isStatic, float mass);
+    void SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity);
+
+	void SetObjectCollider(const std::string& name, int type, float radius, const glm::vec3& normal);
 
 private:
     Registry m_Registry;

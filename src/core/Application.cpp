@@ -148,7 +148,7 @@ void Application::InitVulkan() {
 
     // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/worlds/", "desert");
+    editorUI->Initialize("src/worlds/", "physicstest1");
 
     for (const auto& cam : config.customCameras) {
         camNames.push_back(cam.name);
@@ -281,13 +281,15 @@ void Application::SetupScene() {
 
         // --- Apply Common Properties ---
         // (We assume the object was just added to the back of the vector)
+        scene->SetObjectTransform(objCfg.name, objCfg.position, objCfg.rotation, objCfg.scale);
         scene->SetObjectVisible(objCfg.name, objCfg.visible);
         scene->SetObjectCastsShadow(objCfg.name, objCfg.castsShadow);
         scene->SetObjectReceivesShadows(objCfg.name, objCfg.receiveShadows);
         scene->SetObjectShadingMode(objCfg.name, objCfg.shadingMode);
         scene->SetObjectLayerMask(objCfg.name, objCfg.layerMask);
         scene->SetObjectCollision(objCfg.name, objCfg.hasCollision);
-
+        scene->SetObjectPhysics(objCfg.name, objCfg.isStatic, 1.0f);
+        scene->SetObjectCollider(objCfg.name, objCfg.colliderType, objCfg.colliderRadius, objCfg.colliderNormal);
         // --- Apply Light ---
         if (objCfg.isLight) {
             scene->AddLight(objCfg.name, objCfg.position, objCfg.lightColor, objCfg.lightIntensity, objCfg.lightType);
@@ -604,6 +606,29 @@ void Application::ProcessInput() {
         else {
             timeScale += scaleChangeRate * deltaTime;
         }
+    }
+
+    // --- Physics Testing ---
+    static float shootCooldown = 0.0f;
+    if (shootCooldown > 0.0f) shootCooldown -= deltaTime;
+
+    if (glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_B) == GLFW_PRESS && shootCooldown <= 0.0f) {
+        // Randomize spawn position slightly (between -1.0 and 1.0)
+        float posX = ((rand() % 100) / 100.0f) * 2.0f - 1.0f;
+        float posZ = ((rand() % 100) / 100.0f) * 2.0f - 1.0f;
+
+        // Randomize initial velocity in all 3 directions!
+        // X and Z velocity between -15.0 and 15.0 (shoots left/right/forward/back)
+        float velX = ((rand() % 100) / 100.0f) * 30.0f - 15.0f;
+        float velZ = ((rand() % 100) / 100.0f) * 30.0f - 15.0f;
+
+        // Y velocity between -5.0 and 15.0 (sometimes drops, sometimes shoots upwards!)
+        float velY = ((rand() % 100) / 100.0f) * 20.0f - 5.0f;
+
+        // Spawn the ball with the randomized vectors
+        scene->SpawnPhysicsBall(glm::vec3(posX, 30.0f, posZ), glm::vec3(velX, velY, velZ));
+
+        shootCooldown = 0.2f; // Prevent spamming 60 balls a second
     }
 }
 

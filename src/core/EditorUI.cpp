@@ -1397,13 +1397,45 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             if (open && registry.HasComponent<ColliderComponent>(e)) {
                                 auto& comp = registry.GetComponent<ColliderComponent>(e);
                                 ImGui::Checkbox("Has Collision", &comp.hasCollision);
-                                ImGui::DragFloat("Radius", &comp.radius, 0.1f, 0.0f, 100.0f);
+
+                                const char* shapeTypes[] = { "Sphere", "Plane" };
+                                ImGui::Combo("Shape Type", &comp.type, shapeTypes, IM_ARRAYSIZE(shapeTypes));
+
+                                if (comp.type == 0) { // Sphere
+                                    ImGui::DragFloat("Radius", &comp.radius, 0.1f, 0.0f, 100.0f);
+                                }
+                                else if (comp.type == 1) { // Plane
+                                    if (ImGui::DragFloat3("Normal", &comp.normal.x, 0.05f)) {
+                                        // Keep the normal normalized if the user drags the sliders
+                                        if (glm::length(comp.normal) > 0.001f) {
+                                            comp.normal = glm::normalize(comp.normal);
+                                        }
+                                    }
+                                }
+
                                 ImGui::DragFloat("Height", &comp.height, 0.1f, 0.0f, 100.0f);
                                 ImGui::TreePop();
                             }
                         }
 
-                        
+                        // --- 9. Physics Component ---
+                        if (registry.HasComponent<PhysicsComponent>(e)) {
+                            bool open = ImGui::TreeNodeEx("PhysicsComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                            if (ImGui::Button("Remove##Physics")) registry.RemoveComponent<PhysicsComponent>(e);
+
+                            if (open && registry.HasComponent<PhysicsComponent>(e)) {
+                                auto& comp = registry.GetComponent<PhysicsComponent>(e);
+
+                                ImGui::Checkbox("Is Static", &comp.isStatic);
+                                ImGui::DragFloat("Mass", &comp.mass, 0.1f, 0.1f, 1000.0f);
+                                ImGui::DragFloat("Restitution (Bounciness)", &comp.restitution, 0.05f, 0.0f, 2.0f);
+                                ImGui::DragFloat("Friction", &comp.friction, 0.01f, 0.0f, 1.0f);
+                                ImGui::DragFloat3("Velocity", &comp.velocity.x, 0.1f);
+
+                                ImGui::TreePop();
+                            }
+                        }
 
                         ImGui::Spacing();
 
@@ -1415,6 +1447,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             addMenuItem((OrbitComponent*)nullptr, "OrbitComponent", e);
                             addMenuItem((ThermoComponent*)nullptr, "ThermoComponent", e);
                             addMenuItem((ColliderComponent*)nullptr, "ColliderComponent", e);
+                            addMenuItem((PhysicsComponent*)nullptr, "PhysicsComponent", e);
                             addMenuItem((LightComponent*)nullptr, "LightComponent", e);
                             addMenuItem((CameraComponent*)nullptr, "CameraComponent", e);
                             addMenuItem((AttachedEmitterComponent*)nullptr, "AttachedEmitterComponent", e);

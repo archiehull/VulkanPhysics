@@ -1,79 +1,80 @@
 #include "pch.h"
 #include "Sphere.h"
 #include "PhysicsHelper.h"
+#include <glm/glm.hpp>
 
 // -----------------------------------------------------------------------------
 // Sphere Point Containment
 // -----------------------------------------------------------------------------
 TEST(IsInside, BasicCentreInside) {
     Sphere sphere({ 0.0, 0.0, 0.0 }, 5.0);
-    Vec3 point{ 0.0, 0.0, 0.0 };
+    glm::vec3 point{ 0.0, 0.0, 0.0 };
     EXPECT_TRUE(sphere.IsInside(point));
 }
 
 TEST(IsInside, DiagonalInside) {
     Sphere sphere({ 0.0, 0.0, 0.0 }, 5.0);
-    Vec3 point{ 3.0, 4.0, 0.0 }; // distance 5
+    glm::vec3 point{ 3.0, 4.0, 0.0 }; // distance 5
     EXPECT_TRUE(sphere.IsInside(point));
 }
 
 TEST(IsInside, NonOriginInside) {
     Sphere sphere({ 2.0, 3.0, -1.0 }, 10.0);
-    Vec3 point{ 5.0, 6.0, -2.0 }; // ~4.36 from center
+    glm::vec3 point{ 5.0, 6.0, -2.0 }; // ~4.36 from center
     EXPECT_TRUE(sphere.IsInside(point));
 }
 
 TEST(IsInside, PrecisionInside) {
     Sphere sphere({ 0.0, 0.0, 0.0 }, 5.0);
-    Vec3 point{ 4.999999, 0.0, 0.0 }; // ~4.999999 < 5
+    glm::vec3 point{ 4.999999, 0.0, 0.0 }; // ~4.999999 < 5
     EXPECT_TRUE(sphere.IsInside(point));
 }
 
 TEST(IsInside, NegativeCoordsInside) {
     Sphere sphere({ -2.0, -3.0, -4.0 }, 7.0);
-    Vec3 point{ -5.0, -6.0, -4.0 }; // ~4.2426 from center
+    glm::vec3 point{ -5.0, -6.0, -4.0 }; // ~4.2426 from center
     EXPECT_TRUE(sphere.IsInside(point));
 }
 
 TEST(IsInside, CloseCallInside) {
     Sphere sphere({ 7.0, 8.0, 9.0 }, 10.0);
-    Vec3 point{ 16.99, 8.0, 9.0 }; // ~9.99 < 10
+    glm::vec3 point{ 16.99, 8.0, 9.0 }; // ~9.99 < 10
     EXPECT_TRUE(sphere.IsInside(point));
 }
 
 TEST(IsInside, BasicCentreOutside) {
     Sphere sphere({ 0.0, 0.0, 0.0 }, 5.0);
-    Vec3 point{ 6.0, 0.0, 0.0 };
+    glm::vec3 point{ 6.0, 0.0, 0.0 };
     EXPECT_FALSE(sphere.IsInside(point));
 }
 
 TEST(IsInside, DiagonalOutside) {
     Sphere sphere({ 0.0, 0.0, 0.0 }, 5.0);
-    Vec3 point{ 4.0, 4.0, 0.0 }; // ~5.66
+    glm::vec3 point{ 4.0, 4.0, 0.0 }; // ~5.66
     EXPECT_FALSE(sphere.IsInside(point));
 }
 
 TEST(IsInside, NonOriginOutside) {
     Sphere sphere({ 2.0, 3.0, -1.0 }, 10.0);
-    Vec3 point{ 15.0, 3.0, -1.0 }; // 13
+    glm::vec3 point{ 15.0, 3.0, -1.0 }; // 13
     EXPECT_FALSE(sphere.IsInside(point));
 }
 
 TEST(IsInside, PrecisionOutside) {
     Sphere sphere({ 0.0, 0.0, 0.0 }, 5.0);
-    Vec3 point{ 5.000001, 0.0, 0.0 };
+    glm::vec3 point{ 5.000001, 0.0, 0.0 };
     EXPECT_FALSE(sphere.IsInside(point));
 }
 
 TEST(IsInside, NegativeCoordsOutside) {
     Sphere sphere({ -2.0, -3.0, -4.0 }, 7.0);
-    Vec3 point{ -10.0, -3.0, -4.0 }; // 8
+    glm::vec3 point{ -10.0, -3.0, -4.0 }; // 8
     EXPECT_FALSE(sphere.IsInside(point));
 }
 
 TEST(IsInside, CloseCallOutside) {
     Sphere sphere({ 7.0, 8.0, 9.0 }, 10.0);
-    Vec3 point{ 17.01, 8.0, 9.0 }; // ~10.01
+    glm::vec3 point{ 17.01, 8.0, 9.0 }; // ~10.01
     EXPECT_FALSE(sphere.IsInside(point));
 }
 
@@ -182,35 +183,35 @@ TEST(SphereSphereCollision, IdenticalSpheres) {
 // -----------------------------------------------------------------------------
 TEST(InfiniteLineDistance, ClosestPointOnLine) {
     InfiniteLine line{ {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0} };
-    Vec3 PG{ 2.0, 3.0, 4.0 };
+    glm::vec3 PG{ 2.0, 3.0, 4.0 };
     double distance = Sphere::ShortestDistanceToLine(line, PG);
     EXPECT_NEAR(distance, 1.41421356, 0.01);
 }
 
 TEST(InfiniteLineDistance, PointOnLine) {
     InfiniteLine line{ {0.0, 0.0, 0.0}, {1.0, 2.0, 3.0} };
-    Vec3 PG{ 3.0, 6.0, 9.0 };
+    glm::vec3 PG{ 3.0, 6.0, 9.0 };
     double distance = Sphere::ShortestDistanceToLine(line, PG);
     EXPECT_NEAR(distance, 0.0, 1e-9);
 }
 
 TEST(InfiniteLineDistance, VerticalLine) {
     InfiniteLine line{ {2.0, 2.0, 0.0}, {0.0, 0.0, 1.0} };
-    Vec3 PG{ 4.0, 5.0, 3.0 };
+    glm::vec3 PG{ 4.0, 5.0, 3.0 };
     double distance = Sphere::ShortestDistanceToLine(line, PG);
     EXPECT_NEAR(distance, 3.60555, 0.01);
 }
 
 TEST(InfiniteLineDistance, HorizontalLine) {
     InfiniteLine line{ {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0} };
-    Vec3 PG{ 3.0, 4.0, 5.0 };
+    glm::vec3 PG{ 3.0, 4.0, 5.0 };
     double distance = Sphere::ShortestDistanceToLine(line, PG);
     EXPECT_NEAR(distance, 6.40312, 0.01);
 }
 
 TEST(InfiniteLineDistance, DiagonalLine) {
     InfiniteLine line{ {1.0, 1.0, 1.0}, {1.0, -1.0, 1.0} };
-    Vec3 PG{ 2.0, 5.0, 3.0 };
+    glm::vec3 PG{ 2.0, 5.0, 3.0 };
     double distance = Sphere::ShortestDistanceToLine(line, PG);
     EXPECT_NEAR(distance, 4.54606, 0.01);
 }
@@ -218,6 +219,7 @@ TEST(InfiniteLineDistance, DiagonalLine) {
 // -----------------------------------------------------------------------------
 // Sphere - Infinite Line Intersection (Q3)
 // -----------------------------------------------------------------------------
+
 TEST(Intersects_InfiniteLine_NoEps, NoIntersection_CentreAtOrigin) {
     Sphere s({ 0.0, 0.0, 0.0 }, 3.0f);
     InfiniteLine line{ {5.0, 5.0, 5.0}, {1.0, 0.0, 0.0} };
@@ -277,9 +279,9 @@ TEST(Physics_Collision, DirectCollision_GeneralVelocity) {
     // Direction is (1, 1, 1). Normalized ~ (0.577, 0.577, 0.577)
     // Position B is exactly along that path relative to A
 
-    Vec3 direction{ 1.0, 1.0, 1.0 };
-    Vec3 posA{ 0.0, 0.0, 0.0 };
-    Vec3 posB{ 2.0, 2.0, 2.0 }; // B is at (2,2,2)
+    glm::vec3 direction{ 1.0, 1.0, 1.0 };
+    glm::vec3 posA{ 0.0, 0.0, 0.0 };
+    glm::vec3 posB{ 2.0, 2.0, 2.0 }; // B is at (2,2,2)
 
     // A moves exactly towards B with velocity (5,5,5)
     MovingSphere a(posA, 1.0f, { 5.0, 5.0, 5.0 });
@@ -339,22 +341,21 @@ TEST(Physics_Collision, TwoMoving_SameDir_AxisAligned) {
 // A moves (10,10,10), B moves (-10,-10,-10) along the diagonal axis.
 // Positions are set so the collision normal aligns with the velocity.
 TEST(Physics_Collision, TwoMoving_Opposing_General) {
-    Vec3 p1{ 0.0, 0.0, 0.0 };
-    Vec3 p2{ 2.0, 2.0, 2.0 }; // Direction (1,1,1)
+    glm::vec3 p1{ 0.0, 0.0, 0.0 };
+    glm::vec3 p2{ 2.0, 2.0, 2.0 }; // Direction (1,1,1)
 
     MovingSphere a(p1, 1.0f, { 10.0, 10.0, 10.0 });
     MovingSphere b(p2, 1.0f, { -10.0, -10.0, -10.0 });
 
     ResolveElasticCollision(a, b);
 
-    // Swap expected
-    // A becomes (-10, -10, -10)
-    EXPECT_NEAR(a.velocity.x, -10.0, 1e-6);
-    EXPECT_NEAR(a.velocity.y, -10.0, 1e-6);
-    EXPECT_NEAR(a.velocity.z, -10.0, 1e-6);
+    constexpr float kTol = 1e-5f;
 
-    // B becomes (10, 10, 10)
-    EXPECT_NEAR(b.velocity.x, 10.0, 1e-6);
-    EXPECT_NEAR(b.velocity.y, 10.0, 1e-6);
-    EXPECT_NEAR(b.velocity.z, 10.0, 1e-6);
+    EXPECT_NEAR(a.velocity.x, -10.0f, kTol);
+    EXPECT_NEAR(a.velocity.y, -10.0f, kTol);
+    EXPECT_NEAR(a.velocity.z, -10.0f, kTol);
+
+    EXPECT_NEAR(b.velocity.x, 10.0f, kTol);
+    EXPECT_NEAR(b.velocity.y, 10.0f, kTol);
+    EXPECT_NEAR(b.velocity.z, 10.0f, kTol);
 }

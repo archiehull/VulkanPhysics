@@ -1,0 +1,4 @@
+C:\Users\Ell\Documents\repos\VulkanPhysics\CPP-GoogleTest\x64\Release\CPP-GoogleTest.vcxproj.MdMergeInputs.cache
+C:\Users\Ell\Documents\repos\VulkanPhysics\CPP-GoogleTest\x64\Release\CPP-GoogleTest.vcxproj.cppwinrt_plat.cache
+C:\Users\Ell\Documents\repos\VulkanPhysics\CPP-GoogleTest\x64\Release\CPP-GoogleTest.vcxproj.cppwinrt_comp.cache
+C:\Users\Ell\Documents\repos\VulkanPhysics\CPP-GoogleTest\x64\Release\CPP-Goog.029AC0E3.Up2Date

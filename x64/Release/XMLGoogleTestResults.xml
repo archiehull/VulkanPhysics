@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="75" failures="0" disabled="0" errors="0" timestamp="2026-02-26T00:20:31" time="0.058" name="AllTests">
+  <testsuite name="Collider_Polymorphic" tests="2" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="SphereAsCollider" status="run" time="0" classname="Collider_Polymorphic" />
+    <testcase name="PlaneAsCollider" status="run" time="0" classname="Collider_Polymorphic" />
+  </testsuite>
+  <testsuite name="Intersects_SphereCylinder" tests="6" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="Middle_Inside" status="run" time="0" classname="Intersects_SphereCylinder" />
+    <testcase name="Middle_Outside" status="run" time="0" classname="Intersects_SphereCylinder" />
+    <testcase name="Start_Inside" status="run" time="0" classname="Intersects_SphereCylinder" />
+    <testcase name="Start_Outside" status="run" time="0" classname="Intersects_SphereCylinder" />
+    <testcase name="End_Inside" status="run" time="0" classname="Intersects_SphereCylinder" />
+    <testcase name="End_Outside" status="run" time="0" classname="Intersects_SphereCylinder" />
+  </testsuite>
+  <testsuite name="IsInside_Cylinder" tests="5" failures="0" disabled="0" errors="0" time="0.001">
+    <testcase name="PointInside" status="run" time="0" classname="IsInside_Cylinder" />
+    <testcase name="PointOutside_Radially" status="run" time="0" classname="IsInside_Cylinder" />
+    <testcase name="PointOutside_CloseToStart" status="run" time="0" classname="IsInside_Cylinder" />
+    <testcase name="PointOutside_CloseToEnd" status="run" time="0" classname="IsInside_Cylinder" />
+    <testcase name="PointOnSurface" status="run" time="0" classname="IsInside_Cylinder" />
+  </testsuite>
+  <testsuite name="PhysicsIntegration" tests="1" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="SphereCollisionUpdatesVelocity" status="run" time="0" classname="PhysicsIntegration" />
+  </testsuite>
+  <testsuite name="IsInside_Plane" tests="1" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="HalfSpaceAbove" status="run" time="0" classname="IsInside_Plane" />
+  </testsuite>
+  <testsuite name="Intersects_Plane" tests="2" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="SegmentCrossesPlane" status="run" time="0" classname="Intersects_Plane" />
+    <testcase name="SegmentParallelNoIntersection" status="run" time="0" classname="Intersects_Plane" />
+  </testsuite>
+  <testsuite name="PlaneDistance" tests="7" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="PointAbovePlane" status="run" time="0" classname="PlaneDistance" />
+    <testcase name="PointBelowPlane" status="run" time="0" classname="PlaneDistance" />
+    <testcase name="PointOnPlane" status="run" time="0" classname="PlaneDistance" />
+    <testcase name="PointCloseToPlane" status="run" time="0" classname="PlaneDistance" />
+    <testcase name="NegativeCoordinates" status="run" time="0" classname="PlaneDistance" />
+    <testcase name="AlongNormalDirection" status="run" time="0" classname="PlaneDistance" />
+    <testcase name="RandomDirection" status="run" time="0" classname="PlaneDistance" />
+  </testsuite>
+  <testsuite name="SpherePlaneCollision" tests="5" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="NoIntersection_Above" status="run" time="0" classname="SpherePlaneCollision" />
+    <testcase name="Intersection_Crossing" status="run" time="0" classname="SpherePlaneCollision" />
+    <testcase name="Intersection_Touching" status="run" time="0" classname="SpherePlaneCollision" />
+    <testcase name="Intersection_Bisected" status="run" time="0" classname="SpherePlaneCollision" />
+    <testcase name="NoIntersection_Below" status="run" time="0" classname="SpherePlaneCollision" />
+  </testsuite>
+  <testsuite name="Physics_Energy" tests="1" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="Conservation_PerfectlyElastic" status="run" time="0" classname="Physics_Energy" />
+  </testsuite>
+  <testsuite name="Physics_Momentum" tests="4" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="Conservation_EqualMass_HeadOn" status="run" time="0" classname="Physics_Momentum" />
+    <testcase name="Conservation_UnequalMass_HeadOn" status="run" time="0" classname="Physics_Momentum" />
+    <testcase name="Conservation_UnequalMass_Diagonal" status="run" time="0" classname="Physics_Momentum" />
+    <testcase name="Conservation_GlancingBlow" status="run" time="0" classname="Physics_Momentum" />
+  </testsuite>
+  <testsuite name="IsInside" tests="12" failures="0" disabled="0" errors="0" time="0.02">
+    <testcase name="BasicCentreInside" status="run" time="0" classname="IsInside" />
+    <testcase name="DiagonalInside" status="run" time="0" classname="IsInside" />
+    <testcase name="NonOriginInside" status="run" time="0" classname="IsInside" />
+    <testcase name="PrecisionInside" status="run" time="0" classname="IsInside" />
+    <testcase name="NegativeCoordsInside" status="run" time="0" classname="IsInside" />
+    <testcase name="CloseCallInside" status="run" time="0" classname="IsInside" />
+    <testcase name="BasicCentreOutside" status="run" time="0" classname="IsInside" />
+    <testcase name="DiagonalOutside" status="run" time="0" classname="IsInside" />
+    <testcase name="NonOriginOutside" status="run" time="0" classname="IsInside" />
+    <testcase name="PrecisionOutside" status="run" time="0" classname="IsInside" />
+    <testcase name="NegativeCoordsOutside" status="run" time="0" classname="IsInside" />
+    <testcase name="CloseCallOutside" status="run" time="0" classname="IsInside" />
+  </testsuite>
+  <testsuite name="Intersects_Sphere" tests="8" failures="0" disabled="0" errors="0" time="0.024">
+    <testcase name="SegmentThroughSphere" status="run" time="0" classname="Intersects_Sphere" />
+    <testcase name="SegmentMissesSphere" status="run" time="0" classname="Intersects_Sphere" />
+    <testcase name="DegeneratePointInside" status="run" time="0" classname="Intersects_Sphere" />
+    <testcase name="DegeneratePointOutside" status="run" time="0" classname="Intersects_Sphere" />
+    <testcase name="SegmentStartInside" status="run" time="0" classname="Intersects_Sphere" />
+    <testcase name="SegmentEndInside" status="run" time="0" classname="Intersects_Sphere" />
+    <testcase name="LineHits_ButSegmentIsAfter" status="run" time="0" classname="Intersects_Sphere" />
+    <testcase name="LineHits_ButSegmentIsBefore" status="run" time="0" classname="Intersects_Sphere" />
+  </testsuite>
+  <testsuite name="SphereSphereCollision" tests="7" failures="0" disabled="0" errors="0" time="0.002">
+    <testcase name="NoIntersection_CentreAtOrigin" status="run" time="0" classname="SphereSphereCollision" />
+    <testcase name="NoIntersection_OffsetCentre" status="run" time="0" classname="SphereSphereCollision" />
+    <testcase name="Overlapping_CentreAtOrigin" status="run" time="0" classname="SphereSphereCollision" />
+    <testcase name="Overlapping_OffsetCentre" status="run" time="0" classname="SphereSphereCollision" />
+    <testcase name="FullyContained_CentreAtOrigin" status="run" time="0" classname="SphereSphereCollision" />
+    <testcase name="FullyContained_OffsetCentre" status="run" time="0" classname="SphereSphereCollision" />
+    <testcase name="IdenticalSpheres" status="run" time="0" classname="SphereSphereCollision" />
+  </testsuite>
+  <testsuite name="InfiniteLineDistance" tests="5" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="ClosestPointOnLine" status="run" time="0" classname="InfiniteLineDistance" />
+    <testcase name="PointOnLine" status="run" time="0" classname="InfiniteLineDistance" />
+    <testcase name="VerticalLine" status="run" time="0" classname="InfiniteLineDistance" />
+    <testcase name="HorizontalLine" status="run" time="0" classname="InfiniteLineDistance" />
+    <testcase name="DiagonalLine" status="run" time="0" classname="InfiniteLineDistance" />
+  </testsuite>
+  <testsuite name="Intersects_InfiniteLine_NoEps" tests="4" failures="0" disabled="0" errors="0" time="0.001">
+    <testcase name="NoIntersection_CentreAtOrigin" status="run" time="0" classname="Intersects_InfiniteLine_NoEps" />
+    <testcase name="PassesThroughSphere_CentreAtSphere" status="run" time="0" classname="Intersects_InfiniteLine_NoEps" />
+    <testcase name="LineStartsInsideSphere" status="run" time="0" classname="Intersects_InfiniteLine_NoEps" />
+    <testcase name="LinePassesThroughSphereCenter" status="run" time="0" classname="Intersects_InfiniteLine_NoEps" />
+  </testsuite>
+  <testsuite name="Physics_Collision" tests="5" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="DirectCollision_AxisAligned" status="run" time="0" classname="Physics_Collision" />
+    <testcase name="DirectCollision_GeneralVelocity" status="run" time="0" classname="Physics_Collision" />
+    <testcase name="TwoMoving_Opposing_AxisAligned" status="run" time="0" classname="Physics_Collision" />
+    <testcase name="TwoMoving_SameDir_AxisAligned" status="run" time="0" classname="Physics_Collision" />
+    <testcase name="TwoMoving_Opposing_General" status="run" time="0" classname="Physics_Collision" />
+  </testsuite>
+</testsuites>
