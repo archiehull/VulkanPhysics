@@ -11,6 +11,7 @@ int PhysicsSystem::subSteps = 4;
 IntegrationMethod PhysicsSystem::currentMethod = IntegrationMethod::SemiImplicitEuler;
 ResolutionMethod PhysicsSystem::currentResolutionMethod = ResolutionMethod::Impulse;
 bool PhysicsSystem::applyGravity = true;
+float PhysicsSystem::gravityDirection = -1.0f;
 
 // Global tuning knobs
 float PhysicsSystem::contactFrictionScale = 1.0f;
@@ -53,7 +54,7 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
 
             if (!physics.isStatic && physics.inverseMass > 0.0f) {
                 if (applyGravity) {
-                    const glm::vec3 gravityForce = glm::vec3(0.0f, -9.81f, 0.0f) * physics.mass;
+                    const glm::vec3 gravityForce = glm::vec3(0.0f, 9.81f * gravityDirection, 0.0f) * physics.mass;
                     physics.forceAccumulator += gravityForce;
                 }
 

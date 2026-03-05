@@ -9,6 +9,7 @@
 #include "../geometry/GeometryGenerator.h"
 #include "../geometry/OBJLoader.h"
 #include "../geometry/SJGLoader.h"
+#include "../systems/CameraSystem.h"
 
 // TODO:
 // refactor and decouple scene class to entity component system
@@ -584,6 +585,10 @@ void Application::ProcessInput() {
     }
     if (inputManager->IsActionJustPressed(InputAction::ResetEnvironment)) {
         scene->ResetEnvironment();
+    }
+    if (inputManager->IsActionJustPressed(InputAction::ToggleNoclip)) {
+        CameraSystem::ToggleNoclip(*scene);
+        std::cout << "Noclip toggled via Hotkey\n";
     }
 
     // --- Time Speed (Holding T logic) ---

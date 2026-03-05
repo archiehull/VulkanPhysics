@@ -9,7 +9,7 @@ std::unordered_map<std::string, int> InputManager::StringToKeyMap = {
     {"W", GLFW_KEY_W}, {"A", GLFW_KEY_A}, {"S", GLFW_KEY_S}, {"D", GLFW_KEY_D},
     {"Q", GLFW_KEY_Q}, {"E", GLFW_KEY_E}, {"R", GLFW_KEY_R}, {"T", GLFW_KEY_T},
     {"Y", GLFW_KEY_Y}, {"U", GLFW_KEY_U}, {"I", GLFW_KEY_I}, {"O", GLFW_KEY_O},
-    {"P", GLFW_KEY_P},
+    {"P", GLFW_KEY_P}, {"M", GLFW_KEY_M}, {"N", GLFW_KEY_N},
     {"UP", GLFW_KEY_UP}, {"DOWN", GLFW_KEY_DOWN}, {"LEFT", GLFW_KEY_LEFT}, {"RIGHT", GLFW_KEY_RIGHT},
     {"PAGE_UP", GLFW_KEY_PAGE_UP}, {"PAGE_DOWN", GLFW_KEY_PAGE_DOWN},
     {"LEFT_SHIFT", GLFW_KEY_LEFT_SHIFT}, {"RIGHT_SHIFT", GLFW_KEY_RIGHT_SHIFT},
@@ -48,6 +48,7 @@ std::unordered_map<std::string, InputAction> InputManager::StringToActionMap = {
     {"NextSeason", InputAction::NextSeason},
     {"ToggleWeather", InputAction::ToggleWeather},
     {"SpawnDustCloud", InputAction::SpawnDustCloud},
+    {"ToggleNoclip", InputAction::ToggleNoclip},
     {"PauseToggle", InputAction::PauseToggle},
     {"Exit", InputAction::Exit}
 };
@@ -95,6 +96,7 @@ std::unordered_map<std::string, std::string> InputManager::GetDefaultBindings() 
         {"NextSeason", "I"},
         {"ToggleWeather", "O"},
         {"SpawnDustCloud", "P"},
+        {"ToggleNoclip", "N"},
         {"PauseToggle", "SPACE"},
         {"Exit", "ESCAPE"}
     };

@@ -181,7 +181,10 @@ void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene, const Input
     if (input.IsActionHeld(InputAction::MoveUp))       pos += up * moveSpeed * deltaTime;
     if (input.IsActionHeld(InputAction::MoveDown))     pos -= up * moveSpeed * deltaTime;
 
-    ClampCameraPosition(pos, scene, prevPos);
+    bool isNoclip = cam.noclipEnabled;
+    if (!isNoclip) {
+        ClampCameraPosition(pos, scene, prevPos);
+    }
 
     // Rotation (Make sure to add Look actions to your InputAction enum and configs!)
     if (input.IsActionHeld(InputAction::LookLeft))  cam.yaw += rotateSpeed * deltaTime;

@@ -37,6 +37,7 @@ enum class InputAction {
     NextSeason,
     ToggleWeather,
     ResetEnvironment,
+    ToggleNoclip,
     PauseToggle,
     Exit
 };

@@ -32,3 +32,44 @@ void CameraSystem::Update(Scene& scene, float deltaTime) {
         cam.projectionMatrix[1][1] *= -1; // Vulkan Y-flip
     }
 }
+
+bool CameraSystem::IsNoclip(Scene& scene, Entity cameraEntity) {
+    auto& registry = scene.GetRegistry();
+    Entity target = cameraEntity;
+
+    if (target == MAX_ENTITIES) {
+        for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+            if (registry.HasComponent<CameraComponent>(e) && registry.GetComponent<CameraComponent>(e).isActive) {
+                target = e;
+                break;
+            }
+        }
+    }
+
+    if (target != MAX_ENTITIES && registry.HasComponent<CameraComponent>(target)) {
+        return registry.GetComponent<CameraComponent>(target).noclipEnabled;
+    }
+    return false;
+}
+
+void CameraSystem::SetNoclip(Scene& scene, bool noclipEnabled, Entity cameraEntity) {
+    auto& registry = scene.GetRegistry();
+    Entity target = cameraEntity;
+
+    if (target == MAX_ENTITIES) {
+        for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+            if (registry.HasComponent<CameraComponent>(e) && registry.GetComponent<CameraComponent>(e).isActive) {
+                target = e;
+                break;
+            }
+        }
+    }
+
+    if (target != MAX_ENTITIES && registry.HasComponent<CameraComponent>(target)) {
+        registry.GetComponent<CameraComponent>(target).noclipEnabled = noclipEnabled;
+    }
+}
+
+void CameraSystem::ToggleNoclip(Scene& scene, Entity cameraEntity) {
+    SetNoclip(scene, !IsNoclip(scene, cameraEntity), cameraEntity);
+}

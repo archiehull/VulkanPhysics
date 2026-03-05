@@ -90,6 +90,15 @@ private:
     bool m_ShowControlsWindow = false;
     bool m_ShowEntityPropertiesWindow = false;
 
+    struct PropertyWindowData {
+        int id;
+        Entity selectedEntity;
+        bool showList;
+        bool isOpen;
+    };
+    std::vector<PropertyWindowData> m_PropertyWindows;
+    int m_NextPropertyWindowId = 1;
+
     float m_UIScale = 1.0f;
 
     int m_SelectedSceneIndex = 0;

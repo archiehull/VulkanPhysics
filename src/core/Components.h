@@ -205,4 +205,6 @@ struct CameraComponent {
 
     float moveSpeed = 35.0f;
     float rotateSpeed = 60.0f;
+
+    bool noclipEnabled = false;
 };

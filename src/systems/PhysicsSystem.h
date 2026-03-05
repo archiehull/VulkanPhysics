@@ -20,6 +20,7 @@ public:
     static IntegrationMethod currentMethod;
     static ResolutionMethod currentResolutionMethod;
     static bool applyGravity;
+    static float gravityDirection;
 
     // Global tuning knobs
     static float contactFrictionScale;     // Multiplies per-object friction
