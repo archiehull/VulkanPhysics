@@ -9,7 +9,6 @@
 #include "../vulkan/UniformBufferObject.h"
 #include "../core/Config.h" 
 #include "ParticleSystem.h"
-#include "Camera.h"
 
 
 // ECS Includes
@@ -48,6 +47,8 @@ public:
     Entity GetEntityByName(const std::string& name) const;
 
     void Initialize();
+
+    void CreateEnvironment();
 
     float RadiusAdjustment(const float radius, const float deltaY) const;
 

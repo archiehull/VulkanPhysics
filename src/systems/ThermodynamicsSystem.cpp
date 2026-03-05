@@ -9,19 +9,15 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
     Entity envEntity = scene.GetEnvironmentEntity();
 
-    // FIX 1: Bulletproof Environment Fallback! 
-    // If scene logic accidentally wipes the environment, use a default so fire systems never abort.
-    EnvironmentComponent fallbackEnv;
-    EnvironmentComponent& env = (envEntity != MAX_ENTITIES)
-        ? registry.GetComponent<EnvironmentComponent>(envEntity)
-        : fallbackEnv;
+    // Properly check for the environment instead of using a dummy fallback
+    bool hasEnv = (envEntity != MAX_ENTITIES) && registry.HasComponent<EnvironmentComponent>(envEntity);
+    const EnvironmentComponent* env = hasEnv ? &registry.GetComponent<EnvironmentComponent>(envEntity) : nullptr;
 
     static std::random_device rd;
     static std::mt19937 gen(rd());
     std::uniform_real_distribution<float> chance(0.0f, 1.0f);
 
     for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-        // FIX 2: Remove RenderComponent requirement! (Allows invisible colliders to burn)
         if (!registry.HasComponent<ThermoComponent>(e) ||
             !registry.HasComponent<TransformComponent>(e)) {
             continue;
@@ -39,32 +35,45 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
 
         const glm::vec3 basePos = glm::vec3(transform.matrix[3]);
 
+        // --- DECOUPLED ENVIRONMENTAL VARIABLES ---
+        float targetTemp = 20.0f; // Default ambient room temperature if no environment exists
+        float rawWeatherIntensity = 20.0f;
+        bool isPrecipitating = false;
+        float postRainSuppression = 0.0f;
+        float dayLengthSeconds = 60.0f; // Fallback day length for regrowing
+
+        if (hasEnv) {
+            rawWeatherIntensity = env->weatherIntensity;
+            targetTemp = rawWeatherIntensity;
+            if (env->currentSunHeight > 0.1f) {
+                targetTemp += env->sunHeatBonus * env->currentSunHeight;
+            }
+            if (env->isPrecipitating) {
+                targetTemp -= 40.0f;
+            }
+            isPrecipitating = env->isPrecipitating;
+            postRainSuppression = env->postRainFireSuppressionTimer;
+            dayLengthSeconds = env->timeConfig.dayLengthSeconds;
+        }
+
         switch (thermo.state) {
         case ObjectState::NORMAL:
         case ObjectState::HEATING: {
             const float responseSpeed = thermo.thermalResponse;
             const float effectiveIgnitionThreshold = thermo.ignitionThreshold;
-            float targetTemp = env.weatherIntensity;
-
-            if (env.currentSunHeight > 0.1f) {
-                targetTemp += env.sunHeatBonus * env.currentSunHeight;
-            }
-            if (env.isPrecipitating) {
-                targetTemp -= 40.0f;
-            }
 
             const float changeRate = responseSpeed * deltaTime;
             const float lerpFactor = glm::clamp(changeRate, 0.0f, 1.0f);
             thermo.currentTemp = glm::mix(thermo.currentTemp, targetTemp, lerpFactor);
 
-			if (thermo.currentTemp > 45.0f) { // should this be currenttemp or ignition threshold? maybe a separate "heating threshold"?
+            if (thermo.currentTemp > 45.0f) {
                 thermo.state = ObjectState::HEATING;
             }
             else {
                 thermo.state = ObjectState::NORMAL;
             }
 
-            if (!env.isPrecipitating && env.postRainFireSuppressionTimer <= 0.0f && thermo.currentTemp >= effectiveIgnitionThreshold) {
+            if (!isPrecipitating && postRainSuppression <= 0.0f && thermo.currentTemp >= effectiveIgnitionThreshold) {
                 const float excessHeat = thermo.currentTemp - effectiveIgnitionThreshold;
                 const float ignitionChancePerSecond = 0.05f + (excessHeat * 0.005f);
 
@@ -73,18 +82,17 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                     thermo.burnTimer = 0.0f;
                     thermo.fireEmitterId = scene.AddFire(basePos, 0.1f);
                     thermo.smokeEmitterId = scene.AddSmoke(basePos, 0.1f);
-
-					// could this call be moved to the scene's Ignite function to ensure consistency?
                 }
             }
             break;
         }
 
         case ObjectState::BURNING: {
-            if (env.isPrecipitating) {
+            // Extinguish if it starts raining
+            if (isPrecipitating) {
                 scene.StopObjectFire(e);
                 thermo.state = ObjectState::NORMAL;
-                thermo.currentTemp = env.weatherIntensity;
+                thermo.currentTemp = targetTemp;
                 thermo.burnTimer = 0.0f;
                 break;
             }
@@ -121,7 +129,6 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 fireProps.positionVariation = glm::vec3(0.4f * objectSize, currentFireHeight * 0.4f, 0.4f * objectSize);
 
                 // 2. SPRITE SIZE: ONLY use temporal growth. DO NOT multiply by objectSize!
-                // This guarantees the sprites are always clearly visible (starts at 0.1, grows to 1.5x normal size)
                 const float particleScale = 0.1f + (growth * 1.4f);
 
                 fireProps.sizeBegin *= particleScale;
@@ -155,6 +162,7 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 const float rate = (20.0f + (80.0f * growth)) * objectSize;
                 scene.GetOrCreateSystem(smokeProps)->UpdateEmitter(thermo.smokeEmitterId, smokeProps, rate);
             }
+
             glm::vec3 lightPos = basePos;
             lightPos.y += currentFireHeight * 0.5f;
 
@@ -177,6 +185,7 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 fireLightTransform.matrix[3] = glm::vec4(lightPos, 1.0f);
                 fireLightComp.intensity = targetIntensity * flicker;
             }
+
             // Burnout logic
             if (thermo.burnTimer >= thermo.maxBurnDuration) {
                 if (thermo.canBurnout) {
@@ -202,7 +211,6 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                         scene.GetOrCreateSystem(smolder)->UpdateEmitter(thermo.smokeEmitterId, smolder, 20.0f);
                     }
 
-                    // Only interact with render if the object actually has a renderer
                     if (render) {
                         thermo.storedOriginalGeometry = render->geometry;
                         if (scene.dustGeometryPrototype) {
@@ -211,12 +219,10 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                         render->texturePath = scene.sootTexturePath;
                     }
 
-                    // Save the explicit vectors
                     thermo.storedOriginalPosition = transform.position;
                     thermo.storedOriginalRotation = transform.rotation;
                     thermo.storedOriginalScale = transform.scale;
 
-                    // Shrink the object to a tiny pile of ash
                     transform.scale = glm::vec3(0.003f);
                     transform.UpdateMatrix();
 
@@ -234,11 +240,14 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
         case ObjectState::REGROWING: {
             const float changeRate = 0.5f * deltaTime;
             const float lerpFactor = glm::clamp(changeRate, 0.0f, 1.0f);
-            thermo.currentTemp = glm::mix(thermo.currentTemp, env.weatherIntensity, lerpFactor);
+            thermo.currentTemp = glm::mix(thermo.currentTemp, rawWeatherIntensity, lerpFactor);
 
-            float growthMultiplier = 0.0f;
-            if (env.weatherIntensity > 10.0f) {
-                growthMultiplier = (env.weatherIntensity - 10.0f) / 15.0f;
+            float growthMultiplier = 1.0f; // Defaults to normal growth rate without environment
+            if (hasEnv && rawWeatherIntensity > 10.0f) {
+                growthMultiplier = (rawWeatherIntensity - 10.0f) / 15.0f;
+            }
+            else if (hasEnv && rawWeatherIntensity <= 10.0f) {
+                growthMultiplier = 0.0f; // Too cold to grow
             }
             thermo.regrowTimer += deltaTime * growthMultiplier;
 
@@ -251,7 +260,7 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 if (thermo.regrowTimer >= 10.0f) {
                     thermo.state = ObjectState::REGROWING;
                     thermo.regrowTimer = 0.0f;
-                    thermo.currentTemp = env.weatherIntensity;
+                    thermo.currentTemp = rawWeatherIntensity;
 
                     if (render) {
                         if (thermo.storedOriginalGeometry) {
@@ -263,13 +272,12 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 }
             }
             else if (thermo.state == ObjectState::REGROWING) {
-                const float growthTime = env.timeConfig.dayLengthSeconds * 0.75f;
+                const float growthTime = dayLengthSeconds * 0.75f;
 
                 float t = glm::clamp(thermo.regrowTimer / growthTime, 0.0f, 1.0f);
                 t = t * t * (3.0f - 2.0f * t);
 
                 const float currentScale = glm::mix(0.003f, 1.0f, t);
-                // Keep original position and rotation, but slowly multiply the scale back up
                 transform.position = thermo.storedOriginalPosition;
                 transform.rotation = thermo.storedOriginalRotation;
                 transform.scale = thermo.storedOriginalScale * currentScale;
@@ -277,7 +285,7 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
 
                 if (t >= 1.0f) {
                     thermo.state = ObjectState::NORMAL;
-                    thermo.currentTemp = env.weatherIntensity;
+                    thermo.currentTemp = rawWeatherIntensity;
                 }
             }
             break;

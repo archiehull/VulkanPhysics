@@ -20,33 +20,100 @@ void CameraController::SetOrbitTarget(Entity target, Scene& scene) {
 
     OrbitTargetObject = target;
     auto& registry = scene.GetRegistry();
+
+    if (!registry.HasComponent<TransformComponent>(target)) return;
+
     glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(target).matrix[3]);
 
-    // If the current camera doesn't support orbiting, automatically switch to the main outside camera
+    // If current camera is not orbit-capable, switch to first available Orbit/RandomTarget camera
     const auto& meta = cameraMeta[activeCameraName];
     if (meta.type != "Orbit" && meta.type != "RandomTarget") {
-        SwitchCamera("OutsideCam", scene);
+        std::string fallback;
+        for (const auto& [camName, camMeta] : cameraMeta) {
+            if (camMeta.type == "Orbit" || camMeta.type == "RandomTarget") {
+                fallback = camName;
+                break;
+            }
+        }
+        if (!fallback.empty()) {
+            SwitchCamera(fallback, scene);
+        }
     }
 
-    // --- NEW: Dynamic Close-Up Radius ---
-    float viewRadius = 15.0f; // A tight default fallback
-    float yOffset = 0.0f;     // Default to looking slightly above the base
+    // --- Dynamic Close-Up Radius ---
+    float viewRadius = 15.0f;
+    float yOffset = 0.0f;
 
-    // If the object has a collider, frame it nicely based on its actual size
+    auto& targetTransform = registry.GetComponent<TransformComponent>(target);
+    const float maxScale = std::max({ targetTransform.scale.x, targetTransform.scale.y, targetTransform.scale.z });
+
     if (registry.HasComponent<ColliderComponent>(target)) {
-        const auto& collider = registry.GetComponent<ColliderComponent>(target);
+        auto& collider = registry.GetComponent<ColliderComponent>(target);
 
-        // Make the radius ~2.5x the size of the object, ensuring a minimum distance of 10
-        viewRadius = std::max(10.0f, std::max(collider.radius, collider.height) * 2.5f);
-
-        // Look at the vertical center of the object instead of its feet
-        yOffset = collider.height * 0.5f;
+        // Plane colliders can be huge (e.g., 500). Don't use that for camera framing.
+        if (collider.type == 1) {
+            viewRadius = std::max(maxScale * 4.0f, 8.0f);
+            yOffset = maxScale * 0.5f;
+        }
+        else {
+            viewRadius = std::clamp(std::max(collider.radius * 3.0f, 5.0f), 5.0f, 60.0f);
+            yOffset = std::max(collider.height * 0.5f, maxScale * 0.5f);
+        }
+    }
+    else {
+        viewRadius = std::max(maxScale * 4.0f, 5.0f);
+        yOffset = maxScale * 0.5f;
     }
 
-    // Snap the camera to orbit the object at the new close-up distance
-    scene.SetObjectOrbit(activeCameraName, targetPos + glm::vec3(0, yOffset, 0), viewRadius, 0.0f, { 0,1,0 }, { 1,0,0 });
+    // Apply the vertical offset so we look at the center of the object
+    targetPos.y += yOffset;
 
-    std::cout << "Camera forced to orbit entity: " << target << " at radius: " << viewRadius << std::endl;
+    // Grab the camera components
+    if (!registry.HasComponent<TransformComponent>(activeCameraEntity) ||
+        !registry.HasComponent<CameraComponent>(activeCameraEntity)) {
+        return;
+    }
+
+    auto& camTransform = registry.GetComponent<TransformComponent>(activeCameraEntity);
+    auto& camComp = registry.GetComponent<CameraComponent>(activeCameraEntity);
+
+    // Calculate the new camera position (placing it 'viewRadius' units back and slightly up)
+    // We maintain a gentle angle by offsetting on Y and Z
+    glm::vec3 offset = glm::vec3(0.0f, viewRadius * 0.5f, viewRadius);
+    glm::vec3 newCameraPosition = targetPos + offset;
+
+    // Apply new position
+    camTransform.position = newCameraPosition;
+
+    // Calculate new yaw and pitch so the camera actually looks at the target
+    glm::vec3 direction = glm::normalize(targetPos - newCameraPosition);
+    camComp.yaw = glm::degrees(atan2(direction.z, direction.x));
+    camComp.pitch = glm::degrees(asin(direction.y));
+
+    // Sync rotation for the TransformComponent
+    camTransform.rotation.x = camComp.pitch;
+    camTransform.rotation.y = camComp.yaw;
+    camTransform.rotation.z = 0.0f;
+
+    // We MUST sync the OrbitComponent, otherwise the OrbitSystem will overwrite 
+    // the transform we just calculated on the very next frame!
+    if (registry.HasComponent<OrbitComponent>(activeCameraEntity)) {
+        auto& orbitComp = registry.GetComponent<OrbitComponent>(activeCameraEntity);
+        if (orbitComp.isOrbiting) {
+            orbitComp.center = targetPos;
+            orbitComp.radius = viewRadius;
+
+            // Set start vector so the math matches our forced position exactly
+            glm::vec3 flatOffset = glm::vec3(newCameraPosition.x - targetPos.x, 0.0f, newCameraPosition.z - targetPos.z);
+            if (glm::length(flatOffset) > 0.001f) {
+                orbitComp.startVector = glm::normalize(flatOffset) * viewRadius;
+            }
+            orbitComp.currentAngle = 0.0f;
+        }
+    }
+    // --------------------------------------
+
+    camTransform.UpdateMatrix();
 }
 
 void CameraController::SetupCameras(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs) {
@@ -155,25 +222,27 @@ void CameraController::Update(float deltaTime, Scene& scene, const InputManager&
 }
 
 void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene, const InputManager& input) {
-    auto& registry = scene.GetRegistry();
-    auto& transform = registry.GetComponent<TransformComponent>(activeCameraEntity);
-    auto& cam = registry.GetComponent<CameraComponent>(activeCameraEntity);
+    if (activeCameraEntity == MAX_ENTITIES) return;
 
-    // Speed constants
+    auto& registry = scene.GetRegistry();
+    if (!registry.HasComponent<CameraComponent>(activeCameraEntity) ||
+        !registry.HasComponent<TransformComponent>(activeCameraEntity)) return;
+
+    auto& cam = registry.GetComponent<CameraComponent>(activeCameraEntity);
+    auto& transform = registry.GetComponent<TransformComponent>(activeCameraEntity);
+
     bool sprinting = input.IsActionHeld(InputAction::Sprint);
     const float shiftMult = sprinting ? 3.0f : 1.0f;
     const float moveSpeed = cam.moveSpeed * shiftMult;
     const float rotateSpeed = cam.rotateSpeed * shiftMult;
 
-    // Calculate basis vectors
-    glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2])); // Z-Axis
-    glm::vec3 right = glm::normalize(glm::vec3(transform.matrix[0]));  // X-Axis
+    glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2]));
+    glm::vec3 right = glm::normalize(glm::vec3(transform.matrix[0]));
     glm::vec3 up = { 0, 1, 0 };
 
     glm::vec3 pos = glm::vec3(transform.matrix[3]);
     glm::vec3 prevPos = pos;
 
-    // Translation
     if (input.IsActionHeld(InputAction::MoveForward))  pos += front * moveSpeed * deltaTime;
     if (input.IsActionHeld(InputAction::MoveBackward)) pos -= front * moveSpeed * deltaTime;
     if (input.IsActionHeld(InputAction::MoveLeft))     pos -= right * moveSpeed * deltaTime;
@@ -186,7 +255,6 @@ void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene, const Input
         ClampCameraPosition(pos, scene, prevPos);
     }
 
-    // Rotation (Make sure to add Look actions to your InputAction enum and configs!)
     if (input.IsActionHeld(InputAction::LookLeft))  cam.yaw += rotateSpeed * deltaTime;
     if (input.IsActionHeld(InputAction::LookRight)) cam.yaw -= rotateSpeed * deltaTime;
     if (input.IsActionHeld(InputAction::LookUp))    cam.pitch += rotateSpeed * deltaTime;
@@ -194,11 +262,10 @@ void CameraController::UpdateFreeRoam(float deltaTime, Scene& scene, const Input
 
     cam.pitch = std::clamp(cam.pitch, -89.0f, 89.0f);
 
-    // Reconstruct Matrix from Pos + Euler
-    glm::mat4 m = glm::translate(glm::mat4(1.0f), pos);
-    m = glm::rotate(m, glm::radians(cam.yaw), { 0, 1, 0 });
-    m = glm::rotate(m, glm::radians(cam.pitch), { 1, 0, 0 });
-    transform.matrix = m;
+    // IMPORTANT: write back source-of-truth fields before UpdateMatrix()
+    transform.position = pos;
+    transform.rotation = glm::vec3(cam.pitch, cam.yaw, 0.0f);
+    transform.UpdateMatrix();
 }
 
 void CameraController::UpdateOrbitInput(float deltaTime, Scene& scene, const InputManager& input) {

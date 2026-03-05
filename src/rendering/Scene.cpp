@@ -8,7 +8,6 @@
 #include <iostream>
 #include <algorithm>
 #include <random>
-#include "Camera.h"
 
 // ECS Systems
 #include "../systems/OrbitSystem.h"
@@ -19,6 +18,19 @@
 #include "../systems/ParticleUpdateSystem.h"
 #include "../systems/CameraSystem.h"
 #include "../systems/PhysicsSystem.h"
+
+void Scene::CreateEnvironment() {
+    // Prevent creating multiple environments
+    if (m_EnvironmentEntity != MAX_ENTITIES) {
+        std::cout << "Environment already exists!" << std::endl;
+        return;
+    }
+
+    m_EnvironmentEntity = m_Registry.CreateEntity();
+    m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { "GlobalEnvironment" });
+    m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
+    m_EntityMap["GlobalEnvironment"] = m_EnvironmentEntity;
+}
 
 void Scene::SetObjectPhysics(const std::string& name, bool isStatic, float mass) {
     Entity e = GetEntityByName(name);
@@ -136,15 +148,17 @@ void Scene::Initialize() {
         throw std::runtime_error(std::string("Warning: Failed to load dust prototype: ") + e.what());
     }
 
-    // 1. Create Global Environment Entity
-    m_EnvironmentEntity = m_Registry.CreateEntity();
-    m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { "GlobalEnvironment" });
-    m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
+    //// 1. Create Global Environment Entity
+    //m_EnvironmentEntity = m_Registry.CreateEntity();
+    //m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { "GlobalEnvironment" });
+    //m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
 
-    // 2. Create Global Dust Cloud Entity
-    Entity dustEntity = m_Registry.CreateEntity();
-    m_Registry.AddComponent<NameComponent>(dustEntity, { "GlobalDustCloud" });
-    m_Registry.AddComponent<DustCloudComponent>(dustEntity, DustCloudComponent{});
+    //// 2. Create Global Dust Cloud Entity
+    //Entity dustEntity = m_Registry.CreateEntity();
+    //m_Registry.AddComponent<NameComponent>(dustEntity, { "GlobalDustCloud" });
+    //m_Registry.AddComponent<DustCloudComponent>(dustEntity, DustCloudComponent{});
+
+    m_EnvironmentEntity = MAX_ENTITIES;
 
     // 3. Register ECS Systems
     m_Systems.push_back(std::make_unique<CameraSystem>());
@@ -807,17 +821,19 @@ void Scene::Clear() {
     m_LightEntities.clear();
     particleSystems.clear();
 
-    // 1. Recreate Environment Entity
-    m_EnvironmentEntity = m_Registry.CreateEntity();
-    m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { "GlobalEnvironment" });
-    m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
-    m_EntityMap["GlobalEnvironment"] = m_EnvironmentEntity;
+    //// 1. Recreate Environment Entity
+    //m_EnvironmentEntity = m_Registry.CreateEntity();
+    //m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { "GlobalEnvironment" });
+    //m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
+    //m_EntityMap["GlobalEnvironment"] = m_EnvironmentEntity;
 
-    // 2. Recreate Dust Cloud Entity
-    Entity dustEntity = m_Registry.CreateEntity();
-    m_Registry.AddComponent<NameComponent>(dustEntity, { "GlobalDustCloud" });
-    m_Registry.AddComponent<DustCloudComponent>(dustEntity, DustCloudComponent{});
-    m_EntityMap["GlobalDustCloud"] = dustEntity;
+    //// 2. Recreate Dust Cloud Entity
+    //Entity dustEntity = m_Registry.CreateEntity();
+    //m_Registry.AddComponent<NameComponent>(dustEntity, { "GlobalDustCloud" });
+    //m_Registry.AddComponent<DustCloudComponent>(dustEntity, DustCloudComponent{});
+    //m_EntityMap["GlobalDustCloud"] = dustEntity;
+
+    m_EnvironmentEntity = MAX_ENTITIES;
 }
 
 void Scene::SetObjectTransform(const std::string& name, const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale) {

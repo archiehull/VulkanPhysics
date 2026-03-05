@@ -90,9 +90,6 @@
     <ClCompile Include="src\vulkan\VulkanDescriptorSet.cpp">
       <Filter>Source Files\src\vulkan</Filter>
     </ClCompile>
-    <ClCompile Include="src\rendering\Camera.cpp">
-      <Filter>Source Files\src\rendering</Filter>
-    </ClCompile>
     <ClCompile Include="src\rendering\CameraController.cpp">
       <Filter>Source Files\src\rendering</Filter>
     </ClCompile>
@@ -229,9 +226,6 @@
     </ClInclude>
     <ClInclude Include="src\vulkan\VulkanDescriptorSet.h">
       <Filter>Source Files\src\vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="src\rendering\Camera.h">
-      <Filter>Source Files\src\rendering</Filter>
     </ClInclude>
     <ClInclude Include="src\rendering\CameraController.h">
       <Filter>Source Files\src\rendering</Filter>

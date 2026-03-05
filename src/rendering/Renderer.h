@@ -20,7 +20,6 @@
 #include <map>
 #include <functional>
 #include "../vulkan/VulkanContext.h"
-#include "Camera.h"
 
 class Renderer final {
 public:
@@ -62,7 +61,6 @@ private:
     // --- 1. Pointers & Smart Pointers (8-byte aligned) ---
     VulkanDevice* device;
     VulkanSwapChain* swapChain;
-    Camera* m_camera = nullptr;
     VulkanContext* m_vulkanContext = nullptr;
 
     std::unique_ptr<VulkanRenderPass> renderPass;
