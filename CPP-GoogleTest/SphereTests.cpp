@@ -359,3 +359,27 @@ TEST(Physics_Collision, TwoMoving_Opposing_General) {
     EXPECT_NEAR(b.velocity.y, 10.0f, kTol);
     EXPECT_NEAR(b.velocity.z, 10.0f, kTol);
 }
+
+// Case 4: Glancing collision (Off-centre)
+// Ball A moves purely on the X axis. Ball B is stationary, but offset on the Y axis.
+// This creates a diagonal collision normal, meaning A should deflect diagonally and retain some forward momentum.
+TEST(Physics_Collision, TwoMoving_Glancing) {
+    // A is moving right at 10 m/s
+    MovingSphere a({ 0.0f, 0.0f, 0.0f }, 1.0f, { 10.0f, 0.0f, 0.0f });
+
+    // B is stationary, but placed offset so they hit at a 45-degree angle
+    // At distance sqrt(2) ~ 1.414 on both X and Y, the distance is 2.0 (sum of radii)
+    MovingSphere b({ 1.414213f, 1.414213f, 0.0f }, 1.0f, { 0.0f, 0.0f, 0.0f });
+
+    ResolveElasticCollision(a, b);
+
+    // Because it's a 45-degree glancing blow with equal mass:
+    // The impulse is transferred along the normal (1, 1, 0).
+    // A loses half its X velocity and gains negative Y velocity.
+    // B gains the exact velocity A lost.
+    EXPECT_NEAR(a.velocity.x, 5.0f, 1e-4f);
+    EXPECT_NEAR(a.velocity.y, -5.0f, 1e-4f);
+
+    EXPECT_NEAR(b.velocity.x, 5.0f, 1e-4f);
+    EXPECT_NEAR(b.velocity.y, 5.0f, 1e-4f);
+}
