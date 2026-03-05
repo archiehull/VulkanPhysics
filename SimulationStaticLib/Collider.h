@@ -10,17 +10,17 @@ struct InfiniteLine
 struct Line
 {
 	glm::vec3 a;
-	glm::vec3 b; // line segment from a to b
+	glm::vec3 b;
 };
 
 class Collider
 {
 public:
-	explicit Collider(const glm::vec3& position) : m_position(position) {}
-	virtual ~Collider() = default;
+	explicit Collider(const glm::vec3& position);
+	virtual ~Collider();
 
-	const glm::vec3& Position() const { return m_position; }
-	void SetPosition(const glm::vec3& p) { m_position = p; }
+	const glm::vec3& Position() const;
+	void SetPosition(const glm::vec3& p);
 
 	virtual bool IsInside(const glm::vec3& point) const = 0;
 	virtual bool Intersects(const Line& line) const = 0;

@@ -1,11 +1,4 @@
-﻿  PhysicsTests.cpp
-C:\Users\663073\Workspace\VulkanPhysics\CPP-GoogleTest\PhysicsTests.cpp(86,1): error C2011: 'Physics_Conservation_Momentum_UnequalMass_Diagonal_Test': 'class' type redefinition
-  (compiling source file '/PhysicsTests.cpp')
-      C:\Users\663073\Workspace\VulkanPhysics\CPP-GoogleTest\PhysicsTests.cpp(28,1):
-      see declaration of 'Physics_Conservation_Momentum_UnequalMass_Diagonal_Test'
-  
-C:\Users\663073\Workspace\VulkanPhysics\CPP-GoogleTest\PhysicsTests.cpp(86,1): error C2027: use of undefined type 'Physics_Conservation_Momentum_UnequalMass_Diagonal_Test'
-  (compiling source file '/PhysicsTests.cpp')
-      C:\Users\663073\Workspace\VulkanPhysics\CPP-GoogleTest\PhysicsTests.cpp(28,1):
-      see declaration of 'Physics_Conservation_Momentum_UnequalMass_Diagonal_Test'
-  
+﻿  SimulationStaticLib.lib(Sphere.obj) : MSIL .netmodule or module compiled with /GL found; restarting link with /LTCG; add /LTCG to the link command line to improve linker performance
+  Generating code
+  Finished generating code
+  CPP-GoogleTest.vcxproj -> C:\Users\663073\Workspace\VulkanPhysics\x64\Release\CPP-GoogleTest.exe

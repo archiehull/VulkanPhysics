@@ -1,9 +1,9 @@
 #include "PhysicsSystem.h"
 #include "../core/Components.h"
 #include "../rendering/Scene.h"
-#include "../../SimulationStaticLib/Sphere.h"
-#include "../../SimulationStaticLib/Plane.h"
-#include "../../SimulationStaticLib/PhysicsHelper.h"
+#include <Sphere.h>
+#include <Plane.h>
+#include <PhysicsHelper.h>
 #include <cmath>
 
 // Default settings

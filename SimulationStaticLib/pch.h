@@ -9,5 +9,9 @@
 
 // add headers that you want to pre-compile here
 #include "framework.h"
+#include <glm/glm.hpp>
+#include <cmath>
+#include <algorithm>
+#include <limits>
 
 #endif //PCH_H
