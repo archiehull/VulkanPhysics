@@ -2,14 +2,17 @@
 #include "Sphere.h"
 #include "Plane.h"
 
+// SimulationStaticLib/PhysicsHelper.h
+
 struct MovingSphere {
     Sphere sphere;
     glm::vec3 velocity;
-    float mass;
+    float invMass; // Change from mass to invMass
     float restitution;
 
-    MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, float m = 1.0f, float rest = 1.0f)
-        : sphere(pos, r), velocity(vel), mass(m), restitution(rest) {
+    // Update constructor to take invMass
+    MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, float invM = 1.0f, float rest = 1.0f)
+        : sphere(pos, r), velocity(vel), invMass(invM), restitution(rest) {
     }
 };
 
@@ -24,38 +27,55 @@ inline void ResolveElasticCollision(MovingSphere& a, MovingSphere& b) {
     if (velAlongNormal < 0.0f) return;
 
     double e = static_cast<double>(a.restitution) * static_cast<double>(b.restitution);
-    double invMassSum = (1.0 / static_cast<double>(a.mass)) + (1.0 / static_cast<double>(b.mass));
 
-    // Use unnormalized collision axis to avoid precision loss from normalization.
+    // Standardize: Use the sum of inverse masses
+    double invMassSum = static_cast<double>(a.invMass) + static_cast<double>(b.invMass);
+    if (invMassSum <= 0.0) return; // Both are static
+
     double j = -((1.0 + e) * static_cast<double>(velAlongNormal));
     j /= (invMassSum * static_cast<double>(distSq));
 
     glm::vec3 impulse = normal * static_cast<float>(j);
-    a.velocity += impulse * (1.0f / a.mass);
-    b.velocity -= impulse * (1.0f / b.mass);
+
+    // Apply impulse multiplied by inverse mass
+    a.velocity += impulse * a.invMass;
+    b.velocity -= impulse * b.invMass;
 }
 
-inline void ResolveSpherePlaneCollision(MovingSphere& a, const Plane& p, float planeRestitution) {
-    float velAlongNormal = glm::dot(a.velocity, p.GetNormal());
+// planeRestitution: restitution from plane body
+// contactFriction: [0..1], where 1 = keep tangential speed, 0 = kill tangential speed
+inline void ResolveSpherePlaneCollision(
+    MovingSphere& a,
+    const Plane& p,
+    float planeRestitution,
+    float contactFriction = 1.0f)
+{
+    const glm::vec3 n = p.GetNormal();
+    const float vn = glm::dot(a.velocity, n);
 
-    // If moving away from the plane, do nothing
-    if (velAlongNormal > 0.0f) return;
+    // Moving away from plane
+    if (vn >= 0.0f) return;
 
-    // Combine restitution (bounciness)
-    float e = a.restitution * planeRestitution;
-    float j = -(1.0f + e) * velAlongNormal;
+    const float e = glm::clamp(a.restitution * planeRestitution, 0.0f, 1.0f);
 
-    // Mass of plane is infinite, so we only divide by sphere's mass
-    j /= (1.0f / a.mass);
+    // Bounce (mass-independent for infinite-mass plane)
+    a.velocity -= (1.0f + e) * vn * n;
 
-    glm::vec3 impulse = p.GetNormal() * j;
-    a.velocity += impulse * (1.0f / a.mass);
+    // Tangential damping (friction)
+    const float tangentDamping = glm::clamp(contactFriction, 0.0f, 1.0f);
+    const glm::vec3 vNormal = glm::dot(a.velocity, n) * n;
+    const glm::vec3 vTangent = a.velocity - vNormal;
+    a.velocity = vNormal + (vTangent * tangentDamping);
 }
 
+// Update to handle potential infinite mass
 inline float GetKineticEnergy(const MovingSphere& body) {
-    return 0.5f * body.mass * glm::dot(body.velocity, body.velocity);
+    if (body.invMass <= 0.0f) return 0.0f; // Infinite mass objects don't "possess" KE in this context
+    return 0.5f * (1.0f / body.invMass) * glm::dot(body.velocity, body.velocity);
 }
 
 inline glm::vec3 GetMomentum(const MovingSphere& body) {
-    return body.velocity * body.mass;
+    if (body.invMass <= 0.0f) return glm::vec3(0.0f);
+
+    return body.velocity * (1.0f / body.invMass);
 }

@@ -165,6 +165,7 @@ public:
     bool IsDustActive() const;
 
     void SetObjectPhysics(const std::string& name, bool isStatic, float mass);
+    void SetObjectPhysicsMaterial(const std::string& name, float restitution, float friction);
     void SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity);
 
 	void SetObjectCollider(const std::string& name, int type, float radius, const glm::vec3& normal);

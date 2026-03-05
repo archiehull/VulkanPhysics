@@ -172,18 +172,31 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 currentObject->visible = (vis == "true" || vis == "1");
             }
             else if (key == "PhysicsProps") {
-                std::string flamStr, colStr, staticStr;
+                std::vector<std::string> tokens;
+                std::string tok;
+                while (ss >> tok) tokens.push_back(tok);
 
-                // Read the original two parameters
-                ss >> flamStr >> colStr;
-                currentObject->isFlammable = (flamStr == "true" || flamStr == "1");
-                currentObject->hasCollision = (colStr == "true" || colStr == "1");
-
-                // Backwards Compatibility: Only try to read isStatic if it exists
-                if (!ss.eof()) {
-                    ss >> staticStr;
-                    currentObject->isStatic = (staticStr == "true" || staticStr == "1");
+                if (tokens.size() >= 2) {
+                    currentObject->isFlammable = (tokens[0] == "true" || tokens[0] == "1");
+                    currentObject->hasCollision = (tokens[1] == "true" || tokens[1] == "1");
                 }
+
+                auto isBoolToken = [](const std::string& s) {
+                    return s == "true" || s == "false" || s == "1" || s == "0";
+                    };
+
+                size_t idx = 2;
+
+                // Optional isStatic (legacy-compatible)
+                if (idx < tokens.size() && isBoolToken(tokens[idx])) {
+                    currentObject->isStatic = (tokens[idx] == "true" || tokens[idx] == "1");
+                    ++idx;
+                }
+
+                // Optional mass, restitution, friction
+                if (idx < tokens.size()) currentObject->mass = std::stof(tokens[idx++]);
+                if (idx < tokens.size()) currentObject->restitution = std::stof(tokens[idx++]);
+                if (idx < tokens.size()) currentObject->friction = std::stof(tokens[idx++]);
             }
             else if (key == "ColliderProps") {
                 ss >> currentObject->colliderType;

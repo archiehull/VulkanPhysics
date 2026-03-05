@@ -288,9 +288,9 @@ void Application::SetupScene() {
         scene->SetObjectShadingMode(objCfg.name, objCfg.shadingMode);
         scene->SetObjectLayerMask(objCfg.name, objCfg.layerMask);
         scene->SetObjectCollision(objCfg.name, objCfg.hasCollision);
-        scene->SetObjectPhysics(objCfg.name, objCfg.isStatic, 1.0f);
-        scene->SetObjectCollider(objCfg.name, objCfg.colliderType, objCfg.colliderRadius, objCfg.colliderNormal);
-        // --- Apply Light ---
+        scene->SetObjectPhysics(objCfg.name, objCfg.isStatic, objCfg.mass);
+        scene->SetObjectPhysicsMaterial(objCfg.name, objCfg.restitution, objCfg.friction);
+        scene->SetObjectCollider(objCfg.name, objCfg.colliderType, objCfg.colliderRadius, objCfg.colliderNormal);        // --- Apply Light ---
         if (objCfg.isLight) {
             scene->AddLight(objCfg.name, objCfg.position, objCfg.lightColor, objCfg.lightIntensity, objCfg.lightType);
             scene->SetLightLayerMask(objCfg.name, objCfg.layerMask);

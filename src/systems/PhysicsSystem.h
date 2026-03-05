@@ -1,4 +1,3 @@
-// src/systems/PhysicsSystem.h
 #pragma once
 
 #include "ISystem.h"
@@ -14,8 +13,12 @@ class PhysicsSystem : public ISystem {
 public:
     static int subSteps;
     static IntegrationMethod currentMethod;
-
     static bool applyGravity;
+
+    // Global tuning knobs
+    static float contactFrictionScale;     // Multiplies per-object friction
+    static float sleepNormalThreshold;     // m/s along contact normal
+    static float sleepTangentialThreshold; // m/s tangent to contact plane
 
     void Update(Scene& scene, float deltaTime) override;
 

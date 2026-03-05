@@ -20,13 +20,21 @@
 #include "../systems/CameraSystem.h"
 #include "../systems/PhysicsSystem.h"
 
-// 3. Add the helper implementations anywhere in Scene.cpp
 void Scene::SetObjectPhysics(const std::string& name, bool isStatic, float mass) {
     Entity e = GetEntityByName(name);
     if (e != MAX_ENTITIES && m_Registry.HasComponent<PhysicsComponent>(e)) {
         auto& phys = m_Registry.GetComponent<PhysicsComponent>(e);
         phys.isStatic = isStatic;
-        phys.mass = mass;
+        phys.SetMass(isStatic ? 0.0f : mass);
+    }
+}
+
+void Scene::SetObjectPhysicsMaterial(const std::string& name, float restitution, float friction) {
+    Entity e = GetEntityByName(name);
+    if (e != MAX_ENTITIES && m_Registry.HasComponent<PhysicsComponent>(e)) {
+        auto& phys = m_Registry.GetComponent<PhysicsComponent>(e);
+        phys.restitution = glm::clamp(restitution, 0.0f, 1.0f);
+        phys.friction = glm::clamp(friction, 0.0f, 1.0f);
     }
 }
 
@@ -34,19 +42,16 @@ void Scene::SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity) {
     static int ballCount = 0;
     std::string name = "DynamicBall_" + std::to_string(ballCount++);
 
-    // Create a visual sphere with radius 1.0
-    AddSphere(name, 16, 16, 1.0f, pos, "textures/default.jpg"); // Use whatever default texture you have
+    AddSphere(name, 16, 16, 1.0f, pos, "textures/default.jpg");
 
     Entity e = GetEntityByName(name);
 
-    // Configure Physics
     auto& phys = m_Registry.GetComponent<PhysicsComponent>(e);
     phys.isStatic = false;
     phys.velocity = velocity;
-    phys.restitution = 0.8f; // Bouncy!
-    phys.mass = 2.0f;
+    phys.restitution = 0.7f;
+    phys.SetMass(2.0f);
 
-    // Configure Collider
     auto& col = m_Registry.GetComponent<ColliderComponent>(e);
     col.radius = 1.0f;
     col.hasCollision = true;

@@ -52,6 +52,10 @@ struct SceneObjectConfig {
     bool isStatic = true;
     bool isFlammable = false;
 
+    float mass = 1.0f;
+    float restitution = 1.0f;
+    float friction = 0.98f;
+
     int colliderType = 0; // 0 = Sphere, 1 = Plane
     float colliderRadius = 2.0f;
     glm::vec3 colliderNormal = glm::vec3(0.0f, 1.0f, 0.0f);
