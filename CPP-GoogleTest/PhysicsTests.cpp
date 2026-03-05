@@ -82,3 +82,21 @@ TEST(Physics_FixedCollision, SphereFixedCylinder_SideReflection) {
 
     ExpectVec3Near(ball.velocity, glm::vec3(10.0f, 0.0f, 0.0f));
 }
+TEST(Physics_Collision, UnequalMass_HeadOn) {
+    // Ball A: mass = 2.0 (invMass = 0.5), moving right at 10 m/s
+    MovingSphere a({ 0.0f, 0.0f, 0.0f }, 1.0f, { 10.0f, 0.0f, 0.0f }, 0.5f, 1.0f);
+
+    // Ball B: mass = 3.0 (invMass = 0.3333f), stationary
+    MovingSphere b({ 2.0f, 0.0f, 0.0f }, 1.0f, { 0.0f, 0.0f, 0.0f }, 1.0f / 3.0f, 1.0f);
+
+    ResolveElasticCollision(a, b);
+
+    // Using 1D elastic collision formulas:
+    // v1 = ((m1 - m2)/(m1 + m2))*u1 = ((2-3)/5)*10 = -2.0 m/s
+    // v2 = ((2*m1)/(m1 + m2))*u1 = (4/5)*10 = 8.0 m/s
+    EXPECT_NEAR(a.velocity.x, -2.0f, 1e-4f);
+    EXPECT_NEAR(a.velocity.y, 0.0f, 1e-4f);
+
+    EXPECT_NEAR(b.velocity.x, 8.0f, 1e-4f);
+    EXPECT_NEAR(b.velocity.y, 0.0f, 1e-4f);
+}

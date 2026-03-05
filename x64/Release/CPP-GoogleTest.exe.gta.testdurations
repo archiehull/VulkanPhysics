@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <GtaTestDurations xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <Executable>C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\CPP-GoogleTest.exe</Executable>
+  <Executable>C:\Users\663073\Workspace\VulkanPhysics\x64\Release\CPP-GoogleTest.exe</Executable>
   <TestDurations>
     <TestDuration Test="Collider_Polymorphic.SphereAsCollider" Duration="1" />
     <TestDuration Test="Collider_Polymorphic.PlaneAsCollider" Duration="1" />
@@ -87,5 +87,6 @@
     <TestDuration Test="Physics_FixedCollision.SphereStaticSphere_HeadOn" Duration="1" />
     <TestDuration Test="Physics_FixedCollision.SphereFixedCylinder_SideReflection" Duration="1" />
     <TestDuration Test="Physics_Collision.TwoMoving_Glancing" Duration="1" />
+    <TestDuration Test="Physics_Collision.UnequalMass_HeadOn" Duration="1" />
   </TestDurations>
 </GtaTestDurations>

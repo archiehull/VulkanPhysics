@@ -855,6 +855,16 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                     ImGui::Spacing();
                     // Checkbox to disable gravity to prove the zero-acceleration lab requirement
+
+                    ImGui::Text("Collision Resolution");
+
+                    int currentResMethodIdx = static_cast<int>(PhysicsSystem::currentResolutionMethod);
+                    const char* resMethods[] = { "Impulse (Velocity)", "Force Accumulation" };
+                    if (ImGui::Combo("Resolution Type", &currentResMethodIdx, resMethods, IM_ARRAYSIZE(resMethods))) {
+                        PhysicsSystem::currentResolutionMethod = static_cast<ResolutionMethod>(currentResMethodIdx);
+                    }
+                    ImGui::Spacing();
+
                     ImGui::Checkbox("Apply Gravity", &PhysicsSystem::applyGravity);
                 }
 

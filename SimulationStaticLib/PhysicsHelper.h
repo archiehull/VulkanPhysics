@@ -7,39 +7,47 @@
 struct MovingSphere {
     Sphere sphere;
     glm::vec3 velocity;
-    float invMass; // Change from mass to invMass
+    glm::vec3 forceAccumulator;
+    float invMass;
     float restitution;
 
-    // Update constructor to take invMass
     MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, float invM = 1.0f, float rest = 1.0f)
-        : sphere(pos, r), velocity(vel), invMass(invM), restitution(rest) {
+        : sphere(pos, r), velocity(vel), forceAccumulator(0.0f), invMass(invM), restitution(rest) {
     }
 };
 
-inline void ResolveElasticCollision(MovingSphere& a, MovingSphere& b) {
+inline void ResolveElasticCollision(MovingSphere& a, MovingSphere& b, bool useForce = false, float dt = 0.0f) {
     glm::vec3 normal = b.sphere.Position() - a.sphere.Position();
     float distSq = glm::dot(normal, normal);
     if (distSq == 0.0f) return;
 
     glm::vec3 relVel = a.velocity - b.velocity;
     float velAlongNormal = glm::dot(relVel, normal);
-
     if (velAlongNormal < 0.0f) return;
 
     double e = static_cast<double>(a.restitution) * static_cast<double>(b.restitution);
-
-    // Standardize: Use the sum of inverse masses
     double invMassSum = static_cast<double>(a.invMass) + static_cast<double>(b.invMass);
-    if (invMassSum <= 0.0) return; // Both are static
+    if (invMassSum <= 0.0) return;
 
     double j = -((1.0 + e) * static_cast<double>(velAlongNormal));
     j /= (invMassSum * static_cast<double>(distSq));
 
     glm::vec3 impulse = normal * static_cast<float>(j);
 
-    // Apply impulse multiplied by inverse mass
-    a.velocity += impulse * a.invMass;
-    b.velocity -= impulse * b.invMass;
+    if (useForce && dt > 0.0f) {
+        // Force Accumulation Approach: F = m * (dv / dt)
+        // Since impulse = dv * m, F = impulse / dt
+        glm::vec3 force = impulse / dt;
+
+        // Apply equal and opposite forces
+        if (a.invMass > 0.0f) a.forceAccumulator += force;
+        if (b.invMass > 0.0f) b.forceAccumulator -= force;
+    }
+    else {
+        // Direct Velocity Change (Impulse) Approach
+        a.velocity += impulse * a.invMass;
+        b.velocity -= impulse * b.invMass;
+    }
 }
 
 // planeRestitution: restitution from plane body

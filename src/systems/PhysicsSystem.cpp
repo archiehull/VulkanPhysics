@@ -9,6 +9,7 @@
 // Default settings
 int PhysicsSystem::subSteps = 4;
 IntegrationMethod PhysicsSystem::currentMethod = IntegrationMethod::SemiImplicitEuler;
+ResolutionMethod PhysicsSystem::currentResolutionMethod = ResolutionMethod::Impulse;
 bool PhysicsSystem::applyGravity = true;
 
 // Global tuning knobs
@@ -40,7 +41,7 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
 
     for (int i = 0; i < subSteps; ++i) {
         Integrate(registry, dt);
-        ResolveCollisions(registry);
+        ResolveCollisions(registry, dt);
     }
 }
 
@@ -103,8 +104,9 @@ void PhysicsSystem::ApplySpherePlaneCorrection(TransformComponent& sphereTrans, 
     }
 }
 
-void PhysicsSystem::ResolveCollisions(Registry& registry) {
+void PhysicsSystem::ResolveCollisions(Registry& registry, float dt) {
     const auto entityCount = registry.GetEntityCount();
+    bool useForce = (currentResolutionMethod == ResolutionMethod::Force);
 
     for (Entity i = 0; i < entityCount; ++i) {
         for (Entity j = i + 1; j < entityCount; ++j) {
@@ -119,15 +121,27 @@ void PhysicsSystem::ResolveCollisions(Registry& registry) {
             auto& p2 = registry.GetComponent<PhysicsComponent>(j);
 
             // Sphere vs Sphere
-            if (c1.type == 0 && c2.type == 0) {
+            if (c1.type == 0 && c2.type == 0) { // Sphere vs Sphere
                 MovingSphere sphereA(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
+                sphereA.forceAccumulator = p1.forceAccumulator; // Load accumulator
+
                 MovingSphere sphereB(t2.position, c2.radius, p2.velocity, p2.inverseMass, p2.restitution);
+                sphereB.forceAccumulator = p2.forceAccumulator; // Load accumulator
 
                 if (sphereA.sphere.CollideWith(sphereB.sphere)) {
-                    ResolveElasticCollision(sphereA, sphereB);
-                    if (!p1.isStatic) p1.velocity = sphereA.velocity;
-                    if (!p2.isStatic) p2.velocity = sphereB.velocity;
-                    ApplyPositionCorrection(t1, t2, c1.radius, c2.radius, p1.isStatic, p2.isStatic);
+                    ResolveElasticCollision(sphereA, sphereB, useForce, dt);
+
+                    // Write results back to ECS components
+                    p1.velocity = sphereA.velocity;
+                    p2.velocity = sphereB.velocity;
+                    p1.forceAccumulator = sphereA.forceAccumulator;
+                    p2.forceAccumulator = sphereB.forceAccumulator;
+
+                    if (!useForce) {
+                        // Only correct position immediately if we are using instantaneous impulses. 
+                        // If using forces, resolving overlap here might interfere with the integration step.
+                        ApplyPositionCorrection(t1, t2, c1.radius, c2.radius, p1.isStatic, p2.isStatic);
+                    }
                 }
             }
             // Sphere vs Plane

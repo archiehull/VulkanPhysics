@@ -1,8 +1,11 @@
-﻿  PhysicsIntegration.cpp
-  PhysicsTests.cpp
-  SphereTests.cpp
-C:\Users\Ell\Documents\repos\VulkanPhysics\CPP-GoogleTest\SphereTests.cpp(169,17): warning C4305: 'initializing': truncation from 'double' to 'float'
-  (compiling source file '/SphereTests.cpp')
+﻿  PhysicsTests.cpp
+C:\Users\663073\Workspace\VulkanPhysics\CPP-GoogleTest\PhysicsTests.cpp(86,1): error C2011: 'Physics_Conservation_Momentum_UnequalMass_Diagonal_Test': 'class' type redefinition
+  (compiling source file '/PhysicsTests.cpp')
+      C:\Users\663073\Workspace\VulkanPhysics\CPP-GoogleTest\PhysicsTests.cpp(28,1):
+      see declaration of 'Physics_Conservation_Momentum_UnequalMass_Diagonal_Test'
   
-  Generating Code...
-  CPP-GoogleTest.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\CPP-GoogleTest.exe
+C:\Users\663073\Workspace\VulkanPhysics\CPP-GoogleTest\PhysicsTests.cpp(86,1): error C2027: use of undefined type 'Physics_Conservation_Momentum_UnequalMass_Diagonal_Test'
+  (compiling source file '/PhysicsTests.cpp')
+      C:\Users\663073\Workspace\VulkanPhysics\CPP-GoogleTest\PhysicsTests.cpp(28,1):
+      see declaration of 'Physics_Conservation_Momentum_UnequalMass_Diagonal_Test'
+  
