@@ -141,8 +141,8 @@ struct CustomCameraConfig {
 };
 
 struct AppConfig {
-    int windowWidth = 800;
-    int windowHeight = 600;
+    int windowWidth = 1000;
+    int windowHeight = 750;
 
 
     int proceduralObjectCount = 5;

@@ -108,6 +108,31 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
         ImGui::GetIO().FontGlobalScale = m_UIScale;
 
+		// --- Helper Lambda for Layer Checkboxes ---
+        auto drawLayerCheckboxes = [&](const char* label, int& mask) {
+            ImGui::TextDisabled("%s", label);
+
+            // Dynamically size columns (max 4) based on active layer count
+            int cols = std::min(4, std::max(1, SceneLayers::ActiveLayerCount));
+            if (ImGui::BeginTable(label, cols)) {
+                for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+                    ImGui::TableNextColumn();
+                    bool isActive = (mask & (1 << i)) != 0;
+
+                    ImGui::PushID(i + (int)(size_t)label);
+                    // Read the name directly from SceneLayers::LayerNames
+                    if (ImGui::Checkbox(SceneLayers::LayerNames[i].c_str(), &isActive)) {
+                        if (isActive) mask |= (1 << i);
+                        else mask &= ~(1 << i);
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+            ImGui::Spacing();
+        };
+
+
         if (ImGui::BeginMainMenuBar()) {
 
             if (ImGui::BeginMenu("#")) {
@@ -135,6 +160,40 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     ImGui::EndMenu();
                 }
                 ImGui::Separator();
+
+                // --- Layer Manager ---
+                if (ImGui::BeginMenu("Layer Manager")) {
+                    ImGui::TextDisabled("Create and Rename Layers");
+                    ImGui::Separator();
+
+                    for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+                        char buf[64];
+                        strncpy_s(buf, SceneLayers::LayerNames[i].c_str(), sizeof(buf));
+                        buf[sizeof(buf) - 1] = '\0';
+
+                        ImGui::PushID(i);
+                        ImGui::Text("Layer %c:", 'A' + i);
+                        ImGui::SameLine(65.0f);
+                        // Edit the name directly in SceneLayers
+                        if (ImGui::InputText("##Name", buf, sizeof(buf))) {
+                            SceneLayers::LayerNames[i] = std::string(buf);
+                        }
+                        ImGui::PopID();
+                    }
+
+                    ImGui::Separator();
+                    if (SceneLayers::ActiveLayerCount < SceneLayers::MAX_LAYERS) {
+                        if (ImGui::Button("+ Create New Layer", ImVec2(-1, 0))) {
+                            SceneLayers::ActiveLayerCount++;
+                        }
+                    }
+                    else {
+                        ImGui::TextDisabled("Maximum of %d layers reached.", SceneLayers::MAX_LAYERS);
+                    }
+
+                    ImGui::EndMenu();
+                }
+
 
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Make it green
                 if (ImGui::MenuItem("Create New Entity")) {
@@ -395,7 +454,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             // 2. Render Settings (Layer & Shading)
                             if (registry.HasComponent<RenderComponent>(e)) {
                                 auto& render = registry.GetComponent<RenderComponent>(e);
-                                const char* layerName = (render.layerMask & SceneLayers::INSIDE) ? "Inside" : "Outside";
+                                const char* layerName = (render.layerMask & SceneLayers::LAYER_B) ? "Inside" : "Outside";
                                 ImGui::Text("Layer: %s", layerName);
 
                                 const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
@@ -758,6 +817,15 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             ImGui::DragFloat("Bulldozer Radius", &col.radius, 0.1f, 0.5f, 50.0f);
                         }
 
+                        std::string layerStr = "";
+                        for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+                            if ((cam.viewMask & (1 << i)) != 0) {
+                                layerStr += "[" + SceneLayers::LayerNames[i] + "] ";
+                            }
+                        }
+                        if (layerStr.empty()) layerStr = "[None]";
+
+                        ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "Current Mask: %s", layerStr.c_str());
                         ImGui::Separator();
 
                         if (cam.isActive && activeOrbitTarget != MAX_ENTITIES) {
@@ -792,7 +860,6 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     std::string lightName = registry.HasComponent<NameComponent>(e) ?
                         registry.GetComponent<NameComponent>(e).name : "Unnamed Light";
 
-                    // --- NEW: Inactive Logic ---
                     bool isInactive = (light.intensity <= 0.001f);
                     if (isInactive) {
                         // Change text color to a dim grey for inactive status
@@ -819,7 +886,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                         ImGui::ColorEdit3("Color", &light.color.x, ImGuiColorEditFlags_Float);
 
-                        // --- NEW: Logarithmic-mapped Slider (Power 3) ---
+                        // --- Logarithmic-mapped Slider (Power 3) ---
                         // Mapping: actual_intensity = slider_val^3 * 100
                         // This makes 50% on the slider equal to 12.5 intensity.
                         float sliderVal = std::pow(light.intensity / 100.0f, 1.0f / 3.0f);
@@ -845,13 +912,13 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             ImGui::SliderFloat("Cone Angle", &light.cutoffAngle, 1.0f, 90.0f, "%.1f deg");
                         }
 
-                        const char* layerName = (light.layerMask & SceneLayers::INSIDE) ? "Inside" : "Outside";
+                        const char* layerName = (light.layerMask & SceneLayers::LAYER_B) ? "Inside" : "Outside";
                         ImGui::Text("Layer: %s", layerName);
 
                         ImGui::EndMenu();
                     }
                     else {
-                        if (isInactive) ImGui::PopStyleColor(); // Pop color if menu not open
+                        if (isInactive) ImGui::PopStyleColor();
                     }
                 }
 
@@ -1251,7 +1318,8 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                             const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
                             ImGui::Combo("Shading Mode", &comp.shadingMode, modes, IM_ARRAYSIZE(modes));
-                            ImGui::InputInt("Layer Mask", &comp.layerMask);
+                            
+                            drawLayerCheckboxes("Visible on Layers:", comp.layerMask);
 
                             ImGui::Text("Texture:");
                             std::string comboID = "##TextureCombo" + std::to_string(it->id);
@@ -1513,7 +1581,26 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             }
 
                             ImGui::TreePop();
+
+                            ImGui::Spacing();
+                            ImGui::TextDisabled("Active Render Layers");
+                            ImGui::Separator();
+
+							// Display which layers this camera renders, and allow toggling them on/off
+                            std::string layerStr = "";
+                            for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+                                if ((comp.viewMask & (1 << i)) != 0) {
+                                    layerStr += "[" + SceneLayers::LayerNames[i] + "] ";
+                                }
+                            }
+                            if (layerStr.empty()) layerStr = "[None]";
+
+                            ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "Current Mask: %s", layerStr.c_str());
+
+                            ImGui::TreePop();
                         }
+
+
                     }
 
                     // --- 9. Collider Component ---
@@ -1589,6 +1676,87 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         }
                     }
 
+                    // --- 12. Layer Region Component (Layer Entity) ---
+                    if (registry.HasComponent<LayerRegionComponent>(e)) {
+                        bool open = ImGui::TreeNodeEx("Layer Configuration", ImGuiTreeNodeFlags_DefaultOpen);
+                        ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                        if (ImGui::Button("Remove##LayerRegion")) registry.RemoveComponent<LayerRegionComponent>(e);
+
+                        if (open && registry.HasComponent<LayerRegionComponent>(e)) {
+                            auto& comp = registry.GetComponent<LayerRegionComponent>(e);
+
+                            // 1. Layer Identity
+                            char nameBuf[64];
+                            strncpy_s(nameBuf, comp.layerName.c_str(), sizeof(nameBuf));
+                            nameBuf[sizeof(nameBuf) - 1] = '\0';
+                            if (ImGui::InputText("Layer Name", nameBuf, sizeof(nameBuf))) {
+                                comp.layerName = std::string(nameBuf);
+                                // Sync this entity's name to the global engine layer names!
+                                if (comp.assignedLayerBit >= 1 && comp.assignedLayerBit < SceneLayers::MAX_LAYERS) {
+                                    SceneLayers::LayerNames[comp.assignedLayerBit] = comp.layerName;
+                                }
+                            }
+
+                            // Let the user pick which Layer Slot (1-7) this entity represents
+                            ImGui::SliderInt("Layer Slot", &comp.assignedLayerBit, 1, SceneLayers::MAX_LAYERS - 1);
+
+                            // 2. Spatial Bounds
+                            ImGui::Spacing();
+                            ImGui::TextDisabled("Layer Boundaries");
+                            const char* volumeTypes[] = { "Sphere", "Box (AABB)" };
+                            ImGui::Combo("Volume Type", &comp.volumeType, volumeTypes, IM_ARRAYSIZE(volumeTypes));
+
+                            if (comp.volumeType == 0) {
+                                ImGui::DragFloat("Radius", &comp.radius, 0.1f, 0.1f, 1000.0f);
+                            }
+                            else {
+                                ImGui::DragFloat3("Half Extents", &comp.halfExtents.x, 0.1f, 0.1f, 1000.0f);
+                            }
+
+                            // 3. Live List of Assigned Objects!
+                            ImGui::Spacing();
+                            ImGui::TextDisabled("Objects Assigned to this Layer");
+                            ImGui::Separator();
+
+                            // Create a small scrolling box for the list
+                            ImGui::BeginChild("LayerObjectsList", ImVec2(0, 150), true);
+                            int assignedCount = 0;
+
+                            for (Entity other = 0; other < registry.GetEntityCount(); ++other) {
+                                if (registry.HasComponent<RenderComponent>(other)) {
+                                    auto& otherRender = registry.GetComponent<RenderComponent>(other);
+
+                                    // Check if this object's bitmask contains this layer's bit
+                                    if ((otherRender.layerMask & (1 << comp.assignedLayerBit)) != 0) {
+                                        std::string objName = "Entity " + std::to_string(other);
+                                        if (registry.HasComponent<NameComponent>(other)) {
+                                            objName = registry.GetComponent<NameComponent>(other).name;
+                                        }
+
+                                        ImGui::Text(" %s", objName.c_str());
+
+                                        // Add a quick button to un-assign the object directly from this list
+                                        ImGui::SameLine(ImGui::GetWindowWidth() - 100.0f);
+                                        ImGui::PushID(other);
+                                        if (ImGui::Button("Remove")) {
+                                            otherRender.layerMask &= ~(1 << comp.assignedLayerBit);
+                                        }
+                                        ImGui::PopID();
+
+                                        assignedCount++;
+                                    }
+                                }
+                            }
+
+                            if (assignedCount == 0) {
+                                ImGui::TextDisabled(" No objects currently assigned.");
+                            }
+                            ImGui::EndChild();
+
+                            ImGui::TreePop();
+                        }
+                    }
+
                     ImGui::Spacing();
 
                     // --- Component Assignment Menu ---
@@ -1605,6 +1773,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                         addMenuItem((AttachedEmitterComponent*)nullptr, "AttachedEmitterComponent", e);
                         addMenuItem((EnvironmentComponent*)nullptr, "EnvironmentComponent", e);
                         addMenuItem((DustCloudComponent*)nullptr, "DustCloudComponent", e);
+                        addMenuItem((LayerRegionComponent*)nullptr, "LayerRegionComponent", e);
                         ImGui::EndMenu();
                     }
 

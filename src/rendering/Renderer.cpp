@@ -881,7 +881,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
     RenderShadowMap(cmd, currentFrame, scene, SceneLayers::ALL);
 
     // --- 2. Render Refraction Pass ---
-    RenderRefractionPass(cmd, currentFrame, scene, SceneLayers::INSIDE | SceneLayers::OUTSIDE);
+    RenderRefractionPass(cmd, currentFrame, scene, layerMask);
 
     // --- 3. Render Main Scene ---
     RenderScene(cmd, currentFrame, scene, layerMask);

@@ -469,30 +469,23 @@ void Application::MainLoop() {
             }
         }
 
-        // 4. Update the scene with the calculated delta
-        scene->Update(stepDelta);
 
         cameraController->Update(deltaTime, *scene, *inputManager);
 
+        // 4. Update the scene with the calculated delta
+        scene->Update(stepDelta);
+
         int currentViewMask = SceneLayers::ALL;
 
-        //const float dist = glm::length(activeCamera->GetPosition());
-        //const float ballRadius = 150.0f;
-
-        //if (dist < ballRadius) {
-        //    currentViewMask = SceneLayers::INSIDE;
-        //}
-        //else {
-        //    currentViewMask = SceneLayers::ALL;
-        //}
-
-        Entity activeCamEntity = cameraController->GetActiveCameraEntity(); //
+        Entity activeCamEntity = cameraController->GetActiveCameraEntity();
 
         if (activeCamEntity != MAX_ENTITIES && registry.HasComponent<CameraComponent>(activeCamEntity)) {
-            auto& camComp = registry.GetComponent<CameraComponent>(activeCamEntity); //
+            auto& camComp = registry.GetComponent<CameraComponent>(activeCamEntity);
 
-            const glm::mat4 viewMatrix = camComp.viewMatrix; //
-            const glm::mat4 projMatrix = camComp.projectionMatrix; //
+            const glm::mat4 viewMatrix = camComp.viewMatrix;
+            const glm::mat4 projMatrix = camComp.projectionMatrix;
+
+            currentViewMask = camComp.viewMask;
 
             // Use these for your renderer call
             renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask);

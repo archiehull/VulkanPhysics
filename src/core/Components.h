@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <string>
 #include <memory>
+#include <vector>
 #include "../geometry/Geometry.h"
 #include "ECS.h"
 #include "CoreTypes.h"
@@ -51,7 +52,7 @@ struct RenderComponent {
     bool castsShadow = true;
     bool originalCastsShadow = true;
     bool receiveShadows = true;
-    int layerMask = SceneLayers::ALL;
+    int layerMask = SceneLayers::LAYER_A;
 };
 
 // 4. Movement/Logic Data
@@ -118,7 +119,6 @@ struct PhysicsComponent {
     }
 };
 
-
 struct ColliderComponent {
     bool hasCollision = true;
     int type = 0; // 0 = Sphere, 1 = Plane
@@ -132,7 +132,7 @@ struct LightComponent {
     glm::vec3 color = glm::vec3(1.0f);
     float intensity = 1.0f;
     int type = 0; // 0=Sun, 1=Fire, 2=Point, 3=Spotlight
-    int layerMask = SceneLayers::ALL;
+    int layerMask = SceneLayers::LAYER_A;
 
     // --- NEW Spotlight Variables ---
     glm::vec3 direction = glm::vec3(0.0f, -1.0f, 0.0f); // Default points straight down
@@ -197,7 +197,7 @@ struct CameraComponent {
     glm::mat4 viewMatrix = glm::mat4(1.0f);
     glm::mat4 projectionMatrix = glm::mat4(1.0f);
 
-    int viewMask = SceneLayers::ALL;
+    int viewMask = SceneLayers::LAYER_A;
     bool isActive = false;
 
     // Euler angles for Free Roam
@@ -208,4 +208,13 @@ struct CameraComponent {
     float rotateSpeed = 60.0f;
 
     bool noclipEnabled = false;
+};
+
+struct LayerRegionComponent {
+    int assignedLayerBit = 1; // 1 = Layer B, 2 = Layer C, etc. (0 is reserved for Base World)
+    std::string layerName = "New Layer Region";
+
+    int volumeType = 0; // 0 = Sphere, 1 = Box (AABB)
+    float radius = 10.0f;
+    glm::vec3 halfExtents = glm::vec3(5.0f, 5.0f, 5.0f);
 };
