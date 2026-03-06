@@ -1,0 +1,994 @@
+#include "EditorUI.h"
+#include "imgui.h"
+#include "../rendering/ParticleLibrary.h"
+#include "../systems/PhysicsSystem.h"
+#include "../systems/CameraSystem.h"
+
+void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget, std::string& sceneToLoad, Entity& entityToDelete) {
+if (ImGui::BeginMainMenuBar()) {
+
+    if (ImGui::BeginMenu("#")) {
+        ImGui::Text("UI Scale");
+        ImGui::SliderFloat("##uiscale", &m_UIScale, 0.5f, 3.0f, "%.2fx");
+        ImGui::Separator();
+        if (ImGui::Button("Reset UI Scale", ImVec2(-1, 0))) {
+            m_UIScale = 1.0f;
+        }
+
+        ImGui::Separator();
+        ImGui::MenuItem("View Controls", nullptr, &m_ShowControlsWindow);
+
+        if (ImGui::BeginMenu("Background Colour")) {
+            ImGui::ColorPicker4("##bg_picker", m_ClearColor,
+                ImGuiColorEditFlags_PickerHueWheel |
+                ImGuiColorEditFlags_AlphaBar |
+                ImGuiColorEditFlags_NoSidePreview);
+
+            ImGui::Separator();
+            if (ImGui::Button("Reset to Default", ImVec2(-1, 0))) {
+                m_ClearColor[0] = 0.1f; m_ClearColor[1] = 0.1f;
+                m_ClearColor[2] = 0.1f; m_ClearColor[3] = 1.0f;
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
+
+        // --- Layer Manager ---
+        if (ImGui::BeginMenu("Layer Manager")) {
+            ImGui::TextDisabled("Create and Rename Layers");
+            ImGui::Separator();
+
+            for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+                char buf[64];
+                strncpy_s(buf, SceneLayers::LayerNames[i].c_str(), sizeof(buf));
+                buf[sizeof(buf) - 1] = '\0';
+
+                ImGui::PushID(i);
+                ImGui::Text("Layer %c:", 'A' + i);
+                ImGui::SameLine(65.0f);
+                // Edit the name directly in SceneLayers
+                if (ImGui::InputText("##Name", buf, sizeof(buf))) {
+                    SceneLayers::LayerNames[i] = std::string(buf);
+                }
+                ImGui::PopID();
+            }
+
+            ImGui::Separator();
+            if (SceneLayers::ActiveLayerCount < SceneLayers::MAX_LAYERS) {
+                if (ImGui::Button("+ Create New Layer", ImVec2(-1, 0))) {
+                    SceneLayers::ActiveLayerCount++;
+                }
+            }
+
+            else {
+                ImGui::TextDisabled("Maximum of %d layers reached.", SceneLayers::MAX_LAYERS);
+            }
+
+            ImGui::EndMenu();
+        }
+
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Make it green
+        if (ImGui::MenuItem("Create New Entity")) {
+            static int newEntityCount = 1;
+            std::string name = "NewEntity_" + std::to_string(newEntityCount++);
+
+            // Spawn a default 1x1 cube. AddCube safely registers it in the 
+            // Scene's Renderable arrays and attaches all base components!
+            scene.AddCube(name, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f), "");
+
+            // Force open a properties window if none exist
+            if (m_PropertyWindows.empty()) {
+                m_PropertyWindows.push_back({ m_NextPropertyWindowId++, MAX_ENTITIES, true, true });
+            }
+        }
+        ImGui::PopStyleColor();
+
+
+        if (ImGui::MenuItem("Open New Properties Window")) {
+            m_PropertyWindows.push_back({ m_NextPropertyWindowId++, MAX_ENTITIES, true, true });
+        }
+
+        ImGui::EndMenu();
+    }
+
+    DrawLoadSceneMenu(sceneToLoad);
+
+    DrawObjectsMenu(scene, activeOrbitTarget, entityToDelete);
+
+    if (ImGui::BeginMenu("Particles")) {
+        const auto& pSystems = scene.GetParticleSystems(); //
+        Registry& registry = scene.GetRegistry(); //
+        const auto& entities = scene.GetRenderableEntities(); //
+
+        bool hasEmitters = false;
+        for (const auto& sys : pSystems) {
+            if (!sys->GetEmitters().empty()) { //
+                hasEmitters = true;
+                break;
+            }
+        }
+
+        if (!hasEmitters) {
+            ImGui::MenuItem("No Active Emitters", nullptr, false, false);
+        }
+        else {
+            for (const auto& sys : pSystems) {
+                std::string fullTexPath = sys->GetTexturePath(); //
+                std::string texName = fullTexPath;
+                size_t slashPos = texName.find_last_of("/\\");
+                if (slashPos != std::string::npos) texName = texName.substr(slashPos + 1);
+
+                // Iterate through each emitter managed by this system
+                for (const auto& em : sys->GetEmitters()) { //
+                    std::string emLabel = "Emitter ID: " + std::to_string(em.id) + " (" + texName + ")##GlobalEm_" + std::to_string(em.id);
+
+                    if (ImGui::BeginMenu(emLabel.c_str())) {
+                        ImGui::TextDisabled("Live Controls");
+                        ImGui::Separator();
+
+                        // --- LOGARITHMIC EMISSION RATE ---
+                        // Provides cubic scaling (x^3) for precise control at low values
+                        float rateSlider = std::pow(em.particlesPerSecond / 1000.0f, 1.0f / 3.0f);
+                        if (ImGui::SliderFloat("Emission Rate", &rateSlider, 0.0f, 1.0f, "%.1f p/s")) {
+                            float newRate = std::pow(rateSlider, 3.0f) * 1000.0f;
+                            // Update the system directly using em.props
+                            sys->UpdateEmitter(em.id, em.props, newRate);
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cubic scale for fine control at low counts.");
+
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Spatial Data");
+                        ImGui::Separator();
+                        ImGui::Text("Position: (%.1f, %.1f, %.1f)", em.props.position.x, em.props.position.y, em.props.position.z);
+
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Particle Properties");
+                        ImGui::Separator();
+                        ImGui::Text("Size: %.2f -> %.2f (Var: %.2f)", em.props.sizeBegin, em.props.sizeEnd, em.props.sizeVariation);
+                        ImGui::Text("Lifetime: %.2f s", em.props.lifeTime);
+
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Attached To");
+                        ImGui::Separator();
+
+                        // Search for entities currently linked to this specific emitter
+                        bool foundAttached = false;
+                        for (Entity e : entities) {
+                            bool attached = false;
+                            std::string reason = "";
+
+                            // Check thermal-linked emitters (Fire/Smoke)
+                            if (registry.HasComponent<ThermoComponent>(e)) {
+                                auto& thermo = registry.GetComponent<ThermoComponent>(e);
+                                if (thermo.fireEmitterId == em.id) { attached = true; reason = "Fire"; }
+                                if (thermo.smokeEmitterId == em.id) { attached = true; reason += (reason.empty() ? "" : " & ") + std::string("Smoke"); }
+                            }
+
+                            // Check general attached emitters
+                            if (registry.HasComponent<AttachedEmitterComponent>(e)) {
+                                for (const auto& activeEm : registry.GetComponent<AttachedEmitterComponent>(e).emitters) {
+                                    if (activeEm.emitterId == em.id) { attached = true; reason = "Custom Emitter"; break; }
+                                }
+                            }
+
+                            if (attached) {
+                                foundAttached = true;
+                                std::string name = registry.HasComponent<NameComponent>(e) ? registry.GetComponent<NameComponent>(e).name : "Entity " + std::to_string(e);
+                                ImGui::Text(" %s (%s)", name.c_str(), reason.c_str());
+                            }
+                        }
+                        if (!foundAttached) ImGui::Text(" <No Entity Link Found>");
+
+                        ImGui::Separator();
+                        if (ImGui::MenuItem("Stop Emitter")) {
+                            sys->StopEmitter(em.id); //
+                        }
+
+                        ImGui::EndMenu();
+                    }
+                }
+            }
+        }
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Cameras")) {
+        Registry& registry = scene.GetRegistry();
+        for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+            if (!registry.HasComponent<CameraComponent>(e)) continue;
+
+            auto& cam = registry.GetComponent<CameraComponent>(e);
+
+            std::string baseCamName = registry.HasComponent<NameComponent>(e) ?
+                registry.GetComponent<NameComponent>(e).name : "Unnamed Camera";
+
+            std::string menuLabel = baseCamName;
+
+            if (cam.isActive) {
+                if (activeOrbitTarget != MAX_ENTITIES) {
+                    std::string targetName = "Entity " + std::to_string(activeOrbitTarget);
+                    if (registry.HasComponent<NameComponent>(activeOrbitTarget)) {
+                        targetName = registry.GetComponent<NameComponent>(activeOrbitTarget).name;
+                    }
+                    menuLabel += " [VIEWING: " + targetName + "]";
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 1.0f, 1.0f));
+                }
+                else {
+                    menuLabel += " [ACTIVE]";
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f));
+                }
+            }
+
+            menuLabel += "###CamMenu_" + std::to_string(e);
+
+            if (ImGui::BeginMenu(menuLabel.c_str())) {
+                if (cam.isActive) ImGui::PopStyleColor();
+
+                if (registry.HasComponent<TransformComponent>(e)) {
+                    auto& transform = registry.GetComponent<TransformComponent>(e);
+                    glm::vec3 pos = glm::vec3(transform.matrix[3]);
+
+                    ImGui::TextDisabled("Spatial Data");
+                    ImGui::Separator();
+                    ImGui::Text("Position:    (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+
+                    glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2]));
+                    ImGui::Text("Front Vector: (%.2f, %.2f, %.2f)", front.x, front.y, front.z);
+
+                    glm::vec3 up = glm::normalize(glm::vec3(transform.matrix[1]));
+                    ImGui::Text("Up Vector:    (%.2f, %.2f, %.2f)", up.x, up.y, up.z);
+                }
+
+                ImGui::Spacing();
+                ImGui::TextDisabled("Orientation");
+                ImGui::Separator();
+                ImGui::Text("Yaw:   %.2f", cam.yaw);
+                ImGui::Text("Pitch: %.2f", cam.pitch);
+
+                ImGui::Spacing();
+                ImGui::TextDisabled("Lens Settings");
+                ImGui::Separator();
+                ImGui::Text("Field of View: %.1f deg", cam.fov);
+                ImGui::Text("Near Plane:    %.2f", cam.nearPlane);
+                ImGui::Text("Far Plane:     %.1f", cam.farPlane);
+                ImGui::Text("Aspect Ratio:  %.2f", cam.aspectRatio);
+
+                ImGui::Spacing();
+                ImGui::TextDisabled("Movement Stats");
+                ImGui::Separator();
+                ImGui::DragFloat("Move Speed", &cam.moveSpeed, 0.5f, 0.1f, 500.0f);
+                ImGui::DragFloat("Rotate Speed", &cam.rotateSpeed, 0.5f, 0.1f, 500.0f);
+
+                ImGui::Spacing();
+                ImGui::TextDisabled("Physics Interaction");
+                ImGui::Separator();
+
+                // Safely checks Noclip status for *this specific camera* (e)
+                bool isNoclip = CameraSystem::IsNoclip(scene, e);
+                if (ImGui::Checkbox("Noclip Enabled", &isNoclip)) {
+                    CameraSystem::SetNoclip(scene, isNoclip, e);
+                }
+
+                // If Noclip is OFF (meaning it's a bulldozer), let them change the radius
+                if (!isNoclip && registry.HasComponent<ColliderComponent>(e)) {
+                    auto& col = registry.GetComponent<ColliderComponent>(e);
+                    ImGui::DragFloat("Bulldozer Radius", &col.radius, 0.1f, 0.5f, 50.0f);
+                }
+
+                std::string layerStr = "";
+                for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+                    if ((cam.viewMask & (1 << i)) != 0) {
+                        layerStr += "[" + SceneLayers::LayerNames[i] + "] ";
+                    }
+                }
+                if (layerStr.empty()) layerStr = "[None]";
+
+                ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "Current Mask: %s", layerStr.c_str());
+                ImGui::Separator();
+
+                if (cam.isActive && activeOrbitTarget != MAX_ENTITIES) {
+                    if (ImGui::MenuItem("Stop Viewing / Free Camera")) {
+                        requestedCamera = baseCamName;
+                    }
+                }
+                else {
+                    if (ImGui::MenuItem("Switch to this Camera")) {
+                        requestedCamera = baseCamName;
+                    }
+                }
+
+                ImGui::EndMenu();
+            }
+            else if (cam.isActive) {
+                ImGui::PopStyleColor();
+            }
+        }
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Lights")) {
+        Registry& registry = scene.GetRegistry();
+        bool hasLights = false;
+
+        for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+            if (!registry.HasComponent<LightComponent>(e)) continue;
+            hasLights = true;
+
+            auto& light = registry.GetComponent<LightComponent>(e);
+            std::string lightName = registry.HasComponent<NameComponent>(e) ?
+                registry.GetComponent<NameComponent>(e).name : "Unnamed Light";
+
+            bool isInactive = (light.intensity <= 0.001f);
+            if (isInactive) {
+                // Change text color to a dim grey for inactive status
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+                lightName += " [Inactive]";
+            }
+
+            std::string menuLabel = lightName + "###LightMenu_" + std::to_string(e);
+
+            if (ImGui::BeginMenu(menuLabel.c_str())) {
+                if (isInactive) ImGui::PopStyleColor(); // Restore color for menu content
+
+                if (registry.HasComponent<TransformComponent>(e)) {
+                    auto& transform = registry.GetComponent<TransformComponent>(e);
+                    glm::vec3 pos = glm::vec3(transform.matrix[3]);
+                    ImGui::TextDisabled("Transform Data");
+                    ImGui::Separator();
+                    ImGui::Text("Position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+                    ImGui::Spacing();
+                }
+
+                ImGui::TextDisabled("Light Properties");
+                ImGui::Separator();
+
+                ImGui::ColorEdit3("Color", &light.color.x, ImGuiColorEditFlags_Float);
+
+                // --- Logarithmic-mapped Slider (Power 3) ---
+                // Mapping: actual_intensity = slider_val^3 * 100
+                // This makes 50% on the slider equal to 12.5 intensity.
+                float sliderVal = std::pow(light.intensity / 100.0f, 1.0f / 3.0f);
+                if (ImGui::SliderFloat("Intensity", &sliderVal, 0.0f, 1.0f, "%.3f")) {
+                    light.intensity = std::pow(sliderVal, 3.0f) * 100.0f;
+                    if (light.intensity < 0.001f) light.intensity = 0.0f;
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Logarithmic scale for finer control at low values (0-100 range)");
+
+                const char* lightTypes[] = { "Sun / Directional", "Fire (Harsh Falloff)", "Standard Point", "Spotlight" };
+                int safeTypeIndex = (light.type >= 0 && light.type <= 3) ? light.type : 2;
+                if (ImGui::Combo("Light Type", &safeTypeIndex, lightTypes, 4)) {
+                    light.type = safeTypeIndex;
+                }
+
+                if (light.type == 3) {
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("Spotlight Settings");
+                    ImGui::Separator();
+                    if (ImGui::DragFloat3("Direction", &light.direction.x, 0.05f, -1.0f, 1.0f)) {
+                        if (glm::length(light.direction) > 0.001f) light.direction = glm::normalize(light.direction);
+                    }
+                    ImGui::SliderFloat("Cone Angle", &light.cutoffAngle, 1.0f, 90.0f, "%.1f deg");
+                }
+
+                const char* layerName = (light.layerMask & SceneLayers::LAYER_B) ? "Inside" : "Outside";
+                ImGui::Text("Layer: %s", layerName);
+
+                ImGui::EndMenu();
+            }
+            else {
+                if (isInactive) ImGui::PopStyleColor();
+            }
+        }
+
+        if (!hasLights) {
+            ImGui::MenuItem("No lights in scene", nullptr, false, false);
+        }
+
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Simulation")) {
+        std::string pauseLabel = m_IsPaused ? "Start Simulation  [Space]" : "Pause Simulation  [Space]";
+        if (ImGui::Selectable(pauseLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
+            m_IsPaused = !m_IsPaused;
+        }
+
+        ImGui::Separator();
+
+        ImGui::Text("Step Controls");
+        ImGui::InputFloat("Step Size (s)", &m_StepSize, 0.001f, 0.01f, "%.4f");
+
+        if (m_IsPaused) {
+            if (ImGui::Selectable("Execute Step  [F]", false, ImGuiSelectableFlags_DontClosePopups)) {
+                m_StepRequested = true;
+            }
+        }
+        else {
+            ImGui::TextDisabled("Execute Step  [F] (Pause first)");
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("Restart Environment", "R")) {
+            m_RestartRequested = true;
+        }
+
+        ImGui::Separator();
+
+        ImGui::Text("Simulation Speed (CTRL + CLICK to Type)");
+        ImGui::SliderFloat("##speed", &m_TimeScale, 0.0f, 100.0f, "%.3fx", ImGuiSliderFlags_Logarithmic);
+
+        if (ImGui::CollapsingHeader("Physics Engine", ImGuiTreeNodeFlags_DefaultOpen)) {
+
+            ImGui::Text("Time Step & Substepping");
+            // Slider to control how many times the physics loop runs per frame
+            ImGui::SliderInt("Substeps per Frame", &PhysicsSystem::subSteps, 1, 16);
+
+            ImGui::Spacing();
+            ImGui::Text("Integration Method");
+
+            // Dropdown for Integration Method
+            int currentMethodIdx = static_cast<int>(PhysicsSystem::currentMethod);
+            const char* methods[] = { "Explicit Euler", "Semi-Implicit Euler", "RK4" };
+            if (ImGui::Combo("Algorithm", &currentMethodIdx, methods, IM_ARRAYSIZE(methods))) {
+                PhysicsSystem::currentMethod = static_cast<IntegrationMethod>(currentMethodIdx);
+            }
+
+            ImGui::Spacing();
+            // Checkbox to disable gravity to prove the zero-acceleration lab requirement
+
+            ImGui::Text("Collision Resolution");
+
+            int currentResMethodIdx = static_cast<int>(PhysicsSystem::currentResolutionMethod);
+            const char* resMethods[] = { "Impulse (Velocity)", "Force Accumulation" };
+            if (ImGui::Combo("Resolution Type", &currentResMethodIdx, resMethods, IM_ARRAYSIZE(resMethods))) {
+                PhysicsSystem::currentResolutionMethod = static_cast<ResolutionMethod>(currentResMethodIdx);
+            }
+            ImGui::Spacing();
+
+            ImGui::Checkbox("Apply Gravity", &PhysicsSystem::applyGravity);
+
+            if (PhysicsSystem::applyGravity) {
+                ImGui::SameLine();
+                std::string dirLabel = PhysicsSystem::gravityDirection < 0.0f ? "Flip Up" : "Flip Down";
+                if (ImGui::Button(dirLabel.c_str())) {
+                    PhysicsSystem::gravityDirection *= -1.0f;
+                }
+            }
+        }
+
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Environment")) {
+
+        Registry& sceneRegistry = scene.GetRegistry();
+        Entity envEntity = scene.GetEnvironmentEntity();
+        const bool hasEnvironment =
+            (envEntity != MAX_ENTITIES) &&
+            sceneRegistry.HasComponent<EnvironmentComponent>(envEntity);
+
+
+
+        if (!hasEnvironment) {
+            ImGui::TextDisabled("No environment component found.");
+            ImGui::Separator();
+            if (ImGui::Selectable("Initialise Environment", false, ImGuiSelectableFlags_DontClosePopups)) {
+                scene.CreateEnvironment();
+            }
+        }
+        else {
+            ImGui::TextDisabled("Live Status");
+            ImGui::Separator();
+            ImGui::Text("Season: %s", seasonName.c_str());
+            ImGui::Text("Global Temp: %.1f C", currentTemp);
+
+            auto& env = sceneRegistry.GetComponent<EnvironmentComponent>(envEntity);
+            ImGui::Text("Sun Heat Bonus: %.1f", env.sunHeatBonus);
+            ImGui::Text("Weather Intensity: %.2f", env.weatherIntensity);
+            ImGui::Text("Time Since Rain: %.1f s", env.timeSinceLastRain);
+            ImGui::Text("Fire Suppression Timer: %.1f s", env.postRainFireSuppressionTimer);
+
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("Controls");
+            ImGui::Separator();
+
+            bool useSimple = scene.IsUsingSimpleShadows();
+            if (ImGui::Checkbox("Use Simple Shadows", &useSimple)) {
+                scene.ToggleSimpleShadows();
+            }
+
+            ImGui::Spacing();
+
+            if (ImGui::Selectable("Cycle to Next Season", false, ImGuiSelectableFlags_DontClosePopups)) {
+                scene.NextSeason();
+            }
+
+            bool isPrecipitating = scene.IsPrecipitating();
+            std::string weatherLabel = isPrecipitating ? "Stop Weather" : "Start Weather";
+            if (ImGui::Selectable(weatherLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
+                scene.ToggleWeather();
+            }
+
+            bool isDustActive = scene.IsDustActive();
+            std::string dustLabel = isDustActive ? "Stop Dust Cloud" : "Spawn Dust Cloud";
+            if (ImGui::Selectable(dustLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
+                if (isDustActive) {
+                    scene.StopDust();
+                }
+                else {
+                    scene.SpawnDustCloud();
+                }
+            }
+
+
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("Time of Day");
+            ImGui::Separator();
+
+            if (ImGui::Selectable("Set to Day", false, ImGuiSelectableFlags_DontClosePopups)) {
+                Registry& registry = scene.GetRegistry();
+                for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                    if (!registry.HasComponent<OrbitComponent>(e)) continue;
+
+                    bool isSun = (registry.HasComponent<LightComponent>(e) && registry.GetComponent<LightComponent>(e).type == 0) ||
+                        (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Sun") != std::string::npos);
+
+                    bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
+
+                    if (isSun) {
+                        registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
+                    }
+                    else if (isMoon) {
+                        registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
+                    }
+                }
+            }
+
+            if (ImGui::Selectable("Set to Night", false, ImGuiSelectableFlags_DontClosePopups)) {
+                Registry& registry = scene.GetRegistry();
+                for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                    if (!registry.HasComponent<OrbitComponent>(e)) continue;
+
+                    bool isSun = (registry.HasComponent<LightComponent>(e) && registry.GetComponent<LightComponent>(e).type == 0) ||
+                        (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Sun") != std::string::npos);
+
+                    bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
+
+                    if (isSun) {
+                        registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
+                    }
+                    else if (isMoon) {
+                        registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
+                    }
+                }
+            }
+        }
+        ImGui::EndMenu();
+    }
+
+    DrawMainMenuStatusBar(deltaTime);
+    ImGui::EndMainMenuBar();
+}
+
+}
+
+void EditorUI::DrawLoadSceneMenu(std::string& sceneToLoad) {
+    if (ImGui::BeginMenu("Load Scene")) {
+        if (m_SceneOptions.empty()) {
+            ImGui::MenuItem("No scenes found...", nullptr, false, false);
+        }
+        else {
+            for (int i = 0; i < (int)m_SceneOptions.size(); i++) {
+                const bool isSelected = (m_SelectedSceneIndex == i);
+                if (ImGui::MenuItem(m_SceneOptions[i].name.c_str(), nullptr, isSelected)) {
+                    m_SelectedSceneIndex = i;
+                    sceneToLoad = m_SceneOptions[i].path;
+                }
+            }
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("Refresh List", "F5")) {
+            m_SceneOptions = ConfigLoader::GetAvailableScenes(m_ConfigRoot);
+        }
+
+        ImGui::EndMenu();
+    }
+}
+
+void EditorUI::DrawMainMenuStatusBar(float deltaTime) {
+    std::string currentSceneName = m_SceneOptions.empty() ? "None" : m_SceneOptions[m_SelectedSceneIndex].name;
+    std::string activeSceneStr = "Active Scene: " + currentSceneName;
+    std::string fpsStr = std::to_string((int)(1.0f / deltaTime)) + " FPS";
+
+    float spacing = 20.0f;
+    float totalRightWidth = ImGui::CalcTextSize(activeSceneStr.c_str()).x +
+        ImGui::CalcTextSize(fpsStr.c_str()).x +
+        spacing + 40.0f;
+
+    ImGui::SameLine(ImGui::GetWindowWidth() - totalRightWidth);
+
+    ImGui::TextDisabled("Active Scene: ");
+    ImGui::SameLine();
+    ImGui::Text("%s", currentSceneName.c_str());
+
+    ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(fpsStr.c_str()).x - 20.0f);
+    ImGui::TextDisabled("%s", fpsStr.c_str());
+}
+
+void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& entityToDelete) {
+    if (ImGui::BeginMenu("Objects")) {
+        Registry& registry = scene.GetRegistry();
+        const auto& entities = scene.GetRenderableEntities();
+
+        if (entities.empty()) {
+            ImGui::MenuItem("No objects in scene", nullptr, false, false);
+        }
+        else {
+            for (Entity e : entities) {
+                std::string entityName = "Entity " + std::to_string(e);
+                if (registry.HasComponent<NameComponent>(e)) {
+                    entityName = registry.GetComponent<NameComponent>(e).name;
+                }
+
+                int emitterCount = 0;
+                int fireId = -1;
+                int smokeId = -1;
+                bool isBurning = false;
+
+                if (registry.HasComponent<ThermoComponent>(e)) {
+                    auto& thermo = registry.GetComponent<ThermoComponent>(e);
+                    if (thermo.state == ObjectState::BURNING) {
+                        isBurning = true;
+                    }
+                    if (thermo.fireEmitterId != -1) {
+                        emitterCount++;
+                        fireId = thermo.fireEmitterId;
+                    }
+                    if (thermo.smokeEmitterId != -1) {
+                        emitterCount++;
+                        smokeId = thermo.smokeEmitterId;
+                    }
+                }
+
+                if (registry.HasComponent<AttachedEmitterComponent>(e)) {
+                    emitterCount += static_cast<int>(registry.GetComponent<AttachedEmitterComponent>(e).emitters.size());
+                }
+
+                bool isViewing = (e == activeOrbitTarget && activeOrbitTarget != MAX_ENTITIES);
+
+                if (isViewing) {
+                    entityName += " [VIEWING]";
+                }
+                if (emitterCount > 0) {
+                    entityName += " [" + std::to_string(emitterCount) + " Emitters]";
+                }
+
+                int popCount = 0;
+                if (isViewing) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 1.0f, 1.0f));
+                    popCount++;
+                }
+                else if (isBurning) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+                    popCount++;
+                }
+                else if (emitterCount > 0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+                    popCount++;
+                }
+
+                std::string menuLabel = entityName + "###ObjMenu_" + std::to_string(e);
+
+                bool menuOpen = ImGui::BeginMenu(menuLabel.c_str());
+
+                if (popCount > 0) {
+                    ImGui::PopStyleColor(popCount);
+                }
+
+                if (menuOpen) {
+                    ImGui::TextDisabled("Entity Properties");
+
+                    const bool canViewObject = registry.HasComponent<TransformComponent>(e);
+                    if (!canViewObject) ImGui::BeginDisabled();
+                    if (ImGui::Button("View Object", ImVec2(-1, 0)) && canViewObject) {
+                        m_ViewRequested = e;
+                    }
+                    if (!canViewObject) {
+                        ImGui::EndDisabled();
+                        ImGui::TextDisabled("View requires TransformComponent");
+                    }
+
+                    if (ImGui::Button("Delete Entity", ImVec2(-1, 0))) {
+                        entityToDelete = e;
+                    }
+
+                    if (e == activeOrbitTarget && registry.HasComponent<ThermoComponent>(e)) {
+                        auto& thermo = registry.GetComponent<ThermoComponent>(e);
+                        if (thermo.isFlammable && thermo.state != ObjectState::BURNING) {
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.0f, 1.0f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.2f, 0.0f, 1.0f));
+
+                            if (ImGui::Button("Ignite Object", ImVec2(-1, 0))) {
+                                scene.Ignite(e);
+                            }
+
+                            ImGui::PopStyleColor(3);
+                        }
+                    }
+
+                    if (registry.HasComponent<NameComponent>(e)) {
+                        if (!registry.HasComponent<LightComponent>(e)) {
+                            if (ImGui::Button("Attach Light", ImVec2(-1, 0))) {
+                                std::string targetName = registry.GetComponent<NameComponent>(e).name;
+                                glm::vec3 pos = glm::vec3(0.0f);
+                                if (registry.HasComponent<TransformComponent>(e)) {
+                                    pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
+                                }
+                                scene.AddLight(targetName, pos, glm::vec3(1.0f, 1.0f, 1.0f), 200.0f, 2);
+                            }
+                        }
+                        else {
+                            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "  [Light Attached - Edit in Lights Menu]");
+                        }
+                    }
+
+                    ImGui::Separator();
+
+                    if (!registry.HasComponent<AttachedEmitterComponent>(e)) {
+                        registry.AddComponent<AttachedEmitterComponent>(e, AttachedEmitterComponent{});
+                    }
+                    auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
+
+                    if (!attached.emitters.empty()) {
+                        ImGui::TextDisabled("Active Emitters");
+                        for (size_t i = 0; i < attached.emitters.size(); ++i) {
+                            auto& em = attached.emitters[i];
+
+                            ImGui::PushID(i);
+                            std::string label = "Remove Emitter ID: " + std::to_string(em.emitterId);
+                            if (em.duration > 0.0f) {
+                                label += " (" + std::to_string((int)(em.duration - em.timer)) + "s left)";
+                            }
+                            else {
+                                label += " (Infinite)";
+                            }
+
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+                            if (ImGui::MenuItem(label.c_str())) {
+                                scene.GetOrCreateSystem(em.props)->StopEmitter(em.emitterId);
+                                attached.emitters.erase(attached.emitters.begin() + i);
+                                ImGui::PopStyleColor();
+                                ImGui::PopID();
+                                break;
+                            }
+                            ImGui::PopStyleColor();
+                            ImGui::PopID();
+                        }
+                        ImGui::Separator();
+                    }
+
+                    if (ImGui::BeginMenu("Attach New Emitter...")) {
+                        static float emitDuration = -1.0f;
+                        ImGui::InputFloat("Duration (s)", &emitDuration);
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Set to -1 for Infinite");
+                        ImGui::Separator();
+
+                        auto attachFunc = [&](ParticleProps props, float rate) {
+                            ActiveEmitter newEm;
+                            newEm.props = props;
+                            newEm.duration = emitDuration;
+                            newEm.emissionRate = rate;
+                            newEm.timer = 0.0f;
+
+                            glm::vec3 pos = glm::vec3(0.0f);
+                            if (registry.HasComponent<TransformComponent>(e)) {
+                                pos = glm::vec3(registry.GetComponent<TransformComponent>(e).matrix[3]);
+                            }
+
+                            newEm.props.position = pos;
+                            newEm.emitterId = scene.GetOrCreateSystem(newEm.props)->AddEmitter(newEm.props, rate);
+                            attached.emitters.push_back(newEm);
+                        };
+
+                        auto presets = ParticleLibrary::GetAllPresets();
+                        for (const auto& [name, props] : presets) {
+                            if (ImGui::MenuItem(name.c_str())) {
+                                attachFunc(props, 100.0f);
+                            }
+                        }
+                        ImGui::EndMenu();
+                    }
+
+                    ImGui::Separator();
+
+                    if (registry.HasComponent<TransformComponent>(e)) {
+                        glm::vec3 pos = registry.GetComponent<TransformComponent>(e).matrix[3];
+                        ImGui::Text("Position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+                    }
+
+                    if (registry.HasComponent<RenderComponent>(e)) {
+                        auto& render = registry.GetComponent<RenderComponent>(e);
+                        const char* layerName = (render.layerMask & SceneLayers::LAYER_B) ? "Inside" : "Outside";
+                        ImGui::Text("Layer: %s", layerName);
+
+                        const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
+                        const char* modeName = (render.shadingMode >= 0 && render.shadingMode <= 4) ? modes[render.shadingMode] : "Unknown";
+                        ImGui::Text("Shading: %s", modeName);
+                    }
+
+                    if (registry.HasComponent<ThermoComponent>(e)) {
+                        auto& thermo = registry.GetComponent<ThermoComponent>(e);
+                        ImGui::Text("Temp: %.1f C", thermo.currentTemp);
+                        if (thermo.state == ObjectState::BURNING) {
+                            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.0f, 1.0f), "STATE: BURNING");
+                        }
+                    }
+
+                    if (registry.HasComponent<RenderComponent>(e)) {
+                        auto& render = registry.GetComponent<RenderComponent>(e);
+                        ImGui::Separator();
+                        ImGui::TextDisabled("Material");
+
+                        ImGui::Text("Texture:");
+                        if (ImGui::BeginCombo("##ObjTexCombo", render.texturePath.c_str())) {
+                            for (const auto& texPath : m_AvailableTextures) {
+                                bool isSelected = (render.texturePath == texPath);
+                                if (ImGui::Selectable(texPath.c_str(), isSelected)) {
+                                    render.texturePath = texPath;
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::SameLine();
+                        if (ImGui::Button("Refresh##ObjTex")) {
+                            RefreshTextureList();
+                        }
+
+                        char texBuf[256];
+                        strncpy_s(texBuf, render.texturePath.c_str(), sizeof(texBuf));
+                        texBuf[sizeof(texBuf) - 1] = '\0';
+                        if (ImGui::InputText("Manual Path / ID##Obj", texBuf, sizeof(texBuf))) {
+                            render.texturePath = std::string(texBuf);
+                        }
+
+                        if (ImGui::BeginMenu("Generate Procedural Texture##Obj")) {
+                            static char procName[64] = "custom_tex_1";
+                            static int procType = 1;
+                            static glm::vec4 color1(1.0f, 1.0f, 1.0f, 1.0f);
+                            static glm::vec4 color2(0.2f, 0.2f, 0.2f, 1.0f);
+                            static int cellSize = 32;
+
+                            ImGui::InputText("Name ID", procName, sizeof(procName));
+
+                            const char* procTypes[] = { "Solid Color", "Checkerboard", "Gradient (Vert)", "Gradient (Horiz)" };
+                            ImGui::Combo("Type", &procType, procTypes, IM_ARRAYSIZE(procTypes));
+
+                            ImGui::ColorEdit4("Color 1", &color1.x);
+                            if (procType > 0) {
+                                ImGui::ColorEdit4("Color 2", &color2.x);
+                            }
+                            if (procType == 1) {
+                                ImGui::InputInt("Cell Size", &cellSize);
+                            }
+
+                            if (ImGui::Button("Generate & Apply", ImVec2(-1, 0))) {
+                                ProceduralTextureRequest req;
+                                req.name = std::string(procName);
+                                req.type = static_cast<ProcTexType>(procType);
+                                req.color1 = color1;
+                                req.color2 = color2;
+                                req.cellSize = cellSize;
+                                m_TextureRequests.push_back(req);
+
+                                render.texturePath = req.name;
+                            }
+                            ImGui::EndMenu();
+                        }
+                    }
+
+                    ImGui::Spacing();
+
+                    if (registry.HasComponent<RenderComponent>(e)) {
+                        auto& render = registry.GetComponent<RenderComponent>(e);
+                        ImGui::TextWrapped("Current Geometry: %s", render.geometryName.c_str());
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::Spacing();
+                    }
+
+                    if (ImGui::BeginMenu("Change Geometry...")) {
+                        static int geoTypeIdx = 0;
+                        const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Bowl", "Terrain" };
+                        ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
+
+                        static std::string selectedModel = "";
+                        if (geoTypeIdx == 0) {
+                            if (ImGui::BeginCombo("File", selectedModel.empty() ? "Select..." : selectedModel.c_str())) {
+                                for (const auto& mod : m_AvailableModels) {
+                                    if (ImGui::Selectable(mod.c_str(), selectedModel == mod)) {
+                                        selectedModel = mod;
+                                    }
+                                }
+                                ImGui::EndCombo();
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Refresh##Models")) RefreshModelList();
+                        }
+
+                        ImGui::Spacing();
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                        if (ImGui::Button("Apply New Geometry", ImVec2(-1, 0))) {
+                            GeometryChangeRequest req;
+                            req.entity = e;
+                            req.type = geoTypes[geoTypeIdx];
+                            req.path = selectedModel;
+                            m_GeometryRequests.push_back(req);
+                        }
+                        ImGui::PopStyleColor();
+
+                        ImGui::EndMenu();
+                    }
+
+                    if (fireId != -1 || smokeId != -1) {
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::TextDisabled("Attached Thermodynamics");
+
+                        const auto& pSystems = scene.GetParticleSystems();
+
+                        auto drawAttachedEmitter = [&](int targetId, const char* label, const std::string& texturePath) {
+                            if (targetId == -1) return;
+
+                            bool found = false;
+                            for (const auto& sys : pSystems) {
+                                if (sys->GetTexturePath() != texturePath) continue;
+
+                                for (const auto& em : sys->GetEmitters()) {
+                                    if (em.id == targetId) {
+                                        std::string menuLabel = std::string(label) + " (ID: " + std::to_string(targetId) + ")";
+                                        if (ImGui::BeginMenu(menuLabel.c_str())) {
+                                            ImGui::Text("Rate: %.1f particles/sec", em.particlesPerSecond);
+                                            ImGui::Text("Size: %.2f -> %.2f (Var: %.2f)", em.props.sizeBegin, em.props.sizeEnd, em.props.sizeVariation);
+                                            ImGui::Text("Velocity: (%.1f, %.1f, %.1f)", em.props.velocity.x, em.props.velocity.y, em.props.velocity.z);
+
+                                            ImGui::Separator();
+                                            if (ImGui::MenuItem("Extinguish Object")) {
+                                                scene.StopObjectFire(e);
+                                            }
+
+                                            ImGui::EndMenu();
+                                        }
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (found) break;
+                            }
+
+                            if (!found) {
+                                ImGui::MenuItem((std::string(label) + " (ID: " + std::to_string(targetId) + ") - Missing/Stale").c_str(), nullptr, false, false);
+                            }
+                        };
+
+                        drawAttachedEmitter(fireId, "Fire", ParticleLibrary::GetFireProps().texturePath);
+                        drawAttachedEmitter(smokeId, "Smoke", ParticleLibrary::GetSmokeProps().texturePath);
+                    }
+
+                    ImGui::EndMenu();
+                }
+            }
+        }
+        ImGui::EndMenu();
+    }
+}

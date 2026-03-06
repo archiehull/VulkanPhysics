@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source Files">
@@ -36,6 +36,9 @@
     </Filter>
     <Filter Include="Source Files\src\systems">
       <UniqueIdentifier>{3f196d6e-c5fa-48da-b24a-3ef0eb0da539}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\src\menu">
+      <UniqueIdentifier>{b0f00ec3-ac5d-42ef-861c-f47c26a6a88a}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -144,9 +147,6 @@
     <ClCompile Include="src\geometry\SJGLoader.cpp">
       <Filter>Source Files\src\geometry</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\EditorUI.cpp">
-      <Filter>Source Files\src\core</Filter>
-    </ClCompile>
     <ClCompile Include="src\systems\OrbitSystem.cpp">
       <Filter>Source Files\src\systems</Filter>
     </ClCompile>
@@ -173,6 +173,15 @@
     </ClCompile>
     <ClCompile Include="src\systems\PhysicsSystem.cpp">
       <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menu\EditorUI.cpp">
+      <Filter>Source Files\src\menu</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menu\EditorUI_DrawMainMenu.cpp">
+      <Filter>Source Files\src\menu</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menu\EditorUI_DrawWindows.cpp">
+      <Filter>Source Files\src\menu</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -266,9 +275,6 @@
     <ClInclude Include="src\geometry\SJGLoader.h">
       <Filter>Source Files\src\geometry</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\EditorUI.h">
-      <Filter>Source Files\src\core</Filter>
-    </ClInclude>
     <ClInclude Include="src\core\ECS.h">
       <Filter>Source Files\src\core</Filter>
     </ClInclude>
@@ -307,6 +313,9 @@
     </ClInclude>
     <ClInclude Include="src\systems\PhysicsSystem.h">
       <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\menu\EditorUI.h">
+      <Filter>Source Files\src\menu</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

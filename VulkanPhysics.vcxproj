@@ -28,7 +28,6 @@
     <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_widgets.cpp" />
     <ClCompile Include="src\core\Application.cpp" />
     <ClCompile Include="src\core\Config.cpp" />
-    <ClCompile Include="src\core\EditorUI.cpp" />
     <ClCompile Include="src\core\InputManager.cpp" />
     <ClCompile Include="src\core\Window.cpp" />
     <ClCompile Include="src\geometry\Geometry.cpp" />
@@ -36,6 +35,9 @@
     <ClCompile Include="src\geometry\OBJLoader.cpp" />
     <ClCompile Include="src\geometry\SJGLoader.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\menu\EditorUI.cpp" />
+    <ClCompile Include="src\menu\EditorUI_DrawMainMenu.cpp" />
+    <ClCompile Include="src\menu\EditorUI_DrawWindows.cpp" />
     <ClCompile Include="src\rendering\CameraController.cpp" />
     <ClCompile Include="src\rendering\Cubemap.cpp" />
     <ClCompile Include="src\rendering\GraphicsPipeline.cpp" />
@@ -71,13 +73,13 @@
     <ClInclude Include="src\core\Config.h" />
     <ClInclude Include="src\core\CoreTypes.h" />
     <ClInclude Include="src\core\ECS.h" />
-    <ClInclude Include="src\core\EditorUI.h" />
     <ClInclude Include="src\core\InputManager.h" />
     <ClInclude Include="src\core\Window.h" />
     <ClInclude Include="src\geometry\Geometry.h" />
     <ClInclude Include="src\geometry\GeometryGenerator.h" />
     <ClInclude Include="src\geometry\OBJLoader.h" />
     <ClInclude Include="src\geometry\SJGLoader.h" />
+    <ClInclude Include="src\menu\EditorUI.h" />
     <ClInclude Include="src\rendering\CameraController.h" />
     <ClInclude Include="src\rendering\Cubemap.h" />
     <ClInclude Include="src\rendering\GraphicsPipeline.h" />

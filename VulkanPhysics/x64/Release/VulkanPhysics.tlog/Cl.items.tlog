@@ -7,7 +7,6 @@ C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\img
 C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_widgets.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\imgui_widgets.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\Application.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Application.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\Config.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Config.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\EditorUI.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\EditorUI.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\InputManager.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\InputManager.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\Window.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Window.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\Geometry.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Geometry.obj
@@ -15,6 +14,9 @@ C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\GeometryGenerator.cpp;C:
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\OBJLoader.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\OBJLoader.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\SJGLoader.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\SJGLoader.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\main.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\main.obj
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\EditorUI.obj
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI_DrawMainMenu.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\EditorUI_DrawMainMenu.obj
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI_DrawWindows.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\EditorUI_DrawWindows.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\CameraController.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\CameraController.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Cubemap.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\Cubemap.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\GraphicsPipeline.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Release\GraphicsPipeline.obj
