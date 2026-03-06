@@ -25,7 +25,6 @@ void CameraController::SetOrbitTarget(Entity target, Scene& scene) {
 
     glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(target).matrix[3]);
 
-    // If current camera is not orbit-capable, switch to first available Orbit/RandomTarget camera
     const auto& meta = cameraMeta[activeCameraName];
     if (meta.type != "Orbit" && meta.type != "RandomTarget") {
         std::string fallback;
@@ -40,7 +39,6 @@ void CameraController::SetOrbitTarget(Entity target, Scene& scene) {
         }
     }
 
-    // --- Dynamic Close-Up Radius ---
     float viewRadius = 15.0f;
     float yOffset = 0.0f;
 
@@ -49,8 +47,6 @@ void CameraController::SetOrbitTarget(Entity target, Scene& scene) {
 
     if (registry.HasComponent<ColliderComponent>(target)) {
         auto& collider = registry.GetComponent<ColliderComponent>(target);
-
-        // Plane colliders can be huge (e.g., 500). Don't use that for camera framing.
         if (collider.type == 1) {
             viewRadius = std::max(maxScale * 4.0f, 8.0f);
             yOffset = maxScale * 0.5f;
@@ -65,10 +61,8 @@ void CameraController::SetOrbitTarget(Entity target, Scene& scene) {
         yOffset = maxScale * 0.5f;
     }
 
-    // Apply the vertical offset so we look at the center of the object
     targetPos.y += yOffset;
 
-    // Grab the camera components
     if (!registry.HasComponent<TransformComponent>(activeCameraEntity) ||
         !registry.HasComponent<CameraComponent>(activeCameraEntity)) {
         return;
@@ -77,33 +71,26 @@ void CameraController::SetOrbitTarget(Entity target, Scene& scene) {
     auto& camTransform = registry.GetComponent<TransformComponent>(activeCameraEntity);
     auto& camComp = registry.GetComponent<CameraComponent>(activeCameraEntity);
 
-    // Calculate the new camera position (placing it 'viewRadius' units back and slightly up)
-    // We maintain a gentle angle by offsetting on Y and Z
     glm::vec3 offset = glm::vec3(0.0f, viewRadius * 0.5f, viewRadius);
     glm::vec3 newCameraPosition = targetPos + offset;
 
-    // Apply new position
     camTransform.position = newCameraPosition;
 
-    // Calculate new yaw and pitch so the camera actually looks at the target
     glm::vec3 direction = glm::normalize(targetPos - newCameraPosition);
     camComp.yaw = glm::degrees(atan2(direction.z, direction.x));
     camComp.pitch = glm::degrees(asin(direction.y));
 
-    // Sync rotation for the TransformComponent
     camTransform.rotation.x = camComp.pitch;
     camTransform.rotation.y = camComp.yaw;
     camTransform.rotation.z = 0.0f;
 
-    // We MUST sync the OrbitComponent, otherwise the OrbitSystem will overwrite 
-    // the transform we just calculated on the very next frame!
     if (registry.HasComponent<OrbitComponent>(activeCameraEntity)) {
         auto& orbitComp = registry.GetComponent<OrbitComponent>(activeCameraEntity);
         if (orbitComp.isOrbiting) {
             orbitComp.center = targetPos;
             orbitComp.radius = viewRadius;
+            orbitComp.speed = 0.0f;
 
-            // Set start vector so the math matches our forced position exactly
             glm::vec3 flatOffset = glm::vec3(newCameraPosition.x - targetPos.x, 0.0f, newCameraPosition.z - targetPos.z);
             if (glm::length(flatOffset) > 0.001f) {
                 orbitComp.startVector = glm::normalize(flatOffset) * viewRadius;
@@ -111,9 +98,16 @@ void CameraController::SetOrbitTarget(Entity target, Scene& scene) {
             orbitComp.currentAngle = 0.0f;
         }
     }
-    // --------------------------------------
 
     camTransform.UpdateMatrix();
+
+    // NEW: Print current orbit target name
+    if (registry.HasComponent<NameComponent>(target)) {
+        std::cout << "[OrbitTarget] " << registry.GetComponent<NameComponent>(target).name << std::endl;
+    }
+    else {
+        std::cout << "[OrbitTarget] Entity " << target << std::endl;
+    }
 }
 
 void CameraController::SetupCameras(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs) {
@@ -141,8 +135,85 @@ void CameraController::SwitchCameraByBind(const std::string& actionBind, Scene& 
     }
 }
 
+bool CameraController::IsActiveCameraBoundTo(const std::string& actionBind) const {
+    auto it = bindToNameMap.find(actionBind);
+    if (it == bindToNameMap.end()) return false;
+    return it->second == activeCameraName;
+}
+
+void CameraController::CycleRandomTarget(Scene& scene) {
+    if (activeCameraEntity == MAX_ENTITIES) return;
+
+    auto it = cameraMeta.find(activeCameraName);
+    if (it == cameraMeta.end()) return;
+    const auto& meta = it->second;
+
+    if (meta.type != "RandomTarget") return;
+
+    BuildRandomTargetCycle(scene, meta);
+    if (randomTargetCycle.empty()) return;
+
+    auto found = std::find(randomTargetCycle.begin(), randomTargetCycle.end(), OrbitTargetObject);
+    if (found != randomTargetCycle.end()) {
+        randomTargetIndex = (static_cast<std::size_t>(std::distance(randomTargetCycle.begin(), found)) + 1) % randomTargetCycle.size();
+    }
+    else {
+        randomTargetIndex = 0;
+    }
+
+    ApplyRandomTarget(scene, randomTargetCycle[randomTargetIndex]);
+}
+
+void CameraController::BuildRandomTargetCycle(Scene& scene, const CustomCameraConfig& meta) {
+    randomTargetCycle.clear();
+
+    auto& registry = scene.GetRegistry();
+
+    for (Entity e : scene.GetRenderableEntities()) {
+        if (!registry.HasComponent<RenderComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
+            continue;
+        }
+
+        const auto& render = registry.GetComponent<RenderComponent>(e);
+
+        // Optional: skip hidden objects
+        if (!render.visible) {
+            continue;
+        }
+
+        // Skip generated shadow helper entities
+        if (registry.HasComponent<NameComponent>(e)) {
+            const std::string& n = registry.GetComponent<NameComponent>(e).name;
+            if (n.size() >= 7 && n.rfind("_Shadow") == n.size() - 7) {
+                continue;
+            }
+        }
+
+        // IMPORTANT: do NOT filter by targetMatch
+        randomTargetCycle.push_back(e);
+    }
+
+    if (randomTargetCycle.empty()) {
+        OrbitTargetObject = MAX_ENTITIES;
+        return;
+    }
+
+    if (randomTargetIndex >= randomTargetCycle.size()) {
+        randomTargetIndex = 0;
+    }
+}
+void CameraController::ApplyRandomTarget(Scene& scene, Entity target) {
+    if (target == MAX_ENTITIES) return;
+    SetOrbitTarget(target, scene);
+}
+
 void CameraController::SwitchCamera(const std::string& name, Scene& scene) {
     if (cameraEntities.find(name) == cameraEntities.end()) return;
+
+    // Prevent reinitializing same camera on repeated key press
+    if (activeCameraEntity != MAX_ENTITIES && activeCameraName == name) {
+        return;
+    }
 
     auto& registry = scene.GetRegistry();
 
@@ -157,29 +228,18 @@ void CameraController::SwitchCamera(const std::string& name, Scene& scene) {
     const auto& meta = cameraMeta[name];
     OrbitTargetObject = MAX_ENTITIES;
 
+    randomTargetCycle.clear();
+    randomTargetIndex = 0;
+    randomTargetSwitchTimer = 0.0f;
+
     if (meta.type == "RandomTarget") {
-        std::vector<Entity> validTargets;
-        for (Entity e : scene.GetRenderableEntities()) {
-            if (registry.HasComponent<RenderComponent>(e)) {
-                if (registry.GetComponent<RenderComponent>(e).texturePath.find(meta.targetMatch) != std::string::npos) {
-                    validTargets.push_back(e);
-                }
-            }
-        }
-
-        if (!validTargets.empty()) {
-            static std::random_device rd;
-            static std::mt19937 gen(rd());
-            std::uniform_int_distribution<> dis(0, (int)validTargets.size() - 1);
-            Entity target = validTargets[dis(gen)];
-
-            OrbitTargetObject = target;
-            glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(target).matrix[3]);
-            scene.SetObjectOrbit(name, targetPos + glm::vec3(0, 3, 0), meta.orbitRadius, 0.0f, { 0,1,0 }, { 1,0,0 });
+        BuildRandomTargetCycle(scene, meta);
+        if (!randomTargetCycle.empty()) {
+            ApplyRandomTarget(scene, randomTargetCycle[randomTargetIndex]);
         }
     }
     else if (meta.type == "Orbit") {
-        scene.SetObjectOrbit(name, meta.target, meta.orbitRadius, 0.05f, { 0,1,0 }, { 1,0,0 });
+        scene.SetObjectOrbit(name, meta.target, meta.orbitRadius, 0.0f, { 0,1,0 }, { 1,0,0 }); // <-- no default movement
     }
 
     std::cout << "Switched to Camera: " << name << std::endl;
@@ -188,30 +248,38 @@ void CameraController::SwitchCamera(const std::string& name, Scene& scene) {
 void CameraController::Update(float deltaTime, Scene& scene, const InputManager& input) {
     if (activeCameraEntity == MAX_ENTITIES) return;
 
-    // --- NEW: Continuously track the moving target ---
-    if (OrbitTargetObject != MAX_ENTITIES) {
-        auto& registry = scene.GetRegistry();
+    auto& registry = scene.GetRegistry();
+    const auto& meta = cameraMeta[activeCameraName];
 
-        // Ensure both the target and the camera still have the required components
+    // No auto-cycling; only recover if target disappears
+    if (meta.type == "RandomTarget") {
+        const bool lostTarget =
+            (OrbitTargetObject == MAX_ENTITIES) ||
+            !registry.HasComponent<TransformComponent>(OrbitTargetObject);
+
+        if (lostTarget) {
+            BuildRandomTargetCycle(scene, meta);
+            if (!randomTargetCycle.empty()) {
+                if (randomTargetIndex >= randomTargetCycle.size()) randomTargetIndex = 0;
+                ApplyRandomTarget(scene, randomTargetCycle[randomTargetIndex]);
+            }
+        }
+    }
+
+    if (OrbitTargetObject != MAX_ENTITIES) {
         if (registry.HasComponent<TransformComponent>(OrbitTargetObject) &&
             registry.HasComponent<OrbitComponent>(activeCameraEntity)) {
 
-            // Get the target's current position this frame
             glm::vec3 targetPos = glm::vec3(registry.GetComponent<TransformComponent>(OrbitTargetObject).matrix[3]);
 
-            // Re-calculate the vertical offset so we look at the center of the object, not its feet
             float yOffset = 3.0f;
             if (registry.HasComponent<ColliderComponent>(OrbitTargetObject)) {
                 yOffset = registry.GetComponent<ColliderComponent>(OrbitTargetObject).height * 0.5f;
             }
 
-            // Update the camera's orbit center so it follows the object!
             registry.GetComponent<OrbitComponent>(activeCameraEntity).center = targetPos + glm::vec3(0.0f, yOffset, 0.0f);
         }
     }
-    // -------------------------------------------------
-
-    const auto& meta = cameraMeta[activeCameraName];
 
     if (meta.type == "FreeRoam") {
         UpdateFreeRoam(deltaTime, scene, input);

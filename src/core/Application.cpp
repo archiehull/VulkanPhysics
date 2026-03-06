@@ -542,16 +542,27 @@ void Application::ProcessInput() {
         editorUI->SetPaused(!editorUI->IsPaused());
     }
 
+    auto handleCameraBind = [&](InputAction action, const char* bindName) {
+        if (!inputManager->IsActionJustPressed(action)) return;
+
+        const bool wasAlreadyActive = cameraController->IsActiveCameraBoundTo(bindName);
+        cameraController->SwitchCameraByBind(bindName, *scene);
+
+        if (wasAlreadyActive) {
+            cameraController->CycleRandomTarget(*scene); // no-op unless active camera type is RandomTarget
+        }
+        };
+
     // --- Dynamic Camera Switching ---
     // These now look up the assigned camera name from the config file using the ActionBind
-    if (inputManager->IsActionJustPressed(InputAction::Camera1)) cameraController->SwitchCameraByBind("Camera1", *scene);
-    if (inputManager->IsActionJustPressed(InputAction::Camera2)) cameraController->SwitchCameraByBind("Camera2", *scene);
-    if (inputManager->IsActionJustPressed(InputAction::Camera3)) cameraController->SwitchCameraByBind("Camera3", *scene);
-    if (inputManager->IsActionJustPressed(InputAction::Camera4)) cameraController->SwitchCameraByBind("Camera4", *scene);
-    if (inputManager->IsActionJustPressed(InputAction::Camera5)) cameraController->SwitchCameraByBind("Camera5", *scene);
-    if (inputManager->IsActionJustPressed(InputAction::Camera6)) cameraController->SwitchCameraByBind("Camera6", *scene);
-    if (inputManager->IsActionJustPressed(InputAction::Camera7)) cameraController->SwitchCameraByBind("Camera7", *scene);
-    if (inputManager->IsActionJustPressed(InputAction::Camera8)) cameraController->SwitchCameraByBind("Camera8", *scene);
+    handleCameraBind(InputAction::Camera1, "Camera1");
+    handleCameraBind(InputAction::Camera2, "Camera2");
+    handleCameraBind(InputAction::Camera3, "Camera3");
+    handleCameraBind(InputAction::Camera4, "Camera4");
+    handleCameraBind(InputAction::Camera5, "Camera5");
+    handleCameraBind(InputAction::Camera6, "Camera6");
+    handleCameraBind(InputAction::Camera7, "Camera7");
+    handleCameraBind(InputAction::Camera8, "Camera8");
 
     // --- Decoupled Ignite Logic (F4) ---
     // Works automatically with any camera configured as "RandomTarget" or "Orbit" 

@@ -8,6 +8,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <cstddef>
 
 class Scene;
 
@@ -26,6 +27,10 @@ public:
 
     void SetOrbitTarget(Entity target, Scene& scene);
 
+    // New: manual cycling support for RandomTarget cameras
+    void CycleRandomTarget(Scene& scene);
+    bool IsActiveCameraBoundTo(const std::string& actionBind) const;
+
 private:
     std::map<std::string, Entity> cameraEntities;
     std::map<std::string, CustomCameraConfig> cameraMeta;
@@ -35,7 +40,14 @@ private:
     std::string activeCameraName = "";
     Entity OrbitTargetObject = MAX_ENTITIES;
 
+    std::vector<Entity> randomTargetCycle;
+    std::size_t randomTargetIndex = 0;
+    float randomTargetSwitchTimer = 0.0f;
+    float randomTargetSwitchInterval = 4.0f;
+
     void SetupCameras(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs);
+    void BuildRandomTargetCycle(Scene& scene, const CustomCameraConfig& meta);
+    void ApplyRandomTarget(Scene& scene, Entity target);
 
     void UpdateFreeRoam(float deltaTime, Scene& scene, const InputManager& input);
     void UpdateOrbitInput(float deltaTime, Scene& scene, const InputManager& input);

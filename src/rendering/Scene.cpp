@@ -104,6 +104,7 @@ Entity Scene::AddObjectInternal(const std::string& name, std::shared_ptr<Geometr
 
     RenderComponent render;
     render.geometry = geometry;
+    render.geometryName = name;
     render.texturePath = texturePath;
     render.originalTexturePath = texturePath;
     render.shadingMode = globalShadingMode;
@@ -310,6 +311,7 @@ void Scene::AddModel(const std::string& name, const glm::vec3& position, const g
         }
 
         Entity entity = AddObjectInternal(name, geometry, position, texturePath, isFlammable);
+        m_Registry.GetComponent<RenderComponent>(entity).geometryName = modelPath;
 
         auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
         transform.position = position;

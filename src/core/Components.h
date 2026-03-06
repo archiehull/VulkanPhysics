@@ -39,9 +39,10 @@ struct TransformComponent {
 // 3. Visual Data
 struct RenderComponent {
     std::shared_ptr<Geometry> geometry;
+    std::string geometryName = "Unknown";
     std::string texturePath;
     std::string originalTexturePath;
-    
+
     Entity simpleShadowEntity = MAX_ENTITIES;
     float simpleShadowRadius = -1.0f;
 

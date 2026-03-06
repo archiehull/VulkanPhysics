@@ -10,7 +10,7 @@ ProceduralObjectCount 0
 
 [Scene]
 Camera Default FreeRoam Camera2 0.0 40.0 40.0 0.0 -25.0
-Camera OrbitObj RandomTarget Camera3 0.0 25.0 25.0 18.0 tex_ball
+Camera OrbitObj RandomTarget Camera3 0.0 25.0 25.0 18.0
 
 ProceduralTexture tex_checker_floor
     Type Checker
@@ -84,37 +84,6 @@ Object RightRamp
 EndObject
 
 # --- DYNAMIC BALLS ---
-
-Object Ball1
-    Type Sphere
-    Texture tex_ball
-    Position -16.0 30.0 0.0
-    Scale 2.0 2.0 2.0
-    RenderProps 1 true true true 3
-    PhysicsProps false true false
-    ColliderProps 0 2.0
-EndObject
-
-Object Ball2
-    Type Sphere
-    Texture tex_ball
-    Position 16.0 25.0 0.0
-    Scale 2.0 2.0 2.0
-    RenderProps 1 true true true 3
-    PhysicsProps false true false
-    ColliderProps 0 2.0
-EndObject
-
-Object Ball3
-    Type Sphere
-    Texture tex_ball
-    Position 0.0 40.0 0.0
-    Scale 2.0 2.0 2.0
-    RenderProps 1 true true true 3
-    PhysicsProps false true false
-    ColliderProps 0 2.0
-EndObjectrProps 0 2.0
-EndObject
 
 # --- LIGHTING ---
 

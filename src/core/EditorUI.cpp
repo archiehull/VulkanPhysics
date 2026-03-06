@@ -458,9 +458,18 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                             ImGui::Spacing();
                             if (ImGui::BeginMenu("Change Geometry...")) {
-                                static int geoTypeIdx = 0;
-                                const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Bowl", "Terrain" };
-                                ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
+                                if (registry.HasComponent<RenderComponent>(e)) {
+                                    auto& render = registry.GetComponent<RenderComponent>(e);
+                                    ImGui::TextWrapped("Current Geometry: %s", render.geometryName.c_str());
+                                    ImGui::Spacing();
+                                    ImGui::Separator();
+                                    ImGui::Spacing();
+                                }
+
+                                    static int geoTypeIdx = 0;
+                                    const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Bowl", "Terrain" };
+                                    ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
+
 
                                 static std::string selectedModel = "";
                                 if (geoTypeIdx == 0) { // Model File
@@ -1245,6 +1254,11 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                             // Change Geometry
                             if (ImGui::TreeNode("Change Geometry")) {
+                                ImGui::TextWrapped("Current Geometry: %s", comp.geometryName.c_str());
+                                ImGui::Spacing();
+                                ImGui::Separator();
+                                ImGui::Spacing();
+
                                 static int geoTypeIdx = 0;
                                 const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Bowl", "Terrain" };
                                 ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
