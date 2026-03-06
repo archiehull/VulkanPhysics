@@ -19,6 +19,36 @@
 #include "../systems/CameraSystem.h"
 #include "../systems/PhysicsSystem.h"
 
+Entity Scene::AddLayerRegion(const std::string& name, int layerBit, int volumeType, float radius, const glm::vec3& halfExtents, const glm::vec3& position) {
+    Entity entity = m_Registry.CreateEntity();
+    m_EntityMap[name] = entity;
+
+    m_Registry.AddComponent<NameComponent>(entity, { name });
+
+    TransformComponent transform;
+    transform.position = position;
+    transform.UpdateMatrix();
+    m_Registry.AddComponent<TransformComponent>(entity, transform);
+
+    LayerRegionComponent region;
+    region.layerName = name;
+    region.assignedLayerBit = layerBit;
+    region.volumeType = volumeType;
+    region.radius = radius;
+    region.halfExtents = halfExtents;
+    m_Registry.AddComponent<LayerRegionComponent>(entity, region);
+
+    // Sync config-defined regions into global layer UI state
+    if (layerBit >= 0 && layerBit < SceneLayers::MAX_LAYERS) {
+        SceneLayers::ActiveLayerCount = std::max(SceneLayers::ActiveLayerCount, layerBit + 1);
+        if (!name.empty()) {
+            SceneLayers::LayerNames[layerBit] = name;
+        }
+    }
+
+    return entity;
+}
+
 void Scene::CreateEnvironment(const std::string& name) {
     if (m_EnvironmentEntity != MAX_ENTITIES && m_Registry.HasComponent<EnvironmentComponent>(m_EnvironmentEntity)) {
         std::cout << "Environment already exists!" << std::endl;

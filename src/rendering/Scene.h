@@ -176,6 +176,8 @@ public:
 
     void InvalidateEnvironmentEntity(Entity e);
 
+    Entity AddLayerRegion(const std::string& name, int layerBit, int volumeType, float radius, const glm::vec3& halfExtents, const glm::vec3& position);
+
 private:
     Registry m_Registry;
     std::vector<std::unique_ptr<ISystem>> m_Systems;

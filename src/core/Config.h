@@ -66,6 +66,7 @@ struct SceneObjectConfig {
     bool receiveShadows = true;
     int shadingMode = 1;
     int layerMask = 1;
+    int excludeLayerMask = 0;
 
     bool hasCollision = true;
     bool isStatic = true;
@@ -140,6 +141,15 @@ struct CustomCameraConfig {
     float pitch = 0.0f;
 };
 
+struct LayerRegionConfig {
+    std::string name;
+    int assignedLayerBit = 0;
+    int volumeType = 0; // 0 = Sphere, 1 = Box (AABB)
+    float radius = 10.0f;
+    glm::vec3 halfExtents = glm::vec3(5.0f, 5.0f, 5.0f);
+    glm::vec3 position = glm::vec3(0.0f); // Where this region exists in the world
+};
+
 struct AppConfig {
     int windowWidth = 1000;
     int windowHeight = 750;
@@ -151,6 +161,7 @@ struct AppConfig {
     std::vector<CustomCameraConfig> customCameras;
     std::vector<ProceduralTextureConfig> proceduralTextures;
     std::vector<CustomParticleConfig> customParticles;
+    std::vector<LayerRegionConfig> layerRegions;
     std::unordered_map<std::string, std::string> inputBindings;
 };
 

@@ -51,6 +51,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
     SceneObjectConfig* currentObject = nullptr;
     ProceduralTextureConfig* currentTexture = nullptr;
     CustomParticleConfig* currentParticle = nullptr;
+    LayerRegionConfig* currentLayerRegion = nullptr;
     ConfigSection currentSection = ConfigSection::None;
 
     while (std::getline(file, line)) {
@@ -122,6 +123,19 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             currentParticle = nullptr;
         }
 
+        else if (key == "LayerRegion") {
+            LayerRegionConfig newRegion;
+            ss >> newRegion.name;
+            config.layerRegions.push_back(newRegion);
+            currentLayerRegion = &config.layerRegions.back();
+            currentObject = nullptr;
+            currentTexture = nullptr;
+            currentParticle = nullptr;
+        }
+        else if (key == "EndLayerRegion") {
+            currentLayerRegion = nullptr;
+        }
+
         // --- Particle Fields ---
         else if (currentParticle) {
             if (key == "PosVar") ss >> currentParticle->posVar.x >> currentParticle->posVar.y >> currentParticle->posVar.z;
@@ -157,6 +171,8 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (key == "Rotation") ss >> currentObject->rotation.x >> currentObject->rotation.y >> currentObject->rotation.z;
             else if (key == "Scale") ss >> currentObject->scale.x >> currentObject->scale.y >> currentObject->scale.z;
             else if (key == "Params") ss >> currentObject->params.x >> currentObject->params.y >> currentObject->params.z;
+            else if (key == "LayerMask") ss >> currentObject->layerMask;
+            else if (key == "ExcludeLayerMask") ss >> currentObject->excludeLayerMask;
             else if (key == "AttachParticle") {
                 AttachedParticleConfig ap;
                 std::string durStr;
@@ -281,6 +297,14 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             }
 
             config.customCameras.push_back(cam);
-            }
+        }
+        // --- Layer Region Fields ---
+        else if (currentLayerRegion) {
+            if (key == "LayerBit") ss >> currentLayerRegion->assignedLayerBit;
+            else if (key == "VolumeType") ss >> currentLayerRegion->volumeType;
+            else if (key == "Radius") ss >> currentLayerRegion->radius;
+            else if (key == "HalfExtents") ss >> currentLayerRegion->halfExtents.x >> currentLayerRegion->halfExtents.y >> currentLayerRegion->halfExtents.z;
+            else if (key == "Position") ss >> currentLayerRegion->position.x >> currentLayerRegion->position.y >> currentLayerRegion->position.z;
+        }
     }
 }

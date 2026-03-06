@@ -56,23 +56,71 @@ void EditorUI::DrawPropertyWindowsSection(Scene& scene, Entity& entityToDelete) 
     auto drawLayerCheckboxes = [&](const char* label, int& mask) {
         ImGui::TextDisabled("%s", label);
 
-        int cols = std::min(4, std::max(1, SceneLayers::ActiveLayerCount));
-        if (ImGui::BeginTable(label, cols)) {
-            for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
-                ImGui::TableNextColumn();
-                bool isActive = (mask & (1 << i)) != 0;
+        auto isLayerUsed = [&](int bit) -> bool {
+            if (bit == 0) return true; // Always keep Base World visible
 
-                ImGui::PushID(i + (int)(size_t)label);
-                if (ImGui::Checkbox(SceneLayers::LayerNames[i].c_str(), &isActive)) {
-                    if (isActive) mask |= (1 << i);
-                    else mask &= ~(1 << i);
+            const int bitMask = (1 << bit);
+            Registry& reg = scene.GetRegistry();
+            const Entity count = reg.GetEntityCount();
+
+            for (Entity e = 0; e < count; ++e) {
+                if (reg.HasComponent<LayerRegionComponent>(e) &&
+                    reg.GetComponent<LayerRegionComponent>(e).assignedLayerBit == bit) {
+                    return true;
+                }
+
+                if (reg.HasComponent<RenderComponent>(e)) {
+                    const auto& rc = reg.GetComponent<RenderComponent>(e);
+                    if ((rc.layerMask & bitMask) != 0 || (rc.excludeLayerMask & bitMask) != 0) {
+                        return true;
+                    }
+                }
+
+                if (reg.HasComponent<LightComponent>(e)) {
+                    if ((reg.GetComponent<LightComponent>(e).layerMask & bitMask) != 0) {
+                        return true;
+                    }
+                }
+
+                if (reg.HasComponent<CameraComponent>(e)) {
+                    const auto& cc = reg.GetComponent<CameraComponent>(e);
+                    if ((cc.viewMask & bitMask) != 0 || (cc.insideRegionMask & bitMask) != 0) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+            };
+
+        std::vector<int> visibleBits;
+        visibleBits.reserve(SceneLayers::MAX_LAYERS);
+
+        for (int i = 0; i < SceneLayers::MAX_LAYERS; ++i) {
+            const bool currentlySet = (mask & (1 << i)) != 0;
+            if (isLayerUsed(i) || currentlySet) {
+                visibleBits.push_back(i);
+            }
+        }
+
+        const int cols = std::min(4, std::max(1, static_cast<int>(visibleBits.size())));
+        if (ImGui::BeginTable(label, cols)) {
+            for (int bit : visibleBits) {
+                ImGui::TableNextColumn();
+                bool isActive = (mask & (1 << bit)) != 0;
+
+                ImGui::PushID(bit + (int)(size_t)label);
+                if (ImGui::Checkbox(SceneLayers::LayerNames[bit].c_str(), &isActive)) {
+                    if (isActive) mask |= (1 << bit);
+                    else mask &= ~(1 << bit);
                 }
                 ImGui::PopID();
             }
             ImGui::EndTable();
         }
+
         ImGui::Spacing();
-    };
+        };
 
 // --- MULTIPLE ENTITY PROPERTIES WINDOWS ---
 for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
@@ -598,7 +646,27 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     }
 
                     // Let the user pick which Layer Slot (1-7) this entity represents
-                    ImGui::SliderInt("Layer Slot", &comp.assignedLayerBit, 1, SceneLayers::MAX_LAYERS - 1);
+                    const int previousBit = comp.assignedLayerBit;
+                    if (ImGui::SliderInt("Layer Slot", &comp.assignedLayerBit, 1, SceneLayers::MAX_LAYERS - 1)) {
+                        comp.assignedLayerBit = std::clamp(comp.assignedLayerBit, 1, SceneLayers::MAX_LAYERS - 1);
+
+                        // If this layer name was mapped to the old bit, clear old mapping label
+                        if (previousBit >= 1 &&
+                            previousBit < SceneLayers::MAX_LAYERS &&
+                            SceneLayers::LayerNames[previousBit] == comp.layerName) {
+                            SceneLayers::LayerNames[previousBit] = std::string("Layer ") + static_cast<char>('A' + previousBit);
+                        }
+
+                        // Always map this region's name to its new bit
+                        SceneLayers::LayerNames[comp.assignedLayerBit] = comp.layerName;
+                    }
+
+                    ImGui::TextDisabled(
+                        "Slot = Layer %c | Bit = %d | Mask = %d",
+                        static_cast<char>('A' + comp.assignedLayerBit),
+                        comp.assignedLayerBit,
+                        (1 << comp.assignedLayerBit)
+                    );
 
                     // 2. Spatial Bounds
                     ImGui::Spacing();

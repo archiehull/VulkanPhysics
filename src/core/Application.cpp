@@ -158,6 +158,17 @@ void Application::LoadScene(const std::string& scenePath) {
 
 
 void Application::SetupScene() {
+    // Reset layer globals per-scene
+    SceneLayers::ActiveLayerCount = 1;
+    SceneLayers::LayerNames[0] = "Base World";
+    SceneLayers::LayerNames[1] = "Layer B";
+    SceneLayers::LayerNames[2] = "Layer C";
+    SceneLayers::LayerNames[3] = "Layer D";
+    SceneLayers::LayerNames[4] = "Layer E";
+    SceneLayers::LayerNames[5] = "Layer F";
+    SceneLayers::LayerNames[6] = "Layer G";
+    SceneLayers::LayerNames[7] = "Layer H";
+
     // 1. Pass Global Configuration to Scene
     for (const auto& objCfg : config.sceneObjects) {
         if (objCfg.type == "Environment") {
@@ -270,6 +281,10 @@ void Application::SetupScene() {
             scene->AddLight(objCfg.name, objCfg.position, objCfg.lightColor, objCfg.lightIntensity, objCfg.lightType);
             scene->SetLightLayerMask(objCfg.name, objCfg.layerMask);
         }
+        Entity e = scene->GetEntityByName(objCfg.name);
+        if (e != MAX_ENTITIES && scene->GetRegistry().HasComponent<RenderComponent>(e)) {
+            scene->GetRegistry().GetComponent<RenderComponent>(e).excludeLayerMask = objCfg.excludeLayerMask;
+        }
 
         // --- Apply Orbit ---
         if (objCfg.hasOrbit) {
@@ -302,6 +317,18 @@ void Application::SetupScene() {
                 scene->SetLightOrbit(objCfg.name, objCfg.position, objCfg.orbitRadius, speed, axis, startVector, objCfg.orbitInitialAngle);
             }
         }
+    }
+
+    for (const auto& regionCfg : config.layerRegions) {
+        scene->AddLayerRegion(
+            regionCfg.name,
+            regionCfg.assignedLayerBit,
+            regionCfg.volumeType,
+            regionCfg.radius,
+            regionCfg.halfExtents,
+            regionCfg.position
+        );
+        std::cout << "Loaded Layer Region: " << regionCfg.name << " (Bit: " << regionCfg.assignedLayerBit << ")" << std::endl;
     }
 
     // 4. Generate Procedural Vegetation

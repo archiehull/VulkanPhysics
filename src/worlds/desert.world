@@ -20,6 +20,14 @@ Position 0.0 -70.0 0.0
 DustCloudProps false 0.0 0.0 0.0 20.0
 EndObject
 
+# VolumeType 0 = Sphere, LayerBit 2 = Layer C (Mask value 4)
+LayerRegion InsideBall
+    LayerBit 2
+    VolumeType 0
+    Radius 150.0
+    Position 0.0 0.0 0.0
+EndLayerRegion
+
 # Camera configuration using internal action binds (Camera1, Camera2, etc.)
 Camera OutsideCam Orbit Camera1 0.0 60.0 350.0 350.0 0.0 0.0 0.0
 Camera FreeRoamCam FreeRoam Camera2 0.0 -75.0 0.0
@@ -95,5 +103,6 @@ Object PedestalLightSphere
     Position 200.0 0.0 200.0
     Light true 1.0 0.5 0.2 5.0 1
     RenderProps 1 true true true 2
+    ExcludeLayerMask 4
     PhysicsProps false false
 EndObject
