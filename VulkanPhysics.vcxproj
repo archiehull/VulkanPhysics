@@ -73,6 +73,7 @@
     <ClInclude Include="src\core\Config.h" />
     <ClInclude Include="src\core\CoreTypes.h" />
     <ClInclude Include="src\core\ECS.h" />
+    <ClInclude Include="src\core\EditorUI.h" />
     <ClInclude Include="src\core\InputManager.h" />
     <ClInclude Include="src\core\Window.h" />
     <ClInclude Include="src\geometry\Geometry.h" />

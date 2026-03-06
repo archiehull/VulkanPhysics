@@ -65,7 +65,7 @@ struct SceneObjectConfig {
     bool castsShadow = true;
     bool receiveShadows = true;
     int shadingMode = 1;
-    int layerMask = 3;
+    int layerMask = 1;
 
     bool hasCollision = true;
     bool isStatic = true;

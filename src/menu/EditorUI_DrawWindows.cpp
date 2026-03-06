@@ -218,6 +218,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     ImGui::Combo("Shading Mode", &comp.shadingMode, modes, IM_ARRAYSIZE(modes));
 
                     drawLayerCheckboxes("Visible on Layers:", comp.layerMask);
+                    drawLayerCheckboxes("Hidden on Layers (NOT):", comp.excludeLayerMask);
 
                     ImGui::Text("Texture:");
                     std::string comboID = "##TextureCombo" + std::to_string(it->id);
@@ -484,17 +485,18 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     ImGui::TextDisabled("Active Render Layers");
                     ImGui::Separator();
 
-                    // Display which layers this camera renders, and allow toggling them on/off
-                    std::string layerStr = "";
-                    for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
-                        if ((comp.viewMask & (1 << i)) != 0) {
-                            layerStr += "[" + SceneLayers::LayerNames[i] + "] ";
+                    auto maskToString = [](int mask) {
+                        std::string s;
+                        for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+                            if ((mask & (1 << i)) != 0) {
+                                s += "[" + SceneLayers::LayerNames[i] + "] ";
+                            }
                         }
-                    }
-                    if (layerStr.empty()) layerStr = "[None]";
+                        return s.empty() ? std::string("[None]") : s;
+                        };
 
-                    ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "Current Mask: %s", layerStr.c_str());
-
+                    ImGui::TextColored(ImVec4(0.7f, 0.9f, 1.0f, 1.0f), "Inside Regions: %s", maskToString(comp.insideRegionMask).c_str());
+                    ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "Viewing Mask:   %s", maskToString(comp.viewMask).c_str());
                     ImGui::TreePop();
                 }
 

@@ -37,6 +37,8 @@ void CameraSystem::Update(Scene& scene, float deltaTime) {
         // 3. Layer Mask / Region Logic
         int targetViewMask = SceneLayers::LAYER_A; // Default fallback to Base World
 
+        int insideMask = 0;
+
         for (Entity regionEnt = 0; regionEnt < registry.GetEntityCount(); ++regionEnt) {
             if (!registry.HasComponent<LayerRegionComponent>(regionEnt) || !registry.HasComponent<TransformComponent>(regionEnt)) {
                 continue;
@@ -44,33 +46,30 @@ void CameraSystem::Update(Scene& scene, float deltaTime) {
 
             auto& region = registry.GetComponent<LayerRegionComponent>(regionEnt);
             auto& regTransform = registry.GetComponent<TransformComponent>(regionEnt);
-            glm::vec3 regionPos = regTransform.position;
+            const glm::vec3 regionPos = regTransform.position;
 
             bool isInsideRegion = false;
 
-            if (region.volumeType == 0) { // SPHERE CHECK
-                float dist = glm::distance(pos, regionPos);
-                if (dist <= region.radius) isInsideRegion = true;
+            if (region.volumeType == 0) { // Sphere
+                isInsideRegion = (glm::distance(pos, regionPos) <= region.radius);
             }
-            else if (region.volumeType == 1) { // AABB (BOX) CHECK
-                glm::vec3 minBounds = regionPos - region.halfExtents;
-                glm::vec3 maxBounds = regionPos + region.halfExtents;
-
-                if (pos.x >= minBounds.x && pos.x <= maxBounds.x &&
+            else { // Box (AABB)
+                const glm::vec3 minBounds = regionPos - region.halfExtents;
+                const glm::vec3 maxBounds = regionPos + region.halfExtents;
+                isInsideRegion =
+                    pos.x >= minBounds.x && pos.x <= maxBounds.x &&
                     pos.y >= minBounds.y && pos.y <= maxBounds.y &&
-                    pos.z >= minBounds.z && pos.z <= maxBounds.z) {
-                    isInsideRegion = true;
-                }
+                    pos.z >= minBounds.z && pos.z <= maxBounds.z;
             }
 
-            // If we are inside this layer entity's bounds, switch our view to its layer!
             if (isInsideRegion) {
-                targetViewMask = (1 << region.assignedLayerBit);
-                break;
+                const int bit = glm::clamp(region.assignedLayerBit, 0, SceneLayers::MAX_LAYERS - 1);
+                insideMask |= (1 << bit);
             }
         }
 
-        cam.viewMask = targetViewMask;
+        cam.insideRegionMask = insideMask;
+        cam.viewMask = (insideMask != 0) ? insideMask : SceneLayers::LAYER_A;
     }
 }
 

@@ -1,11 +1,22 @@
-#include "EditorUI.h"
+#include "../menu/EditorUI.h"
 #include "imgui.h"
 #include "../rendering/ParticleLibrary.h"
 #include "../systems/PhysicsSystem.h"
 #include "../systems/CameraSystem.h"
+#include <cmath>
+#include <cstring>
 
 void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget, std::string& sceneToLoad, Entity& entityToDelete) {
-if (ImGui::BeginMainMenuBar()) {
+    auto layerMaskToString = [](int mask) {
+        std::string s;
+        for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+            if ((mask & (1 << i)) != 0) {
+                s += "[" + SceneLayers::LayerNames[i] + "] ";
+            }
+        }
+        return s.empty() ? std::string("[None]") : s;
+        };
+    if (ImGui::BeginMainMenuBar()) {
 
     if (ImGui::BeginMenu("#")) {
         ImGui::Text("UI Scale");
@@ -276,15 +287,18 @@ if (ImGui::BeginMainMenuBar()) {
                     ImGui::DragFloat("Bulldozer Radius", &col.radius, 0.1f, 0.5f, 50.0f);
                 }
 
-                std::string layerStr = "";
-                for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
-                    if ((cam.viewMask & (1 << i)) != 0) {
-                        layerStr += "[" + SceneLayers::LayerNames[i] + "] ";
+                auto maskToString = [](int mask) {
+                    std::string s;
+                    for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+                        if ((mask & (1 << i)) != 0) {
+                            s += "[" + SceneLayers::LayerNames[i] + "] ";
+                        }
                     }
-                }
-                if (layerStr.empty()) layerStr = "[None]";
+                    return s.empty() ? std::string("[None]") : s;
+                    };
 
-                ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "Current Mask: %s", layerStr.c_str());
+                ImGui::TextColored(ImVec4(0.7f, 0.9f, 1.0f, 1.0f), "Inside Regions: %s", maskToString(cam.insideRegionMask).c_str());
+                ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "Viewing Mask:   %s", maskToString(cam.viewMask).c_str());
                 ImGui::Separator();
 
                 if (cam.isActive && activeOrbitTarget != MAX_ENTITIES) {
@@ -371,8 +385,7 @@ if (ImGui::BeginMainMenuBar()) {
                     ImGui::SliderFloat("Cone Angle", &light.cutoffAngle, 1.0f, 90.0f, "%.1f deg");
                 }
 
-                const char* layerName = (light.layerMask & SceneLayers::LAYER_B) ? "Inside" : "Outside";
-                ImGui::Text("Layer: %s", layerName);
+                ImGui::Text("Layer Mask: %s", layerMaskToString(light.layerMask).c_str());
 
                 ImGui::EndMenu();
             }
@@ -623,6 +636,16 @@ void EditorUI::DrawMainMenuStatusBar(float deltaTime) {
 
 void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& entityToDelete) {
     if (ImGui::BeginMenu("Objects")) {
+        auto layerMaskToString = [](int mask) {
+            std::string s;
+            for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
+                if ((mask & (1 << i)) != 0) {
+                    s += "[" + SceneLayers::LayerNames[i] + "] ";
+                }
+            }
+            return s.empty() ? std::string("[None]") : s;
+        };
+
         Registry& registry = scene.GetRegistry();
         const auto& entities = scene.GetRenderableEntities();
 
@@ -815,8 +838,7 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
 
                     if (registry.HasComponent<RenderComponent>(e)) {
                         auto& render = registry.GetComponent<RenderComponent>(e);
-                        const char* layerName = (render.layerMask & SceneLayers::LAYER_B) ? "Inside" : "Outside";
-                        ImGui::Text("Layer: %s", layerName);
+                        ImGui::Text("Layer Mask: %s", layerMaskToString(render.layerMask).c_str());
 
                         const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
                         const char* modeName = (render.shadingMode >= 0 && render.shadingMode <= 4) ? modes[render.shadingMode] : "Unknown";

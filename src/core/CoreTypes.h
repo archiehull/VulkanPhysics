@@ -19,7 +19,7 @@ namespace SceneLayers {
     constexpr int LAYER_B = 1 << 1;
 
     // Centralized Global State for Layers (Requires C++17)
-    inline int ActiveLayerCount = 2;
+    inline int ActiveLayerCount = 1;
     inline std::string LayerNames[MAX_LAYERS] = {
         "Base World", "Layer B", "Layer C", "Layer D",
         "Layer E", "Layer F", "Layer G", "Layer H"

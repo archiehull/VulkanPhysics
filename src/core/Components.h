@@ -53,6 +53,7 @@ struct RenderComponent {
     bool originalCastsShadow = true;
     bool receiveShadows = true;
     int layerMask = SceneLayers::LAYER_A;
+    int excludeLayerMask = 0;
 };
 
 // 4. Movement/Logic Data
@@ -193,25 +194,22 @@ struct CameraComponent {
     float farPlane = 1000.0f;
     float aspectRatio = 16.0f / 9.0f;
 
-    // Computed every frame by the CameraSystem
     glm::mat4 viewMatrix = glm::mat4(1.0f);
     glm::mat4 projectionMatrix = glm::mat4(1.0f);
 
-    int viewMask = SceneLayers::LAYER_A;
+    int viewMask = SceneLayers::LAYER_A;  
+    int insideRegionMask = 0;             
     bool isActive = false;
 
-    // Euler angles for Free Roam
     float yaw = -90.0f;
     float pitch = 0.0f;
-
     float moveSpeed = 35.0f;
     float rotateSpeed = 60.0f;
-
     bool noclipEnabled = false;
 };
 
 struct LayerRegionComponent {
-    int assignedLayerBit = 1; // 1 = Layer B, 2 = Layer C, etc. (0 is reserved for Base World)
+    int assignedLayerBit = 0; // 1 = Layer B, 2 = Layer C, etc. (0 is reserved for Base World)
     std::string layerName = "New Layer Region";
 
     int volumeType = 0; // 0 = Sphere, 1 = Box (AABB)

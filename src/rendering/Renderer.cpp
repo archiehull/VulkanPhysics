@@ -650,7 +650,7 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
 
         if (!renderComp.visible || !renderComp.geometry) continue;
         if (renderComp.shadingMode == 3 || renderComp.shadingMode == 2 || renderComp.shadingMode == 4) continue;
-        if ((renderComp.layerMask & layerMask) == 0) continue;
+        const bool included = (renderComp.layerMask & layerMask) != 0;
 
         PushConstantObject pco{};
         pco.model = transformComp.matrix;
@@ -725,7 +725,7 @@ void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLay
         auto& transformComp = reg.GetComponent<TransformComponent>(e);
 
         if (!renderComp.visible || !renderComp.geometry) continue;
-        if ((renderComp.layerMask & layerMask) == 0) continue;
+        const bool included = (renderComp.layerMask & layerMask) != 0;
         if (skipIfNotCastingShadow && !renderComp.castsShadow) continue;
 
         // Fetch thermodynamics state if the entity is flammable
