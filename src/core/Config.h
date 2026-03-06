@@ -72,6 +72,11 @@ struct SceneObjectConfig {
     int lightType = 0;
 
     std::vector<AttachedParticleConfig> attachedParticles;
+
+    // --- Dust Cloud Properties ---
+    bool isActive = false;
+    glm::vec3 direction = glm::vec3(1.0f, 0.0f, 0.0f);
+    float speed = 15.0f;
 };
 
 // --- Procedural Texture Configuration ---

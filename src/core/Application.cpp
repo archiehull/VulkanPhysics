@@ -50,50 +50,12 @@ Application::Application() {
 void Application::Run() {
     InitVulkan();
 
-
-    // 2. Load the scene that the UI has selected as default
     std::string initialPath = editorUI->GetInitialScenePath();
     if (!initialPath.empty()) {
         LoadScene(initialPath);
     }
 
     lastFrameTime = std::chrono::high_resolution_clock::now();
-
-    const std::string controlsMsg = R"(
---------------------------------------------------
- CONTROLS 
---------------------------------------------------
- [F1]              Outside Camera
- [F2]              Free Roam Camera
- [F3]              Orbit Camera (Random Cactus)
- [F4]              Ignite Orbit Target
-
- [WASD] / [Arrows] Move Horizontal
- [Q] / [PageDown]  Move Down
- [E] / [PageUp]    Move Up
- [Shift]           Sprint
-
- [R]               Reset Environment
-
- [T]               Speed Up Time
- [T] + [Shift]     Slow Down Time
- [T] + [Ctrl]      Normal Time
-
- [Y]               Toggle Shading (Phong / Gouraud)
- [U]               Toggle Shadows (Simple / Advanced)
- [I]               Next Season
- [O]               Toggle Weather
- [P]               Spawn Dust Cloud
-
-
- [Esc]             Exit Application
---------------------------------------------------
-)";
-
-    // Print once
-    //std::cout << controlsMsg << std::endl;
-
-    //cameraController->SwitchCamera(CameraType::CUSTOM_1, *scene);
 
     MainLoop();
     Cleanup();
@@ -278,6 +240,12 @@ void Application::SetupScene() {
         else if (objCfg.type == "Grid") {
             // Params: x=Rows, y=Cols, z=CellSize
             scene->AddGrid(objCfg.name, (int)objCfg.params.x, (int)objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
+        }
+        else if (objCfg.type == "Environment") {
+            scene->CreateEnvironment(objCfg.name);
+        }
+        else if (objCfg.type == "DustCloud") {
+            scene->CreateDustCloud(objCfg.name, objCfg.position, objCfg.direction, objCfg.speed, objCfg.isActive);
         }
 
         // --- Apply Common Properties ---

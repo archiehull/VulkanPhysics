@@ -19,17 +19,15 @@
 #include "../systems/CameraSystem.h"
 #include "../systems/PhysicsSystem.h"
 
-void Scene::CreateEnvironment() {
-    // Prevent creating multiple environments
+void Scene::CreateEnvironment(const std::string& name) {
     if (m_EnvironmentEntity != MAX_ENTITIES) {
         std::cout << "Environment already exists!" << std::endl;
         return;
     }
-
     m_EnvironmentEntity = m_Registry.CreateEntity();
-    m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { "GlobalEnvironment" });
+    m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { name });
     m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
-    m_EntityMap["GlobalEnvironment"] = m_EnvironmentEntity;
+    m_EntityMap[name] = m_EnvironmentEntity;
 }
 
 void Scene::SetObjectPhysics(const std::string& name, bool isStatic, float mass) {
@@ -253,6 +251,7 @@ void Scene::GenerateProceduralObjects(int count, float terrainRadius, float delt
 void Scene::AddTerrain(const std::string& name, float radius, int rings, int segments, float heightScale, float noiseFreq, const glm::vec3& position, const std::string& texturePath) {
     auto geo = GeometryGenerator::CreateTerrain(device, physicalDevice, radius - 1, rings, segments, heightScale, noiseFreq);
     Entity entity = AddObjectInternal(name, std::move(geo), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "terrain";
 
     auto& collider = m_Registry.GetComponent<ColliderComponent>(entity);
     collider.hasCollision = false;
@@ -265,12 +264,14 @@ void Scene::AddTerrain(const std::string& name, float radius, int rings, int seg
 }
 
 void Scene::AddBowl(const std::string& name, float radius, int slices, int stacks, const glm::vec3& position, const std::string& texturePath) {
-    AddObjectInternal(name, GeometryGenerator::CreateBowl(device, physicalDevice, radius, slices, stacks), position, texturePath, false);
+    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateBowl(device, physicalDevice, radius, slices, stacks), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "bowl";
 }
 
 void Scene::AddPedestal(const std::string& name, float topRadius, float baseWidth, float height, const glm::vec3& position, const std::string& texturePath) {
     auto geo = GeometryGenerator::CreatePedestal(device, physicalDevice, topRadius, baseWidth, height, 512, 512);
     Entity entity = AddObjectInternal(name, std::move(geo), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "pedestal";
 
     auto& collider = m_Registry.GetComponent<ColliderComponent>(entity);
     collider.radius = std::max(topRadius, baseWidth);
@@ -281,6 +282,7 @@ void Scene::AddPedestal(const std::string& name, float topRadius, float baseWidt
 void Scene::AddCube(const std::string& name, const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
     auto geo = GeometryGenerator::CreateCube(device, physicalDevice);
     Entity entity = AddObjectInternal(name, std::move(geo), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "cube";
 
     auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
     transform.scale = scale;
@@ -288,11 +290,13 @@ void Scene::AddCube(const std::string& name, const glm::vec3& position, const gl
 }
 
 void Scene::AddGrid(const std::string& name, int rows, int cols, float cellSize, const glm::vec3& position, const std::string& texturePath) {
-    AddObjectInternal(name, GeometryGenerator::CreateGrid(device, physicalDevice, rows, cols, cellSize), position, texturePath, false);
+    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateGrid(device, physicalDevice, rows, cols, cellSize), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "grid";
 }
 
 void Scene::AddSphere(const std::string& name, int stacks, int slices, float radius, const glm::vec3& position, const std::string& texturePath) {
-    AddObjectInternal(name, GeometryGenerator::CreateSphere(device, physicalDevice, stacks, slices, radius), position, texturePath, false);
+    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateSphere(device, physicalDevice, stacks, slices, radius), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "sphere";
 }
 
 void Scene::AddGeometry(const std::string& name, std::unique_ptr<Geometry> geometry, const glm::vec3& position) {
@@ -338,6 +342,7 @@ void Scene::CreateSimpleShadowEntity(Entity targetEntity) {
 
     auto diskGeo = GeometryGenerator::CreateDisk(device, physicalDevice, radius, 16);
     Entity shadowEntity = AddObjectInternal(shadowName, std::move(diskGeo), glm::vec3(0.0f), "textures/shadow.jpg", false);
+    m_Registry.GetComponent<RenderComponent>(shadowEntity).geometryName = "disk";
 
     auto& shadowRender = m_Registry.GetComponent<RenderComponent>(shadowEntity);
     shadowRender.castsShadow = false;
@@ -650,24 +655,50 @@ void Scene::AddDust() {
     sys->AddEmitter(dust, 200.0f);
 }
 
+Entity Scene::CreateDustCloud(const std::string& name, const glm::vec3& position, const glm::vec3& direction, float speed, bool isActive) {
+    Entity entity = m_Registry.CreateEntity();
+    m_EntityMap[name] = entity;
+
+    m_Registry.AddComponent<NameComponent>(entity, { name });
+
+    DustCloudComponent dust;
+    dust.isActive = isActive;
+    dust.position = position;
+    dust.direction = glm::length(direction) > 0.1f ? glm::normalize(direction) : glm::vec3(1, 0, 0);
+    dust.speed = speed;
+    m_Registry.AddComponent<DustCloudComponent>(entity, dust);
+
+    return entity;
+}
+
 void Scene::SpawnDustCloud() {
-    Entity dustEnt = GetEntityByName("GlobalDustCloud");
+    Entity dustEnt = MAX_ENTITIES;
+    for (Entity e = 0; e < m_Registry.GetEntityCount(); ++e) {
+        if (m_Registry.HasComponent<DustCloudComponent>(e)) {
+            dustEnt = e;
+            break;
+        }
+    }
+
     if (dustEnt == MAX_ENTITIES) return;
 
     auto& dust = m_Registry.GetComponent<DustCloudComponent>(dustEnt);
     if (dust.isActive) return;
 
     std::cout << "Spawning Dust Cloud!" << std::endl;
-
     dust.isActive = true;
-    dust.position = glm::vec3(0.0f, -70.0f, 0.0f);
 
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> distAngle(0.0f, glm::two_pi<float>());
+    if (glm::length(dust.direction) < 0.1f) {
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> distAngle(0.0f, glm::two_pi<float>());
 
-    const float angle = distAngle(gen);
-    dust.direction = glm::vec3(cos(angle), 0.0f, sin(angle));
+        const float angle = distAngle(gen);
+        dust.direction = glm::vec3(cos(angle), 0.0f, sin(angle));
+    }
+    else {
+        dust.direction = glm::normalize(dust.direction);
+    }
 
     ParticleProps dustProps = ParticleLibrary::GetDustStormProps();
     dustProps.position = dust.position;
@@ -677,20 +708,22 @@ void Scene::SpawnDustCloud() {
     dust.emitterId = sys->AddEmitter(dustProps, 750.0f);
 }
 
+// Update StopDust to dynamically find the component (Replaces existing logic):
 void Scene::StopDust() {
-    Entity dustEnt = GetEntityByName("GlobalDustCloud");
-    if (dustEnt == MAX_ENTITIES) return;
+    for (Entity e = 0; e < m_Registry.GetEntityCount(); ++e) {
+        if (m_Registry.HasComponent<DustCloudComponent>(e)) {
+            auto& dust = m_Registry.GetComponent<DustCloudComponent>(e);
 
-    auto& dust = m_Registry.GetComponent<DustCloudComponent>(dustEnt);
+            if (dust.isActive && dust.emitterId != -1) {
+                GetOrCreateSystem(ParticleLibrary::GetDustStormProps())->StopEmitter(dust.emitterId);
+                dust.emitterId = -1;
+                dust.isActive = false;
 
-    if (dust.isActive && dust.emitterId != -1) {
-        GetOrCreateSystem(ParticleLibrary::GetDustStormProps())->StopEmitter(dust.emitterId);
-        dust.emitterId = -1;
-        dust.isActive = false;
-
-        if (m_EnvironmentEntity != MAX_ENTITIES) {
-            auto& env = m_Registry.GetComponent<EnvironmentComponent>(m_EnvironmentEntity);
-            env.timeSinceLastRain = 0.0f;
+                if (m_EnvironmentEntity != MAX_ENTITIES) {
+                    auto& env = m_Registry.GetComponent<EnvironmentComponent>(m_EnvironmentEntity);
+                    env.timeSinceLastRain = 0.0f;
+                }
+            }
         }
     }
 }

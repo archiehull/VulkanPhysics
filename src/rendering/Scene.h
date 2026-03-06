@@ -48,7 +48,8 @@ public:
 
     void Initialize();
 
-    void CreateEnvironment();
+    void CreateEnvironment(const std::string& name = "GlobalEnvironment");
+    Entity CreateDustCloud(const std::string& name, const glm::vec3& position, const glm::vec3& direction, float speed, bool isActive = false);
 
     float RadiusAdjustment(const float radius, const float deltaY) const;
 

@@ -230,6 +230,13 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                     ss >> currentObject->lightColor.x >> currentObject->lightColor.y >> currentObject->lightColor.z >> currentObject->lightIntensity >> currentObject->lightType;
                 }
             }
+            else if (key == "DustCloudProps") {
+                std::string activeStr;
+                ss >> activeStr
+                    >> currentObject->direction.x >> currentObject->direction.y >> currentObject->direction.z
+                    >> currentObject->speed;
+                currentObject->isActive = (activeStr == "true" || activeStr == "1");
+            }
         }
         // --- Global Settings ---
         else if (key == "WindowSize") ss >> config.windowWidth >> config.windowHeight;

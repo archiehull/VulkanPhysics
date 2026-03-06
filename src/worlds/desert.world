@@ -8,6 +8,17 @@ FireSuppression 15.0
 SunHeatBonus 0.0
 
 [Scene]
+bject MyEnvironment
+Type Environment
+EndObject
+
+Object DesertStorm
+Type DustCloud
+Position 0.0 -70.0 0.0
+# DustCloudProps: <isActive> <dirX> <dirY> <dirZ> <speed>
+DustCloudProps false 0.0 0.0 0.0 20.0
+EndObject
+
 # Camera configuration using internal action binds (Camera1, Camera2, etc.)
 Camera OutsideCam Orbit Camera1 0.0 60.0 350.0 350.0 0.0 0.0 0.0
 Camera FreeRoamCam FreeRoam Camera2 0.0 -75.0 0.0
