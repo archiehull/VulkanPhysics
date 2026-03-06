@@ -29,10 +29,10 @@ struct TerrainConfig {
 struct ProceduralObjectConfig {
     std::string modelPath;
     std::string texturePath;
-    float frequency;
-    glm::vec3 minScale;
-    glm::vec3 maxScale;
-    glm::vec3 baseRotation;
+    float frequency = 1.0f;
+    glm::vec3 minScale = glm::vec3(1.0f);
+    glm::vec3 maxScale = glm::vec3(1.0f);
+    glm::vec3 baseRotation = glm::vec3(0.0f);
     bool isFlammable = false;
 };
 
@@ -45,6 +45,8 @@ public:
     Scene& operator=(const Scene&) = delete;
 
     Entity GetEntityByName(const std::string& name) const;
+    void DeleteEntity(Entity entity);
+    void RemoveRenderComponent(Entity entity);
 
     void Initialize();
 
@@ -171,6 +173,8 @@ public:
     void SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity);
 
 	void SetObjectCollider(const std::string& name, int type, float radius, const glm::vec3& normal);
+
+    void InvalidateEnvironmentEntity(Entity e);
 
 private:
     Registry m_Registry;

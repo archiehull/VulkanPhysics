@@ -104,6 +104,7 @@ std::string EditorUI::ConsumeCameraSwitchRequest() {
 std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget) {
     {
         std::string sceneToLoad = "";
+        Entity entityToDelete = MAX_ENTITIES;
 
         ImGui::GetIO().FontGlobalScale = m_UIScale;
 
@@ -120,11 +121,21 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                 ImGui::Separator();
                 ImGui::MenuItem("View Controls", nullptr, &m_ShowControlsWindow);
 
-                if (ImGui::MenuItem("Open New Properties Window")) {
-                    m_PropertyWindows.push_back({ m_NextPropertyWindowId++, MAX_ENTITIES, true, true });
-                }
+                if (ImGui::BeginMenu("Background Colour")) {
+                    ImGui::ColorPicker4("##bg_picker", m_ClearColor,
+                        ImGuiColorEditFlags_PickerHueWheel |
+                        ImGuiColorEditFlags_AlphaBar |
+                        ImGuiColorEditFlags_NoSidePreview);
 
+                    ImGui::Separator();
+                    if (ImGui::Button("Reset to Default", ImVec2(-1, 0))) {
+                        m_ClearColor[0] = 0.1f; m_ClearColor[1] = 0.1f;
+                        m_ClearColor[2] = 0.1f; m_ClearColor[3] = 1.0f;
+                    }
+                    ImGui::EndMenu();
+                }
                 ImGui::Separator();
+
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Make it green
                 if (ImGui::MenuItem("Create New Entity")) {
                     static int newEntityCount = 1;
@@ -140,6 +151,11 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     }
                 }
                 ImGui::PopStyleColor();
+
+
+                if (ImGui::MenuItem("Open New Properties Window")) {
+                    m_PropertyWindows.push_back({ m_NextPropertyWindowId++, MAX_ENTITIES, true, true });
+                }
 
                 ImGui::EndMenu();
             }
@@ -249,8 +265,18 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
                             ImGui::TextDisabled("Entity Properties");
 
-                            if (ImGui::Button("View Object", ImVec2(-1, 0))) {
+                            const bool canViewObject = registry.HasComponent<TransformComponent>(e);
+                            if (!canViewObject) ImGui::BeginDisabled();
+                            if (ImGui::Button("View Object", ImVec2(-1, 0)) && canViewObject) {
                                 m_ViewRequested = e;
+                            }
+                            if (!canViewObject) {
+                                ImGui::EndDisabled();
+                                ImGui::TextDisabled("View requires TransformComponent");
+                            }
+
+                            if (ImGui::Button("Delete Entity", ImVec2(-1, 0))) {
+                                entityToDelete = e;
                             }
 
                             if (e == activeOrbitTarget && registry.HasComponent<ThermoComponent>(e)) {
@@ -911,108 +937,110 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
             if (ImGui::BeginMenu("Environment")) {
 
-                ImGui::TextDisabled("Live Status");
-                ImGui::Separator();
-                ImGui::Text("Season: %s", seasonName.c_str());
-                ImGui::Text("Global Temp: %.1f C", currentTemp);
-
+                Registry& sceneRegistry = scene.GetRegistry();
                 Entity envEntity = scene.GetEnvironmentEntity();
-                if (envEntity != MAX_ENTITIES) {
-                    auto& env = scene.GetRegistry().GetComponent<EnvironmentComponent>(envEntity);
+                const bool hasEnvironment =
+                    (envEntity != MAX_ENTITIES) &&
+                    sceneRegistry.HasComponent<EnvironmentComponent>(envEntity);
+
+                
+
+                if (!hasEnvironment) {
+                    ImGui::TextDisabled("No environment component found.");
+                    ImGui::Separator();
+                    if (ImGui::Selectable("Initialise Environment", false, ImGuiSelectableFlags_DontClosePopups)) {
+                        scene.CreateEnvironment();
+                    }
+                }
+                else {
+                    ImGui::TextDisabled("Live Status");
+                    ImGui::Separator();
+                    ImGui::Text("Season: %s", seasonName.c_str());
+                    ImGui::Text("Global Temp: %.1f C", currentTemp);
+
+                    auto& env = sceneRegistry.GetComponent<EnvironmentComponent>(envEntity);
                     ImGui::Text("Sun Heat Bonus: %.1f", env.sunHeatBonus);
                     ImGui::Text("Weather Intensity: %.2f", env.weatherIntensity);
                     ImGui::Text("Time Since Rain: %.1f s", env.timeSinceLastRain);
                     ImGui::Text("Fire Suppression Timer: %.1f s", env.postRainFireSuppressionTimer);
-                }
+                
 
-                ImGui::Spacing();
-                ImGui::TextDisabled("Controls");
-                ImGui::Separator();
-
-                if (ImGui::BeginMenu("Background Colour")) {
-                    ImGui::ColorPicker4("##bg_picker", m_ClearColor,
-                        ImGuiColorEditFlags_PickerHueWheel |
-                        ImGuiColorEditFlags_AlphaBar |
-                        ImGuiColorEditFlags_NoSidePreview);
-
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("Controls");
                     ImGui::Separator();
-                    if (ImGui::Button("Reset to Default", ImVec2(-1, 0))) {
-                        m_ClearColor[0] = 0.1f; m_ClearColor[1] = 0.1f;
-                        m_ClearColor[2] = 0.1f; m_ClearColor[3] = 1.0f;
+
+                    bool useSimple = scene.IsUsingSimpleShadows();
+                    if (ImGui::Checkbox("Use Simple Shadows", &useSimple)) {
+                        scene.ToggleSimpleShadows();
                     }
-                    ImGui::EndMenu();
-                }
 
-                bool useSimple = scene.IsUsingSimpleShadows();
-                if (ImGui::Checkbox("Use Simple Shadows", &useSimple)) {
-                    scene.ToggleSimpleShadows();
-                }
+                    ImGui::Spacing();
 
-                ImGui::Spacing();
-
-                if (ImGui::Selectable("Cycle to Next Season", false, ImGuiSelectableFlags_DontClosePopups)) {
-                    scene.NextSeason();
-                }
-
-                bool isPrecipitating = scene.IsPrecipitating();
-                std::string weatherLabel = isPrecipitating ? "Stop Weather" : "Start Weather";
-                if (ImGui::Selectable(weatherLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
-                    scene.ToggleWeather();
-                }
-
-                bool isDustActive = scene.IsDustActive();
-                std::string dustLabel = isDustActive ? "Stop Dust Cloud" : "Spawn Dust Cloud";
-                if (ImGui::Selectable(dustLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
-                    if (isDustActive) {
-                        scene.StopDust();
+                    if (ImGui::Selectable("Cycle to Next Season", false, ImGuiSelectableFlags_DontClosePopups)) {
+                        scene.NextSeason();
                     }
-                    else {
-                        scene.SpawnDustCloud();
+
+                    bool isPrecipitating = scene.IsPrecipitating();
+                    std::string weatherLabel = isPrecipitating ? "Stop Weather" : "Start Weather";
+                    if (ImGui::Selectable(weatherLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
+                        scene.ToggleWeather();
                     }
-                }
 
-                ImGui::Spacing();
-                ImGui::TextDisabled("Time of Day");
-                ImGui::Separator();
-
-                if (ImGui::Selectable("Set to Day", false, ImGuiSelectableFlags_DontClosePopups)) {
-                    Registry& registry = scene.GetRegistry();
-                    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-                        if (!registry.HasComponent<OrbitComponent>(e)) continue;
-
-                        bool isSun = (registry.HasComponent<LightComponent>(e) && registry.GetComponent<LightComponent>(e).type == 0) ||
-                            (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Sun") != std::string::npos);
-
-                        bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
-
-                        if (isSun) {
-                            registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
+                    bool isDustActive = scene.IsDustActive();
+                    std::string dustLabel = isDustActive ? "Stop Dust Cloud" : "Spawn Dust Cloud";
+                    if (ImGui::Selectable(dustLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
+                        if (isDustActive) {
+                            scene.StopDust();
                         }
-                        else if (isMoon) {
-                            registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
+                        else {
+                            scene.SpawnDustCloud();
                         }
                     }
-                }
 
-                if (ImGui::Selectable("Set to Night", false, ImGuiSelectableFlags_DontClosePopups)) {
-                    Registry& registry = scene.GetRegistry();
-                    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-                        if (!registry.HasComponent<OrbitComponent>(e)) continue;
+                
 
-                        bool isSun = (registry.HasComponent<LightComponent>(e) && registry.GetComponent<LightComponent>(e).type == 0) ||
-                            (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Sun") != std::string::npos);
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("Time of Day");
+                    ImGui::Separator();
 
-                        bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
+                    if (ImGui::Selectable("Set to Day", false, ImGuiSelectableFlags_DontClosePopups)) {
+                        Registry& registry = scene.GetRegistry();
+                        for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                            if (!registry.HasComponent<OrbitComponent>(e)) continue;
 
-                        if (isSun) {
-                            registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
+                            bool isSun = (registry.HasComponent<LightComponent>(e) && registry.GetComponent<LightComponent>(e).type == 0) ||
+                                (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Sun") != std::string::npos);
+
+                            bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
+
+                            if (isSun) {
+                                registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
+                            }
+                            else if (isMoon) {
+                                registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
+                            }
                         }
-                        else if (isMoon) {
-                            registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
+                    }
+
+                    if (ImGui::Selectable("Set to Night", false, ImGuiSelectableFlags_DontClosePopups)) {
+                        Registry& registry = scene.GetRegistry();
+                        for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                            if (!registry.HasComponent<OrbitComponent>(e)) continue;
+
+                            bool isSun = (registry.HasComponent<LightComponent>(e) && registry.GetComponent<LightComponent>(e).type == 0) ||
+                                (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Sun") != std::string::npos);
+
+                            bool isMoon = (registry.HasComponent<NameComponent>(e) && registry.GetComponent<NameComponent>(e).name.find("Moon") != std::string::npos);
+
+                            if (isSun) {
+                                registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(270.0f);
+                            }
+                            else if (isMoon) {
+                                registry.GetComponent<OrbitComponent>(e).currentAngle = glm::radians(90.0f);
+                            }
                         }
                     }
                 }
-
                 ImGui::EndMenu();
             }
 
@@ -1034,6 +1062,20 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
             ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(fpsStr.c_str()).x - 20.0f);
             ImGui::TextDisabled("%s", fpsStr.c_str());
             ImGui::EndMainMenuBar();
+        }
+
+        if (entityToDelete != MAX_ENTITIES) {
+            scene.DeleteEntity(entityToDelete);
+
+            if (m_ViewRequested == entityToDelete) {
+                m_ViewRequested = MAX_ENTITIES;
+            }
+
+            for (auto& wnd : m_PropertyWindows) {
+                if (wnd.selectedEntity == entityToDelete) {
+                    wnd.selectedEntity = MAX_ENTITIES;
+                }
+            }
         }
 
         if (m_ShowControlsWindow) {
@@ -1122,9 +1164,21 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    if (ImGui::Button("Focus Camera on Object", ImVec2(-1, 0))) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.2f, 0.2f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.15f, 0.15f, 1.0f));
+                    if (ImGui::Button("Delete Entity", ImVec2(-1, 0))) {
+                        entityToDelete = e;
+                    }
+                    ImGui::PopStyleColor(3);
+
+                    const bool canFocusObject = registry.HasComponent<TransformComponent>(e);
+                    if (!canFocusObject) ImGui::BeginDisabled();
+                    if (ImGui::Button("Focus Camera on Object", ImVec2(-1, 0)) && canFocusObject) {
                         m_ViewRequested = e;
                     }
+                    if (!canFocusObject) ImGui::EndDisabled();
+
                     ImGui::Spacing();
 
                     // Helper lambda to cleanly draw the menu items to add new components
@@ -1187,7 +1241,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                     if (registry.HasComponent<RenderComponent>(e)) {
                         bool open = ImGui::TreeNodeEx("RenderComponent", ImGuiTreeNodeFlags_DefaultOpen);
                         ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
-                        if (ImGui::Button("Remove##Render")) registry.RemoveComponent<RenderComponent>(e);
+                        if (ImGui::Button("Remove##Render")) scene.RemoveRenderComponent(e);
 
                         if (open && registry.HasComponent<RenderComponent>(e)) {
                             auto& comp = registry.GetComponent<RenderComponent>(e);
@@ -1513,6 +1567,24 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
                             ImGui::DragFloat3("Velocity", &comp.velocity.x, 0.1f);
                             ImGui::DragFloat3("Force Accumulator", &comp.forceAccumulator.x, 0.1f);
 
+                            ImGui::TreePop();
+                        }
+                    }
+
+                    // --- 11. Environment Component ---
+                    if (registry.HasComponent<EnvironmentComponent>(e)) {
+                        bool open = ImGui::TreeNodeEx("EnvironmentComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                        ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                        if (ImGui::Button("Remove##Environment")) {
+                            registry.RemoveComponent<EnvironmentComponent>(e);
+                            scene.InvalidateEnvironmentEntity(e);
+                        }
+
+                        if (open && registry.HasComponent<EnvironmentComponent>(e)) {
+                            auto& comp = registry.GetComponent<EnvironmentComponent>(e);
+                            ImGui::Checkbox("Use Simple Shadows", &comp.useSimpleShadows);
+                            ImGui::Checkbox("Is Precipitating", &comp.isPrecipitating);
+                            ImGui::DragFloat("Sun Heat Bonus", &comp.sunHeatBonus, 0.1f);
                             ImGui::TreePop();
                         }
                     }

@@ -159,10 +159,16 @@ void Application::LoadScene(const std::string& scenePath) {
 
 void Application::SetupScene() {
     // 1. Pass Global Configuration to Scene
-    scene->SetTimeConfig(config.time);
-    scene->SetSeasonConfig(config.seasons);
-    scene->SetWeatherConfig(config.weather);
-    scene->SetSunHeatBonus(config.sunHeatBonus);
+    for (const auto& objCfg : config.sceneObjects) {
+        if (objCfg.type == "Environment") {
+            scene->CreateEnvironment(objCfg.name);
+            scene->SetTimeConfig(objCfg.timeConfig);
+            scene->SetSeasonConfig(objCfg.seasonConfig);
+            scene->SetWeatherConfig(objCfg.weatherConfig);
+            scene->SetSunHeatBonus(objCfg.sunHeatBonus);
+            break;
+        }
+    }
 
     // --- GENERATE PROCEDURAL TEXTURES ---
     for (const auto& texCfg : config.proceduralTextures) {
@@ -198,7 +204,7 @@ void Application::SetupScene() {
     }
 
     // Capture Terrain Params for procedural generation later
-    // Defaults:
+    // Defaults (hard coded for desert world):
     float terrainRadius = 150.0f;
     float terrainY = -75.0f;
     float heightScale = 3.5f;
@@ -241,8 +247,8 @@ void Application::SetupScene() {
             // Params: x=Rows, y=Cols, z=CellSize
             scene->AddGrid(objCfg.name, (int)objCfg.params.x, (int)objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
         }
-        else if (objCfg.type == "Environment") {
-            scene->CreateEnvironment(objCfg.name);
+        if (objCfg.type == "Environment") {
+            continue;
         }
         else if (objCfg.type == "DustCloud") {
             scene->CreateDustCloud(objCfg.name, objCfg.position, objCfg.direction, objCfg.speed, objCfg.isActive);
@@ -284,7 +290,7 @@ void Application::SetupScene() {
             float speed = objCfg.orbitSpeed;
             if (speed < -0.001f) {
                 // Auto-calculate based on Day Length
-                const float dayLength = config.time.dayLengthSeconds;
+                const float dayLength = scene->GetTimeConfig().dayLengthSeconds;
                 speed = (dayLength > 0.0f) ? (glm::two_pi<float>() / dayLength) : 0.1f;
             }
 

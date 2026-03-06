@@ -237,15 +237,21 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                     >> currentObject->speed;
                 currentObject->isActive = (activeStr == "true" || activeStr == "1");
             }
+			// --- Environment Properties ---
+            else if (key == "TimeParams") ss >> currentObject->timeConfig.dayLengthSeconds >> currentObject->timeConfig.daysPerSeason;
+            else if (key == "SeasonTemps") ss >> currentObject->seasonConfig.summerBaseTemp >> currentObject->seasonConfig.winterBaseTemp >> currentObject->seasonConfig.dayNightTempDiff;
+            else if (key == "WeatherIntervals") ss >> currentObject->weatherConfig.minClearInterval >> currentObject->weatherConfig.maxClearInterval;
+            else if (key == "WeatherDuration") ss >> currentObject->weatherConfig.minPrecipitationDuration >> currentObject->weatherConfig.maxPrecipitationDuration;
+            else if (key == "FireSuppression") ss >> currentObject->weatherConfig.fireSuppressionDuration;
+            else if (key == "SunHeatBonus") ss >> currentObject->sunHeatBonus;
+            else if (key == "DustCloudProps") {
+                std::string activeStr;
+                ss >> activeStr >> currentObject->direction.x >> currentObject->direction.y >> currentObject->direction.z >> currentObject->speed;
+                currentObject->isActive = (activeStr == "true" || activeStr == "1");
+            }
         }
         // --- Global Settings ---
         else if (key == "WindowSize") ss >> config.windowWidth >> config.windowHeight;
-        else if (key == "TimeParams") ss >> config.time.dayLengthSeconds >> config.time.daysPerSeason;
-        else if (key == "SeasonTemps") ss >> config.seasons.summerBaseTemp >> config.seasons.winterBaseTemp >> config.seasons.dayNightTempDiff;
-        else if (key == "WeatherIntervals") ss >> config.weather.minClearInterval >> config.weather.maxClearInterval;
-        else if (key == "WeatherDuration") ss >> config.weather.minPrecipitationDuration >> config.weather.maxPrecipitationDuration;
-        else if (key == "FireSuppression") ss >> config.weather.fireSuppressionDuration;
-        else if (key == "SunHeatBonus") ss >> config.sunHeatBonus;
         else if (key == "ProceduralObjectCount") ss >> config.proceduralObjectCount;
         else if (key == "ProceduralPlant") {
             ProceduralPlantConfig plant;

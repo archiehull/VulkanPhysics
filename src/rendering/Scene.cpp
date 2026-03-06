@@ -20,10 +20,15 @@
 #include "../systems/PhysicsSystem.h"
 
 void Scene::CreateEnvironment(const std::string& name) {
-    if (m_EnvironmentEntity != MAX_ENTITIES) {
+    if (m_EnvironmentEntity != MAX_ENTITIES && m_Registry.HasComponent<EnvironmentComponent>(m_EnvironmentEntity)) {
         std::cout << "Environment already exists!" << std::endl;
         return;
     }
+
+    if (m_EnvironmentEntity != MAX_ENTITIES) {
+        m_EnvironmentEntity = MAX_ENTITIES;
+    }
+
     m_EnvironmentEntity = m_Registry.CreateEntity();
     m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { name });
     m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
@@ -73,6 +78,89 @@ Entity Scene::GetEntityByName(const std::string& name) const {
         return it->second;
     }
     return MAX_ENTITIES;
+}
+
+void Scene::DeleteEntity(Entity entity) {
+    if (entity == MAX_ENTITIES || entity >= m_Registry.GetEntityCount()) return;
+
+    Entity linkedShadow = MAX_ENTITIES;
+    if (m_Registry.HasComponent<RenderComponent>(entity)) {
+        auto& render = m_Registry.GetComponent<RenderComponent>(entity);
+        if (render.geometry) {
+            // 1. Wait for the GPU to finish before destroying buffers
+            vkDeviceWaitIdle(device);
+
+            // 2. (Optional but recommended) Only cleanup if no other entities are sharing this geometry
+            if (render.geometry.use_count() == 1) {
+                render.geometry->Cleanup();
+            }
+        }
+        linkedShadow = render.simpleShadowEntity;
+    }
+
+    if (m_Registry.HasComponent<ThermoComponent>(entity)) {
+        StopObjectFire(entity);
+    }
+
+    if (m_Registry.HasComponent<NameComponent>(entity)) {
+        m_EntityMap.erase(m_Registry.GetComponent<NameComponent>(entity).name);
+    }
+
+    m_RenderableEntities.erase(std::remove(m_RenderableEntities.begin(), m_RenderableEntities.end(), entity), m_RenderableEntities.end());
+    m_LightEntities.erase(std::remove(m_LightEntities.begin(), m_LightEntities.end(), entity), m_LightEntities.end());
+
+    for (Entity e : m_RenderableEntities) {
+        if (m_Registry.HasComponent<RenderComponent>(e)) {
+            auto& render = m_Registry.GetComponent<RenderComponent>(e);
+            if (render.simpleShadowEntity == entity) {
+                render.simpleShadowEntity = MAX_ENTITIES;
+            }
+        }
+    }
+
+    if (entity == m_EnvironmentEntity) {
+        m_EnvironmentEntity = MAX_ENTITIES;
+    }
+
+    m_Registry.DestroyEntity(entity);
+
+    if (linkedShadow != MAX_ENTITIES && linkedShadow != entity) {
+        DeleteEntity(linkedShadow);
+    }
+}
+
+void Scene::RemoveRenderComponent(Entity entity) {
+    if (entity == MAX_ENTITIES || entity >= m_Registry.GetEntityCount()) return;
+    if (!m_Registry.HasComponent<RenderComponent>(entity)) return;
+
+    auto& render = m_Registry.GetComponent<RenderComponent>(entity);
+    const Entity shadowEntity = render.simpleShadowEntity;
+
+    if (render.geometry) {
+        // Wait for the GPU to finish before destroying buffers
+        vkDeviceWaitIdle(device);
+
+        // Only cleanup if no other entities are sharing this geometry
+        if (render.geometry.use_count() == 1) {
+            render.geometry->Cleanup();
+        }
+    }
+
+    m_RenderableEntities.erase(std::remove(m_RenderableEntities.begin(), m_RenderableEntities.end(), entity), m_RenderableEntities.end());
+
+    for (Entity e : m_RenderableEntities) {
+        if (!m_Registry.HasComponent<RenderComponent>(e)) continue;
+        auto& otherRender = m_Registry.GetComponent<RenderComponent>(e);
+        if (otherRender.simpleShadowEntity == entity) {
+            otherRender.simpleShadowEntity = MAX_ENTITIES;
+        }
+    }
+
+    m_Registry.RemoveComponent<RenderComponent>(entity);
+
+    if (shadowEntity != MAX_ENTITIES && shadowEntity != entity) {
+        DeleteEntity(shadowEntity);
+    }
 }
 
 void Scene::ToggleGlobalShadingMode() {
@@ -208,8 +296,8 @@ void Scene::GenerateProceduralObjects(int count, float terrainRadius, float delt
 
         const float pick = distFreq(gen);
         float current = 0.0f;
-        int selectedIndex = 0;
-        for (int k = 0; k < proceduralRegistry.size(); k++) {
+        size_t selectedIndex = 0;
+        for (size_t k = 0; k < proceduralRegistry.size(); ++k) {
             current += proceduralRegistry[k].frequency;
             if (pick <= current) {
                 selectedIndex = k;
@@ -484,6 +572,12 @@ void Scene::SetObjectCollider(const std::string& name, int type, float radius, c
         col.type = type;
         col.radius = radius;
         col.normal = glm::normalize(normal);
+    }
+}
+
+void Scene::InvalidateEnvironmentEntity(Entity e) {
+    if (e == m_EnvironmentEntity && !m_Registry.HasComponent<EnvironmentComponent>(e)) {
+        m_EnvironmentEntity = MAX_ENTITIES;
     }
 }
 

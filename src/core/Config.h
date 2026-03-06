@@ -30,6 +30,25 @@ struct AttachedParticleConfig {
     float duration = -1.0f; // -1 for infinite
 };
 
+struct SeasonConfig {
+    float summerBaseTemp = 50.0f;
+    float winterBaseTemp = -5.0f;
+    float dayNightTempDiff = 35.0f;
+};
+
+struct TimeConfig {
+    float dayLengthSeconds = 60.0f;
+    int daysPerSeason = 3;
+};
+
+struct WeatherConfig {
+    float minClearInterval = 30.0f;
+    float maxClearInterval = 60.0f;
+    float minPrecipitationDuration = 20.0f;
+    float maxPrecipitationDuration = 40.0f;
+    float fireSuppressionDuration = 15.0f;
+};
+
 // --- Entity Configuration Structs ---
 struct SceneObjectConfig {
     std::string name;
@@ -73,6 +92,12 @@ struct SceneObjectConfig {
 
     std::vector<AttachedParticleConfig> attachedParticles;
 
+    // --- Environment Properties ---
+    TimeConfig timeConfig;
+    SeasonConfig seasonConfig;
+    WeatherConfig weatherConfig;
+    float sunHeatBonus = 60.0f;
+
     // --- Dust Cloud Properties ---
     bool isActive = false;
     glm::vec3 direction = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -115,33 +140,10 @@ struct CustomCameraConfig {
     float pitch = 0.0f;
 };
 
-struct SeasonConfig {
-    float summerBaseTemp = 50.0f;
-    float winterBaseTemp = -5.0f;
-    float dayNightTempDiff = 35.0f;
-};
-
-struct TimeConfig {
-    float dayLengthSeconds = 60.0f;
-    int daysPerSeason = 3;
-};
-
-struct WeatherConfig {
-    float minClearInterval = 30.0f;
-    float maxClearInterval = 60.0f;
-    float minPrecipitationDuration = 20.0f;
-    float maxPrecipitationDuration = 40.0f;
-    float fireSuppressionDuration = 15.0f;
-};
-
 struct AppConfig {
     int windowWidth = 800;
     int windowHeight = 600;
 
-    TimeConfig time;
-    SeasonConfig seasons;
-    WeatherConfig weather;
-    float sunHeatBonus = 60.0f;
 
     int proceduralObjectCount = 5;
     std::vector<ProceduralPlantConfig> proceduralPlants;
