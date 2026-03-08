@@ -27,6 +27,12 @@ public:
     static float sleepNormalThreshold;     // m/s along contact normal
     static float sleepTangentialThreshold; // m/s tangent to contact plane
 
+    // Drag / damping controls (opt-in)
+    static bool applyLinearDamping;
+    static float linearDampingFactor;      // [0..1], 1 = no damping
+    static bool applyQuadraticDrag;
+    static float quadraticDragCoefficient; // ~0.0f..1.0f depending scale
+
     void Update(Scene& scene, float deltaTime) override;
 
 private:

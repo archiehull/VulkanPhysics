@@ -100,3 +100,53 @@ TEST(Physics_Collision, UnequalMass_HeadOn) {
     EXPECT_NEAR(b.velocity.x, 8.0f, 1e-4f);
     EXPECT_NEAR(b.velocity.y, 0.0f, 1e-4f);
 }
+
+// Add these tests at the end of the file
+
+TEST(Physics_HelperAPI, ApplyImpulse_DynamicBody) {
+    MovingSphere s({ 0.0f, 0.0f, 0.0f }, 1.0f, { 1.0f, 0.0f, 0.0f }, 0.5f, 1.0f); // mass=2
+    ApplyImpulse(s, glm::vec3(4.0f, 0.0f, 0.0f)); // dv = J * invMass = 2
+    EXPECT_NEAR(s.velocity.x, 3.0f, 1e-5f);
+}
+
+TEST(Physics_HelperAPI, ApplyImpulse_StaticBody_NoChange) {
+    MovingSphere s({ 0.0f, 0.0f, 0.0f }, 1.0f, { 2.0f, 0.0f, 0.0f }, 0.0f, 1.0f);
+    ApplyImpulse(s, glm::vec3(100.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(s.velocity.x, 2.0f, 1e-5f);
+}
+
+TEST(Physics_HelperAPI, TotalSystemEnergyAndMomentum) {
+    MovingSphere bodies[2] = {
+        MovingSphere({0,0,0}, 1.0f, {2.0f,0.0f,0.0f}, 1.0f, 1.0f),   // mass=1
+        MovingSphere({0,0,0}, 1.0f, {0.0f,3.0f,0.0f}, 0.5f, 1.0f)    // mass=2
+    };
+
+    const float totalE = GetTotalSystemEnergy(bodies, 2);
+    const glm::vec3 totalP = GetTotalSystemMomentum(bodies, 2);
+
+    // E = 0.5*1*4 + 0.5*2*9 = 2 + 9 = 11
+    EXPECT_NEAR(totalE, 11.0f, 1e-5f);
+    ExpectVec3Near(totalP, glm::vec3(2.0f, 6.0f, 0.0f));
+}
+
+TEST(Physics_HelperAPI, CalculateRestitutionFromVelocities_HeadOn) {
+    const glm::vec3 n = glm::vec3(1.0f, 0.0f, 0.0f);
+    const glm::vec3 vBefore = glm::vec3(10.0f, 0.0f, 0.0f);
+    const glm::vec3 vAfter = glm::vec3(-8.0f, 0.0f, 0.0f);
+    const float e = CalculateRestitutionFromVelocities(vBefore, vAfter, n);
+    EXPECT_NEAR(e, 0.8f, 1e-5f);
+}
+
+TEST(Physics_HelperAPI, ApplyLinearDamping_ReducesSpeed) {
+    MovingSphere s({ 0.0f, 0.0f, 0.0f }, 1.0f, { 10.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+    ApplyLinearDamping(s, 0.5f, 1.0f);
+    EXPECT_NEAR(s.velocity.x, 5.0f, 1e-5f);
+}
+
+TEST(Physics_HelperAPI, ApplyQuadraticDrag_ReducesSpeed) {
+    MovingSphere s({ 0.0f, 0.0f, 0.0f }, 1.0f, { 10.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+    const float before = glm::length(s.velocity);
+    ApplyQuadraticDrag(s, 0.1f, 0.1f);
+    const float after = glm::length(s.velocity);
+    EXPECT_LT(after, before);
+}

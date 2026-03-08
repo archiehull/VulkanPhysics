@@ -650,7 +650,11 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
 
         if (!renderComp.visible || !renderComp.geometry) continue;
         if (renderComp.shadingMode == 3 || renderComp.shadingMode == 2 || renderComp.shadingMode == 4) continue;
+
+        // Apply camera layer filtering in refraction pass
         const bool included = (renderComp.layerMask & layerMask) != 0;
+        const bool excluded = (renderComp.excludeLayerMask & layerMask) != 0;
+        if (!included || excluded) continue;
 
         PushConstantObject pco{};
         pco.model = transformComp.matrix;
@@ -658,10 +662,8 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
         pco.receiveShadows = renderComp.receiveShadows ? 1 : 0;
         pco.layerMask = renderComp.layerMask;
 
-        // Push constants
         vkCmdPushConstants(cmd, graphicsPipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
 
-        // Bind Texture
         const VkDescriptorSet textureSet = GetTextureDescriptorSet(renderComp.texturePath);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 1, 1, &textureSet, 0, nullptr);
 
@@ -671,7 +673,6 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
 
     vkCmdEndRenderPass(cmd);
 
-    // Barrier for refraction texture read
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
@@ -725,10 +726,16 @@ void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLay
         auto& transformComp = reg.GetComponent<TransformComponent>(e);
 
         if (!renderComp.visible || !renderComp.geometry) continue;
-        const bool included = (renderComp.layerMask & layerMask) != 0;
         if (skipIfNotCastingShadow && !renderComp.castsShadow) continue;
 
-        // Fetch thermodynamics state if the entity is flammable
+        // Keep shadow pass behavior unchanged when layerMask == ALL.
+        const bool applyLayerFilter = (layerMask != SceneLayers::ALL);
+        if (applyLayerFilter) {
+            const bool included = (renderComp.layerMask & layerMask) != 0;
+            const bool excluded = (renderComp.excludeLayerMask & layerMask) != 0;
+            if (!included || excluded) continue;
+        }
+
         float burnFactor = 0.0f;
         if (reg.HasComponent<ThermoComponent>(e)) {
             burnFactor = reg.GetComponent<ThermoComponent>(e).burnFactor;
@@ -741,16 +748,13 @@ void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLay
         pco.layerMask = renderComp.layerMask;
         pco.burnFactor = burnFactor;
 
-        // Push constants
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
 
-        // Bind Texture
         if (bindTextures) {
             const VkDescriptorSet textureSet = GetTextureDescriptorSet(renderComp.texturePath);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, 1, &textureSet, 0, nullptr);
         }
 
-        // Draw Geometry
         renderComp.geometry->Bind(cmd);
         renderComp.geometry->Draw(cmd);
     }

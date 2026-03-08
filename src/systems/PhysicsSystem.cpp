@@ -18,6 +18,12 @@ float PhysicsSystem::contactFrictionScale = 1.0f;
 float PhysicsSystem::sleepNormalThreshold = 0.08f;
 float PhysicsSystem::sleepTangentialThreshold = 0.12f;
 
+// Drag / damping defaults (disabled by default for behavior stability)
+bool PhysicsSystem::applyLinearDamping = false;
+float PhysicsSystem::linearDampingFactor = 0.98f;
+bool PhysicsSystem::applyQuadraticDrag = false;
+float PhysicsSystem::quadraticDragCoefficient = 0.01f;
+
 namespace {
     inline void ApplySleepThreshold(PhysicsComponent& phys, const Plane& plane) {
         if (phys.isStatic) return;
@@ -58,6 +64,21 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                     physics.forceAccumulator += gravityForce;
                 }
 
+                // Use helper API directly for damping/drag
+                MovingSphere helperBody(transform.position, 1.0f, physics.velocity, physics.inverseMass, physics.restitution);
+                helperBody.forceAccumulator = physics.forceAccumulator;
+
+                if (applyLinearDamping) {
+                    ApplyLinearDamping(helperBody, linearDampingFactor, dt);
+                }
+
+                if (applyQuadraticDrag) {
+                    ApplyQuadraticDrag(helperBody, quadraticDragCoefficient, dt);
+                }
+
+                physics.velocity = helperBody.velocity;
+                physics.forceAccumulator = helperBody.forceAccumulator;
+
                 const glm::vec3 acceleration = physics.forceAccumulator * physics.inverseMass;
 
                 if (currentMethod == IntegrationMethod::ExplicitEuler) {
@@ -86,10 +107,6 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                 }
 
                 physics.forceAccumulator = glm::vec3(0.0f);
-
-                // Optional air resistance
-                physics.velocity *= std::pow(0.999f, dt * 60.0f);
-
                 transform.UpdateMatrix();
             }
         }

@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "PhysicsHelper.h"
+#include <algorithm>
+#include <cmath>
 
 MovingSphere::MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, float invM, float rest)
 	: sphere(pos, r), velocity(vel), forceAccumulator(0.0f), invMass(invM), restitution(rest)
@@ -74,62 +76,79 @@ glm::vec3 GetMomentum(const MovingSphere& body)
 
 void ApplyImpulse(MovingSphere& body, const glm::vec3& impulse)
 {
-    if (body.invMass > 0.0f) {
-        body.velocity += impulse * body.invMass;
-    }
+	if (body.invMass <= 0.0f) return;
+	body.velocity += impulse * body.invMass;
 }
 
 void ApplyForce(MovingSphere& body, const glm::vec3& force)
 {
-    body.forceAccumulator += force;
+	if (body.invMass <= 0.0f) return;
+	body.forceAccumulator += force;
 }
 
 float GetTotalSystemEnergy(const MovingSphere* bodies, int count)
 {
-    float totalEnergy = 0.0f;
-    for (int i = 0; i < count; ++i) {
-        totalEnergy += GetKineticEnergy(bodies[i]);
-    }
-    return totalEnergy;
+	if (bodies == nullptr || count <= 0) return 0.0f;
+
+	float totalEnergy = 0.0f;
+	for (int i = 0; i < count; ++i) {
+		totalEnergy += GetKineticEnergy(bodies[i]);
+	}
+	return totalEnergy;
 }
 
 glm::vec3 GetTotalSystemMomentum(const MovingSphere* bodies, int count)
 {
-    glm::vec3 totalMomentum(0.0f);
-    for (int i = 0; i < count; ++i) {
-        totalMomentum += GetMomentum(bodies[i]);
-    }
-    return totalMomentum;
+	if (bodies == nullptr || count <= 0) return glm::vec3(0.0f);
+
+	glm::vec3 totalMomentum(0.0f);
+	for (int i = 0; i < count; ++i) {
+		totalMomentum += GetMomentum(bodies[i]);
+	}
+	return totalMomentum;
 }
 
 glm::vec3 GetRelativeVelocity(const MovingSphere& a, const MovingSphere& b)
 {
-    return a.velocity - b.velocity;
+	return a.velocity - b.velocity;
 }
 
 float CalculateRestitutionFromVelocities(const glm::vec3& v1Before, const glm::vec3& v1After, const glm::vec3& normal)
 {
-    float vBefore = glm::dot(v1Before, normal);
-    float vAfter = glm::dot(v1After, normal);
-    
-    if (std::abs(vBefore) < 1e-6f) return 0.0f;
-    
-    return std::abs(vAfter / vBefore);
+	const float nLenSq = glm::dot(normal, normal);
+	if (nLenSq <= 1e-12f) return 0.0f;
+
+	const glm::vec3 n = normal / std::sqrt(nLenSq);
+	const float vBefore = glm::dot(v1Before, n);
+	const float vAfter = glm::dot(v1After, n);
+
+	if (std::abs(vBefore) < 1e-6f) return 0.0f;
+
+	const float e = -vAfter / vBefore;
+	return glm::clamp(e, 0.0f, 1.0f);
 }
 
 void ApplyLinearDamping(MovingSphere& body, float damping, float dt)
 {
-    float dampingFactor = std::pow(damping, dt);
-    body.velocity *= dampingFactor;
+	if (body.invMass <= 0.0f || dt <= 0.0f) return;
+
+	// Interpret damping as [0,1], where 1 = no loss, 0 = full stop
+	const float d = glm::clamp(damping, 0.0f, 1.0f);
+	const float dampingFactor = std::pow(d, dt);
+	body.velocity *= dampingFactor;
 }
 
 void ApplyQuadraticDrag(MovingSphere& body, float dragCoefficient, float dt)
 {
-    float speed = glm::length(body.velocity);
-    if (speed < 1e-6f) return;
-    
-    float dragMagnitude = dragCoefficient * speed * speed;
-    glm::vec3 dragForce = -glm::normalize(body.velocity) * dragMagnitude;
-    
-    body.forceAccumulator += dragForce;
+	if (body.invMass <= 0.0f || dragCoefficient <= 0.0f || dt <= 0.0f) return;
+
+	const float speed = glm::length(body.velocity);
+	if (speed < 1e-6f) return;
+
+	const glm::vec3 dragDir = -body.velocity / speed;
+	const float dragMagnitude = dragCoefficient * speed * speed;
+
+	// F * dt => impulse, then apply with invMass
+	const glm::vec3 dragImpulse = dragDir * dragMagnitude * dt;
+	ApplyImpulse(body, dragImpulse);
 }
