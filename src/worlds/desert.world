@@ -10,7 +10,7 @@ SeasonTemps 50.0 -5.0 35.0
 WeatherIntervals 30.0 60.0
 WeatherDuration 20.0 40.0
 FireSuppression 15.0
-SunHeatBonus 60.0
+SunHeatBonus 30.0
 EndObject
 
 Object DesertStorm
@@ -22,7 +22,7 @@ EndObject
 
 # VolumeType 0 = Sphere, LayerBit 2 = Layer C (Mask value 4)
 LayerRegion InsideBall
-    LayerBit 2
+    LayerBit 1
     VolumeType 0
     Radius 150.0
     Position 0.0 0.0 0.0
@@ -55,7 +55,7 @@ Object BasePedestal
     Texture textures/mahogany.jpg
     Position 0.0 -75.0 0.0
     Params 130.0 345.0 100.0
-    RenderProps 1 false true true 2
+    RenderProps 1 false true true 1
     PhysicsProps false false
 EndObject
 
@@ -81,6 +81,15 @@ Object Moon
     PhysicsProps false false
 EndObject
 
+Object PedestalLightSphere
+    Type Sphere
+    Params 5.0
+    Position 200.0 0.0 200.0
+    Light true 1.0 0.5 0.2 5.0 1
+    RenderProps 1 true true true 1
+    PhysicsProps false false
+EndObject
+
 Object CrystalBall
     Type Sphere
     Params 150.0
@@ -97,12 +106,3 @@ Object FogShell
     PhysicsProps false false
 EndObject
 
-Object PedestalLightSphere
-    Type Sphere
-    Params 5.0
-    Position 200.0 0.0 200.0
-    Light true 1.0 0.5 0.2 5.0 1
-    RenderProps 1 true true true 2
-    ExcludeLayerMask 4
-    PhysicsProps false false
-EndObject

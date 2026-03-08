@@ -233,7 +233,7 @@ void Renderer::DrawUI(VkCommandBuffer cmd, uint32_t imageIndex) {
     vkCmdEndRenderPass(cmd);
 }
 
-void Renderer::DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask) {
+void Renderer::DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int viewMask, int insideRegionMask) {
     // Wait for this frame's fence
     const VkFence fence = syncObjects->GetInFlightFence(currentFrame);
     vkWaitForFences(device->GetDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
@@ -266,7 +266,7 @@ void Renderer::DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& v
     vkResetFences(device->GetDevice(), 1, &fence);
 
     VkCommandBuffer cmd = commandBuffer->GetCommandBuffer(currentFrame);
-    RecordCommandBuffer(cmd, imageIndex, currentFrame, scene, viewMatrix, projMatrix, layerMask);
+    RecordCommandBuffer(cmd, imageIndex, currentFrame, scene, viewMatrix, projMatrix, viewMask, insideRegionMask);
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -627,7 +627,7 @@ void Renderer::BeginRenderPass(VkCommandBuffer cmd, VkRenderPass pass, VkFramebu
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
-void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int layerMask) {
+void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask) {
     std::vector<VkClearValue> clearValues(2);
     clearValues[0].color = { {0.1f, 0.1f, 0.1f, 1.0f} };
     clearValues[1].depthStencil = { 1.0f, 0 };
@@ -652,9 +652,11 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
         if (renderComp.shadingMode == 3 || renderComp.shadingMode == 2 || renderComp.shadingMode == 4) continue;
 
         // Apply camera layer filtering in refraction pass
-        const bool included = (renderComp.layerMask & layerMask) != 0;
-        const bool excluded = (renderComp.excludeLayerMask & layerMask) != 0;
-        if (!included || excluded) continue;
+        const bool includedByView = (renderComp.layerMask & viewMask) != 0;
+        if (!includedByView) continue;
+
+        if (renderComp.onlyInRegionMask != 0 && (renderComp.onlyInRegionMask & insideRegionMask) == 0) continue;
+
 
         PushConstantObject pco{};
         pco.model = transformComp.matrix;
@@ -717,7 +719,7 @@ void Renderer::CreateSyncObjects() {
     syncObjects->CreateSyncObjects(imageCount);
 }
 
-void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int layerMask) {
+void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int viewMask, int insideRegionMask) {
     Registry& reg = scene.GetRegistry();
     for (Entity e : scene.GetRenderableEntities()) {
         if (!reg.HasComponent<RenderComponent>(e) || !reg.HasComponent<TransformComponent>(e)) continue;
@@ -728,13 +730,13 @@ void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLay
         if (!renderComp.visible || !renderComp.geometry) continue;
         if (skipIfNotCastingShadow && !renderComp.castsShadow) continue;
 
-        // Keep shadow pass behavior unchanged when layerMask == ALL.
-        const bool applyLayerFilter = (layerMask != SceneLayers::ALL);
+        const bool applyLayerFilter = (viewMask != SceneLayers::ALL);
         if (applyLayerFilter) {
-            const bool included = (renderComp.layerMask & layerMask) != 0;
-            const bool excluded = (renderComp.excludeLayerMask & layerMask) != 0;
-            if (!included || excluded) continue;
+            const bool includedByView = (renderComp.layerMask & viewMask) != 0;
+            if (!includedByView) continue;
         }
+
+        if (renderComp.onlyInRegionMask != 0 && (renderComp.onlyInRegionMask & insideRegionMask) == 0) continue;
 
         float burnFactor = 0.0f;
         if (reg.HasComponent<ThermoComponent>(e)) {
@@ -807,7 +809,7 @@ void Renderer::SetupSceneParticles(Scene& scene) const {
     );
 }
 
-void Renderer::RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int layerMask) {
+void Renderer::RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask) {
     shadowPass->Begin(cmd);
 
     vkCmdBindDescriptorSets(
@@ -827,7 +829,8 @@ void Renderer::RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene
         shadowPass->GetPipeline()->GetLayout(),
         false, // bindTextures
         true,  // skipIfNotCastingShadow
-        layerMask
+        viewMask,
+		insideRegionMask
     );
 
     shadowPass->End(cmd);
@@ -835,7 +838,8 @@ void Renderer::RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene
 
 void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
     uint32_t currentFrame, Scene& scene,
-    const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask) {
+    const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int viewMask, int insideRegionMask) {
+
 
     vkResetCommandBuffer(cmd, 0);
 
@@ -882,13 +886,13 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
     UpdateUniformBuffer(currentFrame, ubo);
 
     // --- 1. Render Shadow Pass ---
-    RenderShadowMap(cmd, currentFrame, scene, SceneLayers::ALL);
+    RenderShadowMap(cmd, currentFrame, scene, viewMask, insideRegionMask);
 
     // --- 2. Render Refraction Pass ---
-    RenderRefractionPass(cmd, currentFrame, scene, layerMask);
+    RenderRefractionPass(cmd, currentFrame, scene, viewMask, insideRegionMask);
 
     // --- 3. Render Main Scene ---
-    RenderScene(cmd, currentFrame, scene, layerMask);
+    RenderScene(cmd, currentFrame, scene, viewMask, insideRegionMask);
 
     // --- 4. Copy to SwapChain ---
     CopyOffScreenToSwapChain(cmd, imageIndex);
@@ -900,7 +904,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
     }
 }
 
-void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int layerMask) {
+void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask) {
     std::vector<VkClearValue> clearValues(2);
     clearValues[0].color = { {m_ClearColor.r, m_ClearColor.g, m_ClearColor.b, m_ClearColor.a} };
     clearValues[1].depthStencil = { 1.0f, 0 };
@@ -914,7 +918,7 @@ void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& sc
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetPipeline());
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
 
-    DrawSceneObjects(cmd, scene, graphicsPipeline->GetLayout(), true, false, layerMask);
+    DrawSceneObjects(cmd, scene, graphicsPipeline->GetLayout(), true, false, viewMask, insideRegionMask);
 
     for (const auto& sys : scene.GetParticleSystems()) {
         sys->Draw(cmd, descriptorSet->GetDescriptorSets()[currentFrame], currentFrame);

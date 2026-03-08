@@ -138,6 +138,7 @@ public:
     void SetOrbitSpeed(const std::string& name, float speedRadPerSec);
 
     void SetObjectLayerMask(const std::string& name, int mask);
+    void SetObjectRegionVisibilityMasks(const std::string& name, int onlyInRegionMask);
     void SetLightLayerMask(const std::string& name, int mask);
 
     void SetObjectCastsShadow(const std::string& name, bool casts);

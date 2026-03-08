@@ -172,7 +172,6 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (key == "Scale") ss >> currentObject->scale.x >> currentObject->scale.y >> currentObject->scale.z;
             else if (key == "Params") ss >> currentObject->params.x >> currentObject->params.y >> currentObject->params.z;
             else if (key == "LayerMask") ss >> currentObject->layerMask;
-            else if (key == "ExcludeLayerMask") ss >> currentObject->excludeLayerMask;
             else if (key == "AttachParticle") {
                 AttachedParticleConfig ap;
                 std::string durStr;
@@ -180,12 +179,24 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 ap.duration = (durStr == "inf" || durStr == "-1") ? -1.0f : std::stof(durStr);
                 currentObject->attachedParticles.push_back(ap);
             }
+            else if (key == "OnlyInRegionMask") ss >> currentObject->onlyInRegionMask;
             else if (key == "RenderProps") {
-                std::string castS, recvS, vis;
-                ss >> currentObject->shadingMode >> castS >> recvS >> vis >> currentObject->layerMask;
-                currentObject->castsShadow = (castS == "true" || castS == "1");
-                currentObject->receiveShadows = (recvS == "true" || recvS == "1");
-                currentObject->visible = (vis == "true" || vis == "1");
+                std::vector<std::string> tokens;
+                std::string tok;
+                while (ss >> tok) tokens.push_back(tok);
+
+                auto toBool = [](const std::string& s) {
+                    return s == "true" || s == "1";
+                    };
+
+                if (tokens.size() >= 4) {
+                    currentObject->shadingMode = std::stoi(tokens[0]);
+                    currentObject->castsShadow = toBool(tokens[1]);
+                    currentObject->receiveShadows = toBool(tokens[2]);
+                    currentObject->visible = toBool(tokens[3]);
+                }
+                if (tokens.size() >= 5) currentObject->layerMask = std::stoi(tokens[4]);
+                if (tokens.size() >= 6) currentObject->onlyInRegionMask = std::stoi(tokens[5]);
             }
             else if (key == "PhysicsProps") {
                 std::vector<std::string> tokens;

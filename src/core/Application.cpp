@@ -111,7 +111,7 @@ void Application::InitVulkan() {
 
     // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/worlds/", "physicstest1");
+    editorUI->Initialize("src/worlds/", "desert");
 
     for (const auto& cam : config.customCameras) {
         camNames.push_back(cam.name);
@@ -273,6 +273,7 @@ void Application::SetupScene() {
         scene->SetObjectReceivesShadows(objCfg.name, objCfg.receiveShadows);
         scene->SetObjectShadingMode(objCfg.name, objCfg.shadingMode);
         scene->SetObjectLayerMask(objCfg.name, objCfg.layerMask);
+        scene->SetObjectRegionVisibilityMasks(objCfg.name, objCfg.onlyInRegionMask);
         scene->SetObjectCollision(objCfg.name, objCfg.hasCollision);
         scene->SetObjectPhysics(objCfg.name, objCfg.isStatic, objCfg.mass);
         scene->SetObjectPhysicsMaterial(objCfg.name, objCfg.restitution, objCfg.friction);
@@ -280,10 +281,6 @@ void Application::SetupScene() {
         if (objCfg.isLight) {
             scene->AddLight(objCfg.name, objCfg.position, objCfg.lightColor, objCfg.lightIntensity, objCfg.lightType);
             scene->SetLightLayerMask(objCfg.name, objCfg.layerMask);
-        }
-        Entity e = scene->GetEntityByName(objCfg.name);
-        if (e != MAX_ENTITIES && scene->GetRegistry().HasComponent<RenderComponent>(e)) {
-            scene->GetRegistry().GetComponent<RenderComponent>(e).excludeLayerMask = objCfg.excludeLayerMask;
         }
 
         // --- Apply Orbit ---
@@ -502,9 +499,10 @@ void Application::MainLoop() {
         // 4. Update the scene with the calculated delta
         scene->Update(stepDelta);
 
-        int currentViewMask = SceneLayers::ALL;
-
         Entity activeCamEntity = cameraController->GetActiveCameraEntity();
+
+        int currentViewMask = SceneLayers::ALL;
+        int currentInsideRegionMask = 0;
 
         if (activeCamEntity != MAX_ENTITIES && registry.HasComponent<CameraComponent>(activeCamEntity)) {
             auto& camComp = registry.GetComponent<CameraComponent>(activeCamEntity);
@@ -513,9 +511,9 @@ void Application::MainLoop() {
             const glm::mat4 projMatrix = camComp.projectionMatrix;
 
             currentViewMask = camComp.viewMask;
+            currentInsideRegionMask = camComp.insideRegionMask;
 
-            // Use these for your renderer call
-            renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask);
+            renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask, currentInsideRegionMask);
         }
 
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;

@@ -5,8 +5,11 @@
 #include "../systems/CameraSystem.h"
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 
 void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget, std::string& sceneToLoad, Entity& entityToDelete) {
+    
+    
     auto layerMaskToString = [](int mask) {
         std::string s;
         for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
@@ -45,34 +48,153 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         ImGui::Separator();
 
         // --- Layer Manager ---
-        if (ImGui::BeginMenu("Layer Manager")) {
-            ImGui::TextDisabled("Create and Rename Layers");
+        if (ImGui::BeginMenu("Layer Properties")) {
+            Registry& registry = scene.GetRegistry();
+            const Entity entityCount = registry.GetEntityCount();
+
+            ImGui::TextDisabled("Layer regions");
             ImGui::Separator();
 
-            for (int i = 0; i < SceneLayers::ActiveLayerCount; ++i) {
-                char buf[64];
-                strncpy_s(buf, SceneLayers::LayerNames[i].c_str(), sizeof(buf));
-                buf[sizeof(buf) - 1] = '\0';
+            int regionCount = 0;
+            static const char* modeItems[] = { "Disabled", "Enabled", "Only In Region" };
 
-                ImGui::PushID(i);
-                ImGui::Text("Layer %c:", 'A' + i);
-                ImGui::SameLine(65.0f);
-                // Edit the name directly in SceneLayers
-                if (ImGui::InputText("##Name", buf, sizeof(buf))) {
-                    SceneLayers::LayerNames[i] = std::string(buf);
+            if (ImGui::BeginMenu("Base World###LayerRegion_Base")) {
+                char baseNameBuf[64];
+                strncpy_s(baseNameBuf, SceneLayers::LayerNames[0].c_str(), sizeof(baseNameBuf));
+                baseNameBuf[sizeof(baseNameBuf) - 1] = '\0';
+
+                if (ImGui::InputText("Layer Name", baseNameBuf, sizeof(baseNameBuf))) {
+                    SceneLayers::LayerNames[0] = std::string(baseNameBuf);
                 }
-                ImGui::PopID();
+
+                ImGui::TextDisabled("Slot = Layer A | Bit = 0 | Mask = 1");
+                ImGui::TextDisabled("Base World is global and has no region volume.");
+                ImGui::EndMenu();
             }
 
             ImGui::Separator();
-            if (SceneLayers::ActiveLayerCount < SceneLayers::MAX_LAYERS) {
-                if (ImGui::Button("+ Create New Layer", ImVec2(-1, 0))) {
-                    SceneLayers::ActiveLayerCount++;
+
+            for (Entity layerEntity = 0; layerEntity < entityCount; ++layerEntity) {
+                if (!registry.HasComponent<LayerRegionComponent>(layerEntity)) continue;
+                regionCount++;
+
+                auto& comp = registry.GetComponent<LayerRegionComponent>(layerEntity);
+                std::string menuLabel = comp.layerName + "###LayerRegion_" + std::to_string(layerEntity);
+
+                if (ImGui::BeginMenu(menuLabel.c_str())) {
+                    ImGui::PushID(static_cast<int>(layerEntity));
+
+                    char nameBuf[64];
+                    strncpy_s(nameBuf, comp.layerName.c_str(), sizeof(nameBuf));
+                    nameBuf[sizeof(nameBuf) - 1] = '\0';
+                    if (ImGui::InputText("Layer Name", nameBuf, sizeof(nameBuf))) {
+                        comp.layerName = std::string(nameBuf);
+                        if (registry.HasComponent<NameComponent>(layerEntity)) {
+                            registry.GetComponent<NameComponent>(layerEntity).name = comp.layerName;
+                        }
+                        if (comp.assignedLayerBit >= 1 && comp.assignedLayerBit < SceneLayers::MAX_LAYERS) {
+                            SceneLayers::LayerNames[comp.assignedLayerBit] = comp.layerName;
+                        }
+                    }
+
+                    const int oldBit = comp.assignedLayerBit;
+                    if (ImGui::SliderInt("Layer Slot", &comp.assignedLayerBit, 1, SceneLayers::MAX_LAYERS - 1)) {
+                        comp.assignedLayerBit = std::clamp(comp.assignedLayerBit, 1, SceneLayers::MAX_LAYERS - 1);
+
+                        if (oldBit >= 1 && oldBit < SceneLayers::MAX_LAYERS &&
+                            SceneLayers::LayerNames[oldBit] == comp.layerName) {
+                            SceneLayers::LayerNames[oldBit] = std::string("Layer ") + static_cast<char>('A' + oldBit);
+                        }
+
+                        SceneLayers::LayerNames[comp.assignedLayerBit] = comp.layerName;
+                        SceneLayers::ActiveLayerCount = std::max(SceneLayers::ActiveLayerCount, comp.assignedLayerBit + 1);
+                    }
+
+                    ImGui::TextDisabled("Slot = Layer %c | Bit = %d | Mask = %d",
+                        static_cast<char>('A' + comp.assignedLayerBit),
+                        comp.assignedLayerBit,
+                        (1 << comp.assignedLayerBit));
+
+                    if (registry.HasComponent<TransformComponent>(layerEntity)) {
+                        auto& tr = registry.GetComponent<TransformComponent>(layerEntity);
+                        if (ImGui::DragFloat3("Region Position", &tr.position.x, 0.1f)) {
+                            tr.UpdateMatrix();
+                        }
+                    }
+
+                    const char* volumeTypes[] = { "Sphere", "Box (AABB)" };
+                    ImGui::Combo("Volume Type", &comp.volumeType, volumeTypes, IM_ARRAYSIZE(volumeTypes));
+                    if (comp.volumeType == 0) ImGui::DragFloat("Radius", &comp.radius, 0.1f, 0.1f, 1000.0f);
+                    else ImGui::DragFloat3("Half Extents", &comp.halfExtents.x, 0.1f, 0.1f, 1000.0f);
+
+                    ImGui::Separator();
+                    ImGui::TextDisabled("Objects Assigned to this Layer");
+
+                    const int bitMask = (1 << comp.assignedLayerBit);
+                    if (ImGui::BeginTable("LayerAssignTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
+                        ImGui::TableSetupColumn("Object", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableSetupColumn("Mode", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                        ImGui::TableHeadersRow();
+
+                        for (Entity other = 0; other < entityCount; ++other) {
+                            if (!registry.HasComponent<RenderComponent>(other)) continue;
+                            auto& rc = registry.GetComponent<RenderComponent>(other);
+
+                            int mode = 0;
+                            if ((rc.onlyInRegionMask & bitMask) != 0) mode = 2;
+                            else if ((rc.layerMask & bitMask) != 0) mode = 1;
+
+                            std::string objName = "Entity " + std::to_string(other);
+                            if (registry.HasComponent<NameComponent>(other)) {
+                                objName = registry.GetComponent<NameComponent>(other).name;
+                            }
+
+                            ImGui::TableNextRow();
+                            ImGui::TableNextColumn();
+                            ImGui::Text("%s", objName.c_str());
+
+                            ImGui::TableNextColumn();
+                            ImGui::PushID(static_cast<int>(other));
+                            int newMode = mode;
+                            if (ImGui::Combo("##LayerMode", &newMode, modeItems, IM_ARRAYSIZE(modeItems))) {
+                                rc.layerMask &= ~bitMask;
+                                rc.onlyInRegionMask &= ~bitMask;
+                                if (newMode == 1) rc.layerMask |= bitMask;
+                                else if (newMode == 2) {
+                                    rc.layerMask |= bitMask;
+                                    rc.onlyInRegionMask |= bitMask;
+                                }
+                            }
+                            ImGui::PopID();
+                        }
+
+                        ImGui::EndTable();
+                    }
+
+                    if (ImGui::Button("Delete Layer Region", ImVec2(-1, 0))) {
+                        entityToDelete = layerEntity;
+                    }
+
+                    ImGui::PopID();
+                    ImGui::EndMenu();
                 }
             }
 
-            else {
-                ImGui::TextDisabled("Maximum of %d layers reached.", SceneLayers::MAX_LAYERS);
+            if (regionCount == 0) {
+                ImGui::TextDisabled("No layer regions found.");
+            }
+
+            ImGui::Separator();
+            static char newLayerName[64] = "New Layer Region";
+            static int newLayerSlot = 1;
+
+            ImGui::InputText("New Layer Name", newLayerName, sizeof(newLayerName));
+            ImGui::SliderInt("New Layer Slot", &newLayerSlot, 1, SceneLayers::MAX_LAYERS - 1);
+
+            if (ImGui::Button("+ Create Layer Region", ImVec2(-1, 0))) {
+                newLayerSlot = std::clamp(newLayerSlot, 1, SceneLayers::MAX_LAYERS - 1);
+                scene.AddLayerRegion(newLayerName, newLayerSlot, 0, 10.0f, glm::vec3(5.0f), glm::vec3(0.0f));
+                SceneLayers::ActiveLayerCount = std::max(SceneLayers::ActiveLayerCount, newLayerSlot + 1);
             }
 
             ImGui::EndMenu();
@@ -635,6 +757,35 @@ void EditorUI::DrawMainMenuStatusBar(float deltaTime) {
 }
 
 void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& entityToDelete) {
+    auto getLayerModeForBit = [](const RenderComponent& rc, int bit) -> int {
+        const int bitMask = (1 << bit);
+        const bool visible = (rc.layerMask & bitMask) != 0;
+        const bool only = (rc.onlyInRegionMask & bitMask) != 0;
+
+        if (only) return 2;     // Only Display In Region
+        if (visible) return 1;  // Enabled
+        return 0;               // Disabled
+        };
+
+    auto setLayerModeForBit = [](RenderComponent& rc, int bit, int mode) {
+        const int bitMask = (1 << bit);
+
+        rc.layerMask &= ~bitMask;
+        rc.onlyInRegionMask &= ~bitMask;
+
+        switch (mode) {
+        case 1: // Enabled
+            rc.layerMask |= bitMask;
+            break;
+        case 2: // Only Display In Region
+            rc.layerMask |= bitMask;
+            rc.onlyInRegionMask |= bitMask;
+            break;
+        default: // Disabled
+            break;
+        }
+        };
+
     if (ImGui::BeginMenu("Objects")) {
         auto layerMaskToString = [](int mask) {
             std::string s;
@@ -843,6 +994,39 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
                         const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
                         const char* modeName = (render.shadingMode >= 0 && render.shadingMode <= 4) ? modes[render.shadingMode] : "Unknown";
                         ImGui::Text("Shading: %s", modeName);
+
+                        ImGui::Separator();
+                        ImGui::TextDisabled("Layer Options");
+
+                        if (ImGui::BeginTable("ObjLayerOptionsTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
+                            ImGui::TableSetupColumn("Layer", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+                            ImGui::TableSetupColumn("Mode", ImGuiTableColumnFlags_WidthStretch);
+                            ImGui::TableHeadersRow();
+
+                            static const char* modeItems[] = {
+                                "Disabled",
+                                "Enabled",
+                                "Only Display In Region"
+                            };
+
+                            for (int bit = 0; bit < SceneLayers::ActiveLayerCount; ++bit) {
+                                ImGui::TableNextRow();
+
+                                ImGui::TableNextColumn();
+                                ImGui::Text("%s", SceneLayers::LayerNames[bit].c_str());
+
+                                ImGui::TableNextColumn();
+                                int mode = getLayerModeForBit(render, bit);
+
+                                ImGui::PushID(bit);
+                                if (ImGui::Combo("##ObjLayerMode", &mode, modeItems, IM_ARRAYSIZE(modeItems))) {
+                                    setLayerModeForBit(render, bit, mode);
+                                }
+                                ImGui::PopID();
+                            }
+
+                            ImGui::EndTable();
+                        }
                     }
 
                     if (registry.HasComponent<ThermoComponent>(e)) {

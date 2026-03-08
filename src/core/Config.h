@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <glm/glm.hpp>
+#include "CoreTypes.h"
 
 struct SceneOption {
     std::string name;
@@ -54,7 +55,7 @@ struct SceneObjectConfig {
     std::string name;
     std::string type;
     std::string modelPath;
-    std::string texturePath; // Can now be a file path OR a procedural name
+    std::string texturePath;
 
     glm::vec3 position = glm::vec3(0.0f);
     glm::vec3 rotation = glm::vec3(0.0f);
@@ -65,8 +66,8 @@ struct SceneObjectConfig {
     bool castsShadow = true;
     bool receiveShadows = true;
     int shadingMode = 1;
-    int layerMask = 1;
-    int excludeLayerMask = 0;
+    int layerMask = SceneLayers::ALL_USED;
+    int onlyInRegionMask = 0;
 
     bool hasCollision = true;
     bool isStatic = true;
@@ -76,7 +77,7 @@ struct SceneObjectConfig {
     float restitution = 1.0f;
     float friction = 0.98f;
 
-    int colliderType = 0; // 0 = Sphere, 1 = Plane
+    int colliderType = 0;
     float colliderRadius = 2.0f;
     glm::vec3 colliderNormal = glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -93,13 +94,11 @@ struct SceneObjectConfig {
 
     std::vector<AttachedParticleConfig> attachedParticles;
 
-    // --- Environment Properties ---
     TimeConfig timeConfig;
     SeasonConfig seasonConfig;
     WeatherConfig weatherConfig;
     float sunHeatBonus = 60.0f;
 
-    // --- Dust Cloud Properties ---
     bool isActive = false;
     glm::vec3 direction = glm::vec3(1.0f, 0.0f, 0.0f);
     float speed = 15.0f;

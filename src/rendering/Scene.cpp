@@ -1006,6 +1006,13 @@ void Scene::SetObjectTransform(const std::string& name, const glm::vec3& pos, co
     }
 }
 
+void Scene::SetObjectRegionVisibilityMasks(const std::string& name, int onlyInRegionMask) {
+    Entity e = GetEntityByName(name);
+    if (e != MAX_ENTITIES && m_Registry.HasComponent<RenderComponent>(e)) {
+        m_Registry.GetComponent<RenderComponent>(e).onlyInRegionMask = onlyInRegionMask;
+    }
+}
+
 void Scene::SetObjectLayerMask(const std::string& name, int mask) {
     Entity e = GetEntityByName(name);
     if (e != MAX_ENTITIES && m_Registry.HasComponent<RenderComponent>(e)) {

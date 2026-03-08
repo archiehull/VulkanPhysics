@@ -34,7 +34,7 @@ public:
 
     void RegisterProceduralTexture(const std::string& name, const std::function<void(Texture&)>& generator);
 
-    void DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask = SceneLayers::ALL);
+    void DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int viewMask = SceneLayers::ALL, int insideRegionMask = 0);
     void UpdateUniformBuffer(uint32_t currentFrame, const UniformBufferObject& ubo);
     void WaitIdle() const;
     void Cleanup();
@@ -133,15 +133,15 @@ private:
     void CreateSyncObjects();
     void CreateUniformBuffers();
 
-    void RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex, uint32_t currentFrame, Scene& scene, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int layerMask);
+    void RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex, uint32_t currentFrame, Scene& scene, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int viewMask, int insideRegionMask);
 
     // Helper to reduce code duplication
     void BeginRenderPass(VkCommandBuffer cmd, VkRenderPass pass, VkFramebuffer fb, const std::vector<VkClearValue>& clearValues) const;
 
-    void RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int layerMask = SceneLayers::ALL);
-    void DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int layerMask);
-    void RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int layerMask);
-    void RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int layerMask);
+    void RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
+    void DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int viewMask, int insideRegionMask);
+    void RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
+    void RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
 
     void CopyOffScreenToSwapChain(VkCommandBuffer cmd, uint32_t imageIndex) const;
     void CleanupOffScreenResources();

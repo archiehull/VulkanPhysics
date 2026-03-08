@@ -53,74 +53,120 @@ if (m_ShowControlsWindow) {
 }
 
 void EditorUI::DrawPropertyWindowsSection(Scene& scene, Entity& entityToDelete) {
-    auto drawLayerCheckboxes = [&](const char* label, int& mask) {
-        ImGui::TextDisabled("%s", label);
+    auto isLayerUsed = [&](int bit) -> bool {
+        if (bit == 0) return true; // Always keep Base World visible
 
-        auto isLayerUsed = [&](int bit) -> bool {
-            if (bit == 0) return true; // Always keep Base World visible
+        const int bitMask = (1 << bit);
+        Registry& reg = scene.GetRegistry();
+        const Entity count = reg.GetEntityCount();
 
-            const int bitMask = (1 << bit);
-            Registry& reg = scene.GetRegistry();
-            const Entity count = reg.GetEntityCount();
-
-            for (Entity e = 0; e < count; ++e) {
-                if (reg.HasComponent<LayerRegionComponent>(e) &&
-                    reg.GetComponent<LayerRegionComponent>(e).assignedLayerBit == bit) {
-                    return true;
-                }
-
-                if (reg.HasComponent<RenderComponent>(e)) {
-                    const auto& rc = reg.GetComponent<RenderComponent>(e);
-                    if ((rc.layerMask & bitMask) != 0 || (rc.excludeLayerMask & bitMask) != 0) {
-                        return true;
-                    }
-                }
-
-                if (reg.HasComponent<LightComponent>(e)) {
-                    if ((reg.GetComponent<LightComponent>(e).layerMask & bitMask) != 0) {
-                        return true;
-                    }
-                }
-
-                if (reg.HasComponent<CameraComponent>(e)) {
-                    const auto& cc = reg.GetComponent<CameraComponent>(e);
-                    if ((cc.viewMask & bitMask) != 0 || (cc.insideRegionMask & bitMask) != 0) {
-                        return true;
-                    }
-                }
+        for (Entity e = 0; e < count; ++e) {
+            if (reg.HasComponent<LayerRegionComponent>(e) &&
+                reg.GetComponent<LayerRegionComponent>(e).assignedLayerBit == bit) {
+                return true;
             }
 
-            return false;
+            if (reg.HasComponent<RenderComponent>(e)) {
+                const auto& rc = reg.GetComponent<RenderComponent>(e);
+                if ((rc.layerMask & bitMask) != 0) return true;
+                if ((rc.onlyInRegionMask & bitMask) != 0) return true;
+            }
+
+            if (reg.HasComponent<LightComponent>(e)) {
+                if ((reg.GetComponent<LightComponent>(e).layerMask & bitMask) != 0) return true;
+            }
+
+            if (reg.HasComponent<CameraComponent>(e)) {
+                const auto& cc = reg.GetComponent<CameraComponent>(e);
+                if ((cc.viewMask & bitMask) != 0 || (cc.insideRegionMask & bitMask) != 0) return true;
+            }
+        }
+
+        return false;
+        };
+
+    auto drawLayerCheckboxes = [&](const char* label, int& visibleMask, int& onlyMask) {
+        ImGui::TextDisabled("%s", label);
+
+        auto getMode = [&](int bit) -> int {
+            const int bitMask = (1 << bit);
+            const bool visible = (visibleMask & bitMask) != 0;
+            const bool only = (onlyMask & bitMask) != 0;
+
+            if (only) return 2;     // Only in region
+            if (visible) return 1;  // Enabled
+            return 0;               // Disabled
+            };
+
+        auto setMode = [&](int bit, int mode) {
+            const int bitMask = (1 << bit);
+
+            // Clear this bit from both masks first
+            visibleMask &= ~bitMask;
+            onlyMask &= ~bitMask;
+
+            switch (mode) {
+            case 1: // Enabled
+                visibleMask |= bitMask;
+                break;
+            case 2: // Only display in region
+                visibleMask |= bitMask;
+                onlyMask |= bitMask;
+                break;
+            default: // Disabled
+                break;
+            }
             };
 
         std::vector<int> visibleBits;
         visibleBits.reserve(SceneLayers::MAX_LAYERS);
 
         for (int i = 0; i < SceneLayers::MAX_LAYERS; ++i) {
-            const bool currentlySet = (mask & (1 << i)) != 0;
+            const int bitMask = (1 << i);
+            const bool currentlySet =
+                (visibleMask & bitMask) != 0 ||
+                (onlyMask & bitMask) != 0;
+
             if (isLayerUsed(i) || currentlySet) {
                 visibleBits.push_back(i);
             }
         }
 
-        const int cols = std::min(4, std::max(1, static_cast<int>(visibleBits.size())));
-        if (ImGui::BeginTable(label, cols)) {
-            for (int bit : visibleBits) {
-                ImGui::TableNextColumn();
-                bool isActive = (mask & (1 << bit)) != 0;
+        static const char* modeItems[] = {
+            "Disabled",
+            "Enabled",
+            "Only Display In Region"
+        };
 
-                ImGui::PushID(bit + (int)(size_t)label);
-                if (ImGui::Checkbox(SceneLayers::LayerNames[bit].c_str(), &isActive)) {
-                    if (isActive) mask |= (1 << bit);
-                    else mask &= ~(1 << bit);
+        // Scope table IDs by label so multiple property windows don't collide
+        ImGui::PushID(label);
+        if (ImGui::BeginTable("LayerRulesTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("Layer", ImGuiTableColumnFlags_WidthFixed, 170.0f);
+            ImGui::TableSetupColumn("Mode", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
+
+            for (int bit : visibleBits) {
+                ImGui::TableNextRow();
+
+                ImGui::TableNextColumn();
+                ImGui::Text("%s", SceneLayers::LayerNames[bit].c_str());
+
+                ImGui::TableNextColumn();
+                int mode = getMode(bit);
+
+                ImGui::PushID(bit);
+                if (ImGui::Combo("##Mode", &mode, modeItems, IM_ARRAYSIZE(modeItems))) {
+                    setMode(bit, mode);
                 }
                 ImGui::PopID();
             }
+
             ImGui::EndTable();
         }
+        ImGui::PopID();
 
         ImGui::Spacing();
-        };
+    };
 
 // --- MULTIPLE ENTITY PROPERTIES WINDOWS ---
 for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
@@ -265,8 +311,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
                     ImGui::Combo("Shading Mode", &comp.shadingMode, modes, IM_ARRAYSIZE(modes));
 
-                    drawLayerCheckboxes("Visible on Layers:", comp.layerMask);
-                    drawLayerCheckboxes("Hidden on Layers (NOT):", comp.excludeLayerMask);
+                    drawLayerCheckboxes("Layer Visibility Rules", comp.layerMask, comp.onlyInRegionMask);
 
                     ImGui::Text("Texture:");
                     std::string comboID = "##TextureCombo" + std::to_string(it->id);
@@ -686,38 +731,58 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     ImGui::TextDisabled("Objects Assigned to this Layer");
                     ImGui::Separator();
 
-                    // Create a small scrolling box for the list
-                    ImGui::BeginChild("LayerObjectsList", ImVec2(0, 150), true);
-                    int assignedCount = 0;
+                    ImGui::BeginChild("LayerObjectsList", ImVec2(0, 170), true);
+                    int listedCount = 0;
+
+                    static const char* modeItems[] = {
+                        "Disabled",
+                        "Enabled",
+                        "Only In Region"
+                    };
+
+                    const int bitMask = (1 << comp.assignedLayerBit);
 
                     for (Entity other = 0; other < registry.GetEntityCount(); ++other) {
-                        if (registry.HasComponent<RenderComponent>(other)) {
-                            auto& otherRender = registry.GetComponent<RenderComponent>(other);
+                        if (!registry.HasComponent<RenderComponent>(other)) continue;
 
-                            // Check if this object's bitmask contains this layer's bit
-                            if ((otherRender.layerMask & (1 << comp.assignedLayerBit)) != 0) {
-                                std::string objName = "Entity " + std::to_string(other);
-                                if (registry.HasComponent<NameComponent>(other)) {
-                                    objName = registry.GetComponent<NameComponent>(other).name;
-                                }
+                        auto& otherRender = registry.GetComponent<RenderComponent>(other);
 
-                                ImGui::Text(" %s", objName.c_str());
+                        int mode = 0; // 0=Disabled, 1=Enabled, 2=OnlyInRegion
+                        if ((otherRender.onlyInRegionMask & bitMask) != 0) mode = 2;
+                        else if ((otherRender.layerMask & bitMask) != 0) mode = 1;
 
-                                // Add a quick button to un-assign the object directly from this list
-                                ImGui::SameLine(ImGui::GetWindowWidth() - 100.0f);
-                                ImGui::PushID(other);
-                                if (ImGui::Button("Remove")) {
-                                    otherRender.layerMask &= ~(1 << comp.assignedLayerBit);
-                                }
-                                ImGui::PopID();
+                        std::string objName = "Entity " + std::to_string(other);
+                        if (registry.HasComponent<NameComponent>(other)) {
+                            objName = registry.GetComponent<NameComponent>(other).name;
+                        }
 
-                                assignedCount++;
+                        ImGui::PushID(static_cast<int>(other));
+
+                        ImGui::Text(" %s", objName.c_str());
+                        ImGui::SameLine(ImGui::GetWindowWidth() - 185.0f);
+
+                        int newMode = mode;
+                        if (ImGui::Combo("##LayerModeInline", &newMode, modeItems, IM_ARRAYSIZE(modeItems))) {
+                            // Clear this layer bit first
+                            otherRender.layerMask &= ~bitMask;
+                            otherRender.onlyInRegionMask &= ~bitMask;
+
+                            // Apply selected mode
+                            if (newMode == 1) { // Enabled
+                                otherRender.layerMask |= bitMask;
+                            }
+                            else if (newMode == 2) { // Only In Region
+                                otherRender.layerMask |= bitMask;
+                                otherRender.onlyInRegionMask |= bitMask;
                             }
                         }
+
+                        ImGui::PopID();
+                        listedCount++;
                     }
 
-                    if (assignedCount == 0) {
-                        ImGui::TextDisabled(" No objects currently assigned.");
+                    if (listedCount == 0) {
+                        ImGui::TextDisabled(" No renderable objects found.");
                     }
                     ImGui::EndChild();
 

@@ -52,8 +52,8 @@ struct RenderComponent {
     bool castsShadow = true;
     bool originalCastsShadow = true;
     bool receiveShadows = true;
-    int layerMask = SceneLayers::LAYER_A;
-    int excludeLayerMask = 0;
+    int layerMask = SceneLayers::ALL_USED;
+    int onlyInRegionMask = 0;
 };
 
 // 4. Movement/Logic Data
