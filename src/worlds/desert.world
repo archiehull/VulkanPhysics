@@ -10,7 +10,7 @@ SeasonTemps 50.0 -5.0 35.0
 WeatherIntervals 30.0 60.0
 WeatherDuration 20.0 40.0
 FireSuppression 15.0
-SunHeatBonus 30.0
+SunHeatBonus 00.0
 EndObject
 
 Object DesertStorm

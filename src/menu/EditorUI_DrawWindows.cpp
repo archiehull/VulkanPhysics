@@ -3,6 +3,7 @@
 #include "../rendering/ParticleLibrary.h"
 #include "../systems/CameraSystem.h"
 #include <algorithm>
+#include <random>
 
 void EditorUI::DrawPostMainMenuSection(Scene& scene, Entity entityToDelete) {
 if (entityToDelete != MAX_ENTITIES) {
@@ -119,9 +120,10 @@ void EditorUI::DrawPropertyWindowsSection(Scene& scene, Entity& entityToDelete) 
             };
 
         std::vector<int> visibleBits;
-        visibleBits.reserve(SceneLayers::MAX_LAYERS);
+        const int maxVisibleLayer = std::max(1, SceneLayers::ActiveLayerCount);
+        visibleBits.reserve(maxVisibleLayer);
 
-        for (int i = 0; i < SceneLayers::MAX_LAYERS; ++i) {
+        for (int i = 0; i < maxVisibleLayer; ++i) {
             const int bitMask = (1 << i);
             const bool currentlySet =
                 (visibleMask & bitMask) != 0 ||
@@ -313,66 +315,100 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
                     drawLayerCheckboxes("Layer Visibility Rules", comp.layerMask, comp.onlyInRegionMask);
 
-                    ImGui::Text("Texture:");
-                    std::string comboID = "##TextureCombo" + std::to_string(it->id);
-                    if (ImGui::BeginCombo(comboID.c_str(), comp.texturePath.c_str())) {
-                        for (const auto& texPath : m_AvailableTextures) {
-                            bool isSelected = (comp.texturePath == texPath);
-                            if (ImGui::Selectable(texPath.c_str(), isSelected)) {
-                                comp.texturePath = texPath;
+                    std::string textureNodeLabel =
+                        "Current Texture: " + comp.texturePath + "###TextureNode_" +
+                        std::to_string(it->id) + "_" + std::to_string(e);
+
+                    if (ImGui::TreeNode(textureNodeLabel.c_str())) {
+                        std::string comboID = "##TextureCombo" + std::to_string(it->id) + "_" + std::to_string(e);
+                        if (ImGui::BeginCombo(comboID.c_str(), comp.texturePath.c_str())) {
+                            for (const auto& texPath : m_AvailableTextures) {
+                                bool isSelected = (comp.texturePath == texPath);
+                                if (ImGui::Selectable(texPath.c_str(), isSelected)) {
+                                    comp.texturePath = texPath;
+                                }
+                                if (isSelected) ImGui::SetItemDefaultFocus();
                             }
-                            if (isSelected) ImGui::SetItemDefaultFocus();
+                            ImGui::EndCombo();
                         }
-                        ImGui::EndCombo();
-                    }
 
-                    ImGui::SameLine();
-                    if (ImGui::Button(("Refresh##Tex" + std::to_string(it->id)).c_str())) RefreshTextureList();
-
-                    char texBuf[256];
-                    strncpy_s(texBuf, comp.texturePath.c_str(), sizeof(texBuf));
-                    texBuf[sizeof(texBuf) - 1] = '\0';
-                    if (ImGui::InputText("Manual Path / ID", texBuf, sizeof(texBuf))) {
-                        comp.texturePath = std::string(texBuf);
-                    }
-
-                    // Procedural Texture Generator
-                    if (ImGui::TreeNode("Generate Procedural Texture")) {
-                        static char procName[64] = "custom_tex_1";
-                        static int procType = 1;
-                        static glm::vec4 color1(1.0f, 1.0f, 1.0f, 1.0f);
-                        static glm::vec4 color2(0.2f, 0.2f, 0.2f, 1.0f);
-                        static int cellSize = 32;
-
-                        ImGui::InputText("Name ID", procName, sizeof(procName));
-
-                        const char* procTypes[] = { "Solid Color", "Checkerboard", "Gradient (Vert)", "Gradient (Horiz)" };
-                        ImGui::Combo("Type", &procType, procTypes, IM_ARRAYSIZE(procTypes));
-
-                        ImGui::ColorEdit4("Color 1", &color1.x);
-                        if (procType > 0) ImGui::ColorEdit4("Color 2", &color2.x);
-                        if (procType == 1) ImGui::InputInt("Cell Size", &cellSize);
-
-                        if (ImGui::Button("Generate & Apply", ImVec2(-1, 0))) {
-                            ProceduralTextureRequest req;
-                            req.name = std::string(procName);
-                            req.type = static_cast<ProcTexType>(procType);
-                            req.color1 = color1;
-                            req.color2 = color2;
-                            req.cellSize = cellSize;
-                            m_TextureRequests.push_back(req);
-                            comp.texturePath = req.name;
+                        ImGui::SameLine();
+                        if (ImGui::Button(("Refresh##Tex" + std::to_string(it->id) + "_" + std::to_string(e)).c_str())) {
+                            RefreshTextureList();
                         }
-                        ImGui::TreePop();
-                    }
 
-                    // Change Geometry
-                    if (ImGui::TreeNode("Change Geometry")) {
-                        ImGui::TextWrapped("Current Geometry: %s", comp.geometryName.c_str());
-                        ImGui::Spacing();
-                        ImGui::Separator();
-                        ImGui::Spacing();
+                        char texBuf[256];
+                        strncpy_s(texBuf, comp.texturePath.c_str(), sizeof(texBuf));
+                        texBuf[sizeof(texBuf) - 1] = '\0';
+                        if (ImGui::InputText(("Manual Path / ID##TexPath" + std::to_string(it->id) + "_" + std::to_string(e)).c_str(), texBuf, sizeof(texBuf))) {
+                            comp.texturePath = std::string(texBuf);
+                        }
 
+                        if (ImGui::TreeNode(("Generate Procedural Texture##ProcTex_" + std::to_string(it->id) + "_" + std::to_string(e)).c_str())) {
+                            static char procName[64] = "custom_tex_1";
+                            static int procType = 1;
+                            static glm::vec4 color1(1.0f, 1.0f, 1.0f, 1.0f);
+                            static glm::vec4 color2(0.2f, 0.2f, 0.2f, 1.0f);
+                            static int cellSize = 32;
+
+                            static std::mt19937 rng(std::random_device{}());
+                            static std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);
+                            static std::uniform_int_distribution<int> cellDist(4, 128);
+                            static std::uniform_int_distribution<int> typeDist(0, 3);
+
+                            auto queueProceduralUpdate = [&]() {
+                                if (procName[0] == '\0') return;
+
+                                ProceduralTextureRequest req;
+                                req.name = std::string(procName);
+                                req.type = static_cast<ProcTexType>(procType);
+                                req.color1 = color1;
+                                req.color2 = color2;
+                                req.cellSize = std::max(1, cellSize);
+                                m_TextureRequests.push_back(req);
+
+                                // Keep this object bound to the live procedural texture ID.
+                                comp.texturePath = req.name;
+                             };
+
+                            bool changed = false;
+
+                            changed |= ImGui::InputText("Name ID", procName, sizeof(procName));
+
+                            const char* procTypes[] = { "Solid Color", "Checkerboard", "Gradient (Vert)", "Gradient (Horiz)" };
+                            changed |= ImGui::Combo("Type", &procType, procTypes, IM_ARRAYSIZE(procTypes));
+
+                            changed |= ImGui::ColorEdit4("Color 1", &color1.x);
+                            if (procType > 0) changed |= ImGui::ColorEdit4("Color 2", &color2.x);
+                            if (procType == 1) changed |= ImGui::InputInt("Cell Size", &cellSize);
+
+                            if (ImGui::Button("Randomise##ProcTexWnd")) {
+                                procType = typeDist(rng);
+                                color1 = glm::vec4(colorDist(rng), colorDist(rng), colorDist(rng), 1.0f);
+                                color2 = glm::vec4(colorDist(rng), colorDist(rng), colorDist(rng), 1.0f);
+                                if (procType == 1) {
+                                    cellSize = cellDist(rng);
+                                }
+                                queueProceduralUpdate();
+                            }
+
+                            // Live update as values are edited.
+                            if (changed) {
+                                queueProceduralUpdate();
+                            }
+
+                            ImGui::TreePop();
+                        }
+
+                        ImGui::TreePop(); 
+                    }                    
+
+
+                    std::string geometryNodeLabel =
+                        "Current Geometry: " + comp.geometryName + "###GeometryNode_" +
+                        std::to_string(it->id) + "_" + std::to_string(e);
+
+                    if (ImGui::TreeNode(geometryNodeLabel.c_str())) {
                         static int geoTypeIdx = 0;
                         const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Bowl", "Terrain" };
                         ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
@@ -386,7 +422,9 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                                 ImGui::EndCombo();
                             }
                             ImGui::SameLine();
-                            if (ImGui::Button(("Refresh##ModelsProp" + std::to_string(it->id)).c_str())) RefreshModelList();
+                            if (ImGui::Button(("Refresh##ModelsProp" + std::to_string(it->id) + "_" + std::to_string(e)).c_str())) {
+                                RefreshModelList();
+                            }
                         }
 
                         ImGui::Spacing();
@@ -399,6 +437,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                             m_GeometryRequests.push_back(req);
                         }
                         ImGui::PopStyleColor();
+
                         ImGui::TreePop();
                     }
                     ImGui::TreePop();
@@ -724,6 +763,25 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     }
                     else {
                         ImGui::DragFloat3("Half Extents", &comp.halfExtents.x, 0.1f, 0.1f, 1000.0f);
+                    }
+
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("Region Debug");
+                    ImGui::Checkbox("Show Region", &comp.showRegionDebug);
+                    ImGui::ColorEdit4("Region Color", &comp.regionDebugColor.x, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_Float);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Randomise##RegionColorWnd")) {
+                        static std::mt19937 rng(std::random_device{}());
+                        static std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);
+                        comp.regionDebugColor.r = colorDist(rng);
+                        comp.regionDebugColor.g = colorDist(rng);
+                        comp.regionDebugColor.b = colorDist(rng);
+                        comp.regionDebugColor.a = 0.25f;
+                    }
+
+                    bool regionsOnly = scene.GetRegionsOnlyDebugView();
+                    if (ImGui::Checkbox("Regions Only (Global)", &regionsOnly)) {
+                        scene.SetRegionsOnlyDebugView(regionsOnly);
                     }
 
                     // 3. Live List of Assigned Objects!

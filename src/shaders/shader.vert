@@ -27,6 +27,8 @@ layout(push_constant) uniform PushConstantObject {
     int receiveShadows; 
     int layerMask;      
     float burnFactor;
+    int debugOverlay;
+    vec4 debugColor;
 } pco;
 
 layout(location = 0) in vec3 inPosition;

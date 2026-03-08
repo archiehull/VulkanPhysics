@@ -1,12 +1,16 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 #include "Renderer.h"
+#include "../geometry/GeometryGenerator.h"
 #include "../vulkan/Vertex.h"
 #include "../vulkan/VulkanUtils.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <stdexcept>
 #include <iostream>
 #include <array>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 
 #include "imgui.h"
 #include "backends/imgui_impl_vulkan.h"
@@ -85,6 +89,7 @@ void Renderer::Initialize() {
 
     // --- Create Shared Particle Pipelines ---
     CreateParticlePipelines();
+    CreateLayerRegionDebugGeometries();
 
     CreatePipeline(); // Main scene object pipeline
     CreateSyncObjects();
@@ -354,21 +359,32 @@ void Renderer::CreateTextureDescriptorPool() {
 void Renderer::RegisterProceduralTexture(const std::string& name, const std::function<void(Texture&)>& generator) {
     proceduralGenerators[name] = generator;
 
+    // Generate new texture data
     auto tex = std::make_unique<Texture>(
         device->GetDevice(), device->GetPhysicalDevice(),
         commandBuffer->GetCommandPool(), device->GetGraphicsQueue());
 
     generator(*tex);
 
-    VkDescriptorSet descSet;
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = textureDescriptorPool;
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &textureSetLayout;
+    // Reuse descriptor set if this procedural texture already exists
+    auto existingIt = textureCache.find(name);
+    const bool isUpdate = (existingIt != textureCache.end());
 
-    if (vkAllocateDescriptorSets(device->GetDevice(), &allocInfo, &descSet) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate descriptor set for procedural texture!");
+    VkDescriptorSet descSet = VK_NULL_HANDLE;
+
+    if (isUpdate) {
+        descSet = existingIt->second.descriptorSet;
+    }
+    else {
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = textureDescriptorPool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &textureSetLayout;
+
+        if (vkAllocateDescriptorSets(device->GetDevice(), &allocInfo, &descSet) != VK_SUCCESS) {
+            throw std::runtime_error("failed to allocate descriptor set for procedural texture!");
+        }
     }
 
     VkDescriptorImageInfo imageInfo{};
@@ -386,8 +402,19 @@ void Renderer::RegisterProceduralTexture(const std::string& name, const std::fun
 
     vkUpdateDescriptorSets(device->GetDevice(), 1, &descriptorWrite, 0, nullptr);
 
-    textureCache[name] = { std::move(tex), descSet };
-    std::cout << "Procedural Texture Registered: " << name << std::endl;
+    if (isUpdate) {
+        // Replace texture while keeping descriptor set
+        if (existingIt->second.texture) {
+            existingIt->second.texture->Cleanup();
+        }
+        existingIt->second.texture = std::move(tex);
+        existingIt->second.descriptorSet = descSet;
+    }
+    else {
+        textureCache[name] = { std::move(tex), descSet };
+    }
+
+    //std::cout << "Procedural Texture " << (isUpdate ? "Updated: " : "Registered: ") << name << std::endl;
 }
 
 void Renderer::CreateDefaultTexture() {
@@ -663,6 +690,9 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
         pco.shadingMode = renderComp.shadingMode;
         pco.receiveShadows = renderComp.receiveShadows ? 1 : 0;
         pco.layerMask = renderComp.layerMask;
+        pco.burnFactor = 0.0f;
+        pco.debugOverlay = 0;
+        pco.debugColor = glm::vec4(0.0f);
 
         vkCmdPushConstants(cmd, graphicsPipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
 
@@ -749,6 +779,8 @@ void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLay
         pco.receiveShadows = renderComp.receiveShadows ? 1 : 0;
         pco.layerMask = renderComp.layerMask;
         pco.burnFactor = burnFactor;
+        pco.debugOverlay = 0;
+        pco.debugColor = glm::vec4(0.0f);
 
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
 
@@ -796,6 +828,73 @@ void Renderer::CreateParticlePipelines() {
 
     particlePipelineAlpha = std::make_unique<GraphicsPipeline>(device->GetDevice(), config);
     particlePipelineAlpha->Create();
+}
+
+void Renderer::CreateLayerRegionDebugGeometries() {
+    auto sphere = GeometryGenerator::CreateSphere(device->GetDevice(), device->GetPhysicalDevice(), 16, 24, 0.5f);
+    auto box = GeometryGenerator::CreateCube(device->GetDevice(), device->GetPhysicalDevice());
+
+    layerRegionSphereGeometry = std::shared_ptr<Geometry>(std::move(sphere));
+    layerRegionBoxGeometry = std::shared_ptr<Geometry>(std::move(box));
+}
+
+void Renderer::DrawLayerRegionDebugOverlays(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, VkPipelineLayout layout, bool forceShowAll) {
+    if (!layerRegionSphereGeometry || !layerRegionBoxGeometry) {
+        return;
+    }
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetPipeline());
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        layout,
+        0,
+        1,
+        &descriptorSet->GetDescriptorSets()[currentFrame],
+        0,
+        nullptr
+    );
+
+    const VkDescriptorSet textureSet = defaultTextureResource.descriptorSet;
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, 1, &textureSet, 0, nullptr);
+
+    Registry& reg = scene.GetRegistry();
+    static const auto glowStart = std::chrono::steady_clock::now();
+    const float elapsedSeconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - glowStart).count();
+
+    for (Entity e = 0; e < reg.GetEntityCount(); ++e) {
+        if (!reg.HasComponent<LayerRegionComponent>(e) || !reg.HasComponent<TransformComponent>(e)) continue;
+
+        auto& regionComp = reg.GetComponent<LayerRegionComponent>(e);
+        if (!forceShowAll && !regionComp.showRegionDebug) continue;
+
+        auto& transformComp = reg.GetComponent<TransformComponent>(e);
+
+        glm::vec3 debugScale = (regionComp.volumeType == 0)
+            ? glm::vec3(regionComp.radius * 2.0f)
+            : regionComp.halfExtents * 2.0f;
+
+        PushConstantObject pco{};
+        pco.model = transformComp.matrix * glm::scale(glm::mat4(1.0f), debugScale);
+        pco.shadingMode = 1;
+        pco.receiveShadows = 0;
+        pco.layerMask = SceneLayers::ALL;
+        pco.burnFactor = 0.0f;
+        pco.debugOverlay = 1;
+
+        const float glow = 0.75f + 0.25f * std::sin(elapsedSeconds * 3.0f + static_cast<float>(e) * 0.65f);
+        pco.debugColor = regionComp.regionDebugColor;
+        pco.debugColor.r = std::min(pco.debugColor.r * glow, 1.0f);
+        pco.debugColor.g = std::min(pco.debugColor.g * glow, 1.0f);
+        pco.debugColor.b = std::min(pco.debugColor.b * glow, 1.0f);
+        pco.debugColor.a = std::clamp(regionComp.regionDebugColor.a * (0.6f + 0.4f * glow), 0.05f, 1.0f);
+
+        vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
+
+        Geometry* geometry = (regionComp.volumeType == 0) ? layerRegionSphereGeometry.get() : layerRegionBoxGeometry.get();
+        geometry->Bind(cmd);
+        geometry->Draw(cmd);
+    }
 }
 
 void Renderer::SetupSceneParticles(Scene& scene) const {
@@ -911,18 +1010,24 @@ void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& sc
 
     BeginRenderPass(cmd, renderPass->GetRenderPass(), renderPass->GetOffScreenFramebuffer(), clearValues);
 
-    if (skyboxPass) {
+    const bool regionsOnly = scene.GetRegionsOnlyDebugView();
+
+    if (!regionsOnly && skyboxPass) {
         skyboxPass->Draw(cmd, scene, currentFrame, descriptorSet->GetDescriptorSets()[currentFrame]);
     }
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetPipeline());
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
 
-    DrawSceneObjects(cmd, scene, graphicsPipeline->GetLayout(), true, false, viewMask, insideRegionMask);
+    if (!regionsOnly) {
+        DrawSceneObjects(cmd, scene, graphicsPipeline->GetLayout(), true, false, viewMask, insideRegionMask);
 
-    for (const auto& sys : scene.GetParticleSystems()) {
-        sys->Draw(cmd, descriptorSet->GetDescriptorSets()[currentFrame], currentFrame);
+        for (const auto& sys : scene.GetParticleSystems()) {
+            sys->Draw(cmd, descriptorSet->GetDescriptorSets()[currentFrame], currentFrame);
+        }
     }
+
+    DrawLayerRegionDebugOverlays(cmd, currentFrame, scene, graphicsPipeline->GetLayout(), regionsOnly);
 
     vkCmdEndRenderPass(cmd);
 }
@@ -1042,6 +1147,15 @@ void Renderer::Cleanup() {
     if (particlePipelineAlpha) {
         particlePipelineAlpha->Cleanup();
         particlePipelineAlpha.reset();
+    }
+
+    if (layerRegionSphereGeometry) {
+        layerRegionSphereGeometry->Cleanup();
+        layerRegionSphereGeometry.reset();
+    }
+    if (layerRegionBoxGeometry) {
+        layerRegionBoxGeometry->Cleanup();
+        layerRegionBoxGeometry.reset();
     }
 
     if (syncObjects) {

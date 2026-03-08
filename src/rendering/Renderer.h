@@ -15,6 +15,7 @@
 #include "../rendering/Texture.h"
 #include "../rendering/ShadowPass.h"
 #include "ParticleSystem.h"
+#include "../geometry/Geometry.h"
 
 #include <memory>
 #include <map>
@@ -75,6 +76,9 @@ private:
     // Shared Particle Resources
     std::unique_ptr<GraphicsPipeline> particlePipelineAdditive;
     std::unique_ptr<GraphicsPipeline> particlePipelineAlpha;
+
+    std::shared_ptr<Geometry> layerRegionSphereGeometry;
+    std::shared_ptr<Geometry> layerRegionBoxGeometry;
 
     // --- 2. Vulkan Handles (Ptr/64-bit) ---
     VkImage refractionImage = VK_NULL_HANDLE;
@@ -142,6 +146,8 @@ private:
     void DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int viewMask, int insideRegionMask);
     void RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
     void RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
+    void CreateLayerRegionDebugGeometries();
+    void DrawLayerRegionDebugOverlays(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, VkPipelineLayout layout, bool forceShowAll);
 
     void CopyOffScreenToSwapChain(VkCommandBuffer cmd, uint32_t imageIndex) const;
     void CleanupOffScreenResources();

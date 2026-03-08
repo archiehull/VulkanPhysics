@@ -37,6 +37,8 @@ layout(push_constant) uniform PushConstantObject {
     int receiveShadows;
     int layerMask;
     float burnFactor;
+    int debugOverlay;
+    vec4 debugColor;
 } pco;
 
 layout(set = 0, binding = 1) uniform sampler2D shadowMap;
@@ -71,6 +73,11 @@ float ShadowCalculation(vec4 fragPosLightSpace) {
 }
 
 void main() {
+    if (pco.debugOverlay == 1) {
+        outColor = vec4(pco.debugColor.rgb, pco.debugColor.a);
+        return;
+    }
+
     // --- 1. SCREEN-SPACE REFRACTION MODE ---
     if (pco.shadingMode == 3) {
         vec3 I = normalize(fragPos - ubo.viewPos);

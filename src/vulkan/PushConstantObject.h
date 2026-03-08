@@ -7,4 +7,6 @@ struct PushConstantObject {
     alignas(4) int receiveShadows;
     alignas(4) int layerMask;
     alignas(4) float burnFactor; // 0.0 = Normal, 1.0 = Fully Burnt
+    alignas(4) int debugOverlay;
+    alignas(16) glm::vec4 debugColor;
 };

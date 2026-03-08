@@ -179,6 +179,9 @@ public:
 
     Entity AddLayerRegion(const std::string& name, int layerBit, int volumeType, float radius, const glm::vec3& halfExtents, const glm::vec3& position);
 
+    void SetRegionsOnlyDebugView(bool enabled) { m_RegionsOnlyDebugView = enabled; }
+    bool GetRegionsOnlyDebugView() const { return m_RegionsOnlyDebugView; }
+
 private:
     Registry m_Registry;
     std::vector<std::unique_ptr<ISystem>> m_Systems;
@@ -213,4 +216,6 @@ private:
     uint32_t framesInFlight = 2;
 
     std::vector<std::unique_ptr<ParticleSystem>> particleSystems;
+
+    bool m_RegionsOnlyDebugView = false;
 };

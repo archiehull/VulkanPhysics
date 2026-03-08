@@ -215,4 +215,7 @@ struct LayerRegionComponent {
     int volumeType = 0; // 0 = Sphere, 1 = Box (AABB)
     float radius = 10.0f;
     glm::vec3 halfExtents = glm::vec3(5.0f, 5.0f, 5.0f);
+
+    bool showRegionDebug = false;
+    glm::vec4 regionDebugColor = glm::vec4(0.5f, 0.8f, 1.0f, 0.25f);
 };

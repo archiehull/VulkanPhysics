@@ -36,6 +36,11 @@ Entity Scene::AddLayerRegion(const std::string& name, int layerBit, int volumeTy
     region.volumeType = volumeType;
     region.radius = radius;
     region.halfExtents = halfExtents;
+
+    static std::mt19937 rng(std::random_device{}());
+    static std::uniform_real_distribution<float> colorDist(0.2f, 1.0f);
+    region.regionDebugColor = glm::vec4(colorDist(rng), colorDist(rng), colorDist(rng), 0.25f);
+
     m_Registry.AddComponent<LayerRegionComponent>(entity, region);
 
     // Sync config-defined regions into global layer UI state
@@ -57,6 +62,7 @@ void Scene::CreateEnvironment(const std::string& name) {
 
     if (m_EnvironmentEntity != MAX_ENTITIES) {
         m_EnvironmentEntity = MAX_ENTITIES;
+    m_RegionsOnlyDebugView = false;
     }
 
     m_EnvironmentEntity = m_Registry.CreateEntity();
