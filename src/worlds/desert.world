@@ -1,5 +1,7 @@
 [Settings]
 WindowSize 800 600
+VSync false
+MaxFPS 144
 
 
 [Scene]
@@ -34,7 +36,7 @@ Camera FreeRoamCam FreeRoam Camera2 0.0 -75.0 0.0
 Camera CactusCam RandomTarget Camera3 20.0 10.0 20.0 15.0 cactus
 Camera MainCam FreeRoam Camera4 0.0 20.0 40.0
 
-ProceduralObjectCount 25
+ProceduralObjectCount 15
 
 # Corrected Cactus: Moving corrective rotation to Z-axis (0 0 -90) to prevent yaw skewing
 ProceduralPlant models/cactus.obj textures/cactus.jpg 7.0 0.01 0.01 0.01 0.02 0.02 0.02 -90.0 0.0 0.0 true

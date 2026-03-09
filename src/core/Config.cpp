@@ -375,6 +375,17 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
         }
         // --- Global Settings ---
         else if (key == "WindowSize") ss >> config.windowWidth >> config.windowHeight;
+        else if (key == "VSync") {
+            std::string value;
+            ss >> value;
+            config.vsync = ParseBoolToken(value);
+        }
+        else if (key == "MaxFPS") {
+            ss >> config.maxFps;
+            if (config.maxFps < 0) {
+                config.maxFps = 0;
+            }
+        }
         else if (key == "EnableDefaultDeathWall") {
             std::string value;
             ss >> value;

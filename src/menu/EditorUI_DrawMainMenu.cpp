@@ -48,6 +48,35 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         }
         ImGui::Separator();
 
+        ImGui::TextDisabled("Performance");
+        if (ImGui::Checkbox("VSync", &m_VSyncEnabled)) {
+            m_PerformanceSettingsChanged = true;
+        }
+
+        if (ImGui::Checkbox("Enable FPS Cap", &m_FpsCapEnabled)) {
+            m_PerformanceSettingsChanged = true;
+        }
+
+        if (!m_FpsCapEnabled) {
+            ImGui::BeginDisabled();
+        }
+
+        if (ImGui::InputInt("Max FPS", &m_MaxFps)) {
+            if (m_FpsCapEnabled && m_MaxFps < 1) {
+                m_MaxFps = 1;
+            }
+            else if (!m_FpsCapEnabled && m_MaxFps < 0) {
+                m_MaxFps = 0;
+            }
+            m_PerformanceSettingsChanged = true;
+        }
+
+        if (!m_FpsCapEnabled) {
+            ImGui::EndDisabled();
+        }
+
+        ImGui::Separator();
+
         // --- Layer Manager ---
         if (ImGui::BeginMenu("Layer Properties")) {
             Registry& registry = scene.GetRegistry();

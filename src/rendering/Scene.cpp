@@ -38,6 +38,7 @@ float ComputeFlickerPresetValue(int preset, float t, float phase) {
         return 1.0f;
     }
 }
+
 }
 
 // ECS Systems
@@ -220,12 +221,9 @@ void Scene::DeleteEntity(Entity entity) {
     if (m_Registry.HasComponent<RenderComponent>(entity)) {
         auto& render = m_Registry.GetComponent<RenderComponent>(entity);
         if (render.geometry) {
-            // 1. Wait for the GPU to finish before destroying buffers
-            vkDeviceWaitIdle(device);
-
-            // 2. (Optional but recommended) Only cleanup if no other entities are sharing this geometry
+            // Defer GPU resource destruction to avoid hard stalls in runtime deletion paths.
             if (render.geometry.use_count() == 1) {
-                render.geometry->Cleanup();
+                m_DeferredGeometryCleanup.push_back(std::move(render.geometry));
             }
         }
         linkedShadow = render.simpleShadowEntity;
@@ -270,12 +268,9 @@ void Scene::RemoveRenderComponent(Entity entity) {
     const Entity shadowEntity = render.simpleShadowEntity;
 
     if (render.geometry) {
-        // Wait for the GPU to finish before destroying buffers
-        vkDeviceWaitIdle(device);
-
-        // Only cleanup if no other entities are sharing this geometry
+        // Defer GPU resource destruction to avoid hard stalls in runtime deletion paths.
         if (render.geometry.use_count() == 1) {
-            render.geometry->Cleanup();
+            m_DeferredGeometryCleanup.push_back(std::move(render.geometry));
         }
     }
 
@@ -1086,7 +1081,9 @@ void Scene::Clear() {
         if (m_Registry.HasComponent<RenderComponent>(e)) {
             auto& renderComp = m_Registry.GetComponent<RenderComponent>(e);
             if (renderComp.geometry) {
-                renderComp.geometry->Cleanup();
+                if (renderComp.geometry.use_count() == 1) {
+                    m_DeferredGeometryCleanup.push_back(std::move(renderComp.geometry));
+                }
             }
         }
     }
@@ -1099,6 +1096,8 @@ void Scene::Clear() {
     m_RenderableEntities.clear();
     m_LightEntities.clear();
     particleSystems.clear();
+
+    FlushDeferredGeometryCleanup();
 
     //// 1. Recreate Environment Entity
     //m_EnvironmentEntity = m_Registry.CreateEntity();
@@ -1113,6 +1112,20 @@ void Scene::Clear() {
     //m_EntityMap["GlobalDustCloud"] = dustEntity;
 
     m_EnvironmentEntity = MAX_ENTITIES;
+}
+
+void Scene::FlushDeferredGeometryCleanup() {
+    if (m_DeferredGeometryCleanup.empty()) {
+        return;
+    }
+
+    vkDeviceWaitIdle(device);
+    for (auto& geometry : m_DeferredGeometryCleanup) {
+        if (geometry) {
+            geometry->Cleanup();
+        }
+    }
+    m_DeferredGeometryCleanup.clear();
 }
 
 void Scene::SetObjectTransform(const std::string& name, const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale) {

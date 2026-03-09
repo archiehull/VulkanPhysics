@@ -181,6 +181,8 @@ struct AppConfig {
     int windowWidth = 1000;
     int windowHeight = 750;
     bool enableDefaultDeathWall = true;
+    bool vsync = false;
+    int maxFps = 144;
 
 
     int proceduralObjectCount = 5;

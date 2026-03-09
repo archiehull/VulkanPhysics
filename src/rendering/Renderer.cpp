@@ -306,7 +306,7 @@ void Renderer::DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& v
 }
 
 void Renderer::CreateShadowPass() {
-    shadowPass = std::make_unique<ShadowPass>(device, 16384, 16384);
+    shadowPass = std::make_unique<ShadowPass>(device, 4096, 4096);
     shadowPass->Initialize(descriptorSet->GetLayout());
 }
 
@@ -320,6 +320,30 @@ void Renderer::CreateUniformBuffers() {
         uniformBuffers[i]->CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         vkMapMemory(device->GetDevice(), uniformBuffers[i]->GetBufferMemory(), 0, bufferSize, 0, &uniformBuffersMapped[i]);
     }
+}
+
+bool Renderer::ShouldRenderRefractionPass(Scene& scene, int viewMask, int insideRegionMask) const {
+    if (scene.GetRegionsOnlyDebugView()) {
+        return false;
+    }
+
+    Registry& reg = scene.GetRegistry();
+    for (Entity e : scene.GetRenderableEntities()) {
+        if (!reg.HasComponent<RenderComponent>(e)) continue;
+        const auto& renderComp = reg.GetComponent<RenderComponent>(e);
+
+        if (!renderComp.visible || !renderComp.geometry) continue;
+        if (renderComp.shadingMode != 3) continue;
+
+        const bool includedByView = (renderComp.layerMask & viewMask) != 0;
+        if (!includedByView) continue;
+
+        if (renderComp.onlyInRegionMask != 0 && (renderComp.onlyInRegionMask & insideRegionMask) == 0) continue;
+
+        return true;
+    }
+
+    return false;
 }
 
 void Renderer::CreateTextureDescriptorSetLayout() {
@@ -987,8 +1011,10 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex,
     // --- 1. Render Shadow Pass ---
     RenderShadowMap(cmd, currentFrame, scene, viewMask, insideRegionMask);
 
-    // --- 2. Render Refraction Pass ---
-    RenderRefractionPass(cmd, currentFrame, scene, viewMask, insideRegionMask);
+    // --- 2. Render Refraction Pass (only when needed) ---
+    if (ShouldRenderRefractionPass(scene, viewMask, insideRegionMask)) {
+        RenderRefractionPass(cmd, currentFrame, scene, viewMask, insideRegionMask);
+    }
 
     // --- 3. Render Main Scene ---
     RenderScene(cmd, currentFrame, scene, viewMask, insideRegionMask);

@@ -5,11 +5,12 @@
 #include <limits>
 #include <array>
 
-VulkanSwapChain::VulkanSwapChain(VkDevice deviceArg, VkPhysicalDevice physicalDeviceArg, VkSurfaceKHR surfaceArg, GLFWwindow* windowArg)
+VulkanSwapChain::VulkanSwapChain(VkDevice deviceArg, VkPhysicalDevice physicalDeviceArg, VkSurfaceKHR surfaceArg, GLFWwindow* windowArg, bool enableVsyncArg)
     : device(deviceArg),
     physicalDevice(physicalDeviceArg),
     surface(surfaceArg),
     window(windowArg),
+    enableVsync(enableVsyncArg),
     swapChainImageFormat(VK_FORMAT_UNDEFINED),
     swapChainExtent{ 0, 0 } {
 }
@@ -143,11 +144,22 @@ VkSurfaceFormatKHR VulkanSwapChain::chooseSwapSurfaceFormat(const std::vector<Vk
 }
 
 VkPresentModeKHR VulkanSwapChain::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) const {
+    if (enableVsync) {
+        return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
     for (const auto& availablePresentMode : availablePresentModes) {
         if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return availablePresentMode;
         }
     }
+
+    for (const auto& availablePresentMode : availablePresentModes) {
+        if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+            return availablePresentMode;
+        }
+    }
+
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 

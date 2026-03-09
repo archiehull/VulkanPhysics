@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <cmath>
 #include <algorithm>
+#include <thread>
+#include <limits>
 
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
@@ -12,6 +14,13 @@
 #include "../geometry/OBJLoader.h"
 #include "../geometry/SJGLoader.h"
 #include "../systems/CameraSystem.h"
+
+namespace {
+    constexpr bool kSceneDebug = false;
+    constexpr bool kPerfDebug = false;
+    constexpr float kPerfLogIntervalSeconds = 1.0f;
+    constexpr float kPerfHitchThresholdMs = 20.0f;
+}
 
 // TODO:
 // refactor and decouple scene class to entity component system
@@ -80,7 +89,8 @@ void Application::InitVulkan() {
         vulkanDevice->GetDevice(),
         vulkanDevice->GetPhysicalDevice(),
         vulkanContext->GetSurface(),
-        window->GetGLFWWindow()
+        window->GetGLFWWindow(),
+        config.vsync
     );
     vulkanSwapChain->Create(vulkanDevice->GetQueueFamilies());
     vulkanSwapChain->CreateImageViews();
@@ -113,7 +123,8 @@ void Application::InitVulkan() {
 
     // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/worlds/", "physicstest1");
+    editorUI->Initialize("src/worlds/", "desert");
+    editorUI->SetPerformanceSettings(config.vsync, config.maxFps);
 
     for (const auto& cam : config.customCameras) {
         camNames.push_back(cam.name);
@@ -136,6 +147,13 @@ void Application::LoadScene(const std::string& scenePath) {
 
     // 3. Load new configuration
     config = ConfigLoader::Load(scenePath);
+    editorUI->SetPerformanceSettings(config.vsync, config.maxFps);
+
+    if (vulkanSwapChain && vulkanSwapChain->IsVSyncEnabled() != config.vsync) {
+        vulkanSwapChain->SetVSyncEnabled(config.vsync);
+        RecreateSwapChain();
+    }
+
     auto activeBindings = inputManager->LoadFromBindings(config.inputBindings);
     editorUI->SetInputBindings(activeBindings);
 
@@ -165,7 +183,9 @@ void Application::LoadScene(const std::string& scenePath) {
         renderer->SetupSceneParticles(*scene);
     }
 
-    std::cout << "Loaded Scene: " << scenePath << std::endl;
+    if (kSceneDebug) {
+        std::cout << "Loaded Scene: " << scenePath << std::endl;
+    }
 }
 
 
@@ -216,7 +236,9 @@ void Application::SetupScene() {
                 tex.GenerateSolidColor(texCfg.color1);
                 });
         }
-        std::cout << "Generated Texture: " << texCfg.name << " (" << texCfg.type << ")" << std::endl;
+        if (kSceneDebug) {
+            std::cout << "Generated Texture: " << texCfg.name << " (" << texCfg.type << ")" << std::endl;
+        }
     }
 
     // 2. Setup Procedural Objects (Vegetation)
@@ -242,7 +264,9 @@ void Application::SetupScene() {
     // 3. Process Explicit Scene Objects
     for (const auto& objCfg : config.sceneObjects) {
         std::string setupPhase = "Begin";
-        std::cout << "[SetupScene] Object Start: '" << objCfg.name << "' type='" << objCfg.type << "'" << std::endl;
+        if (kSceneDebug) {
+            std::cout << "[SetupScene] Object Start: '" << objCfg.name << "' type='" << objCfg.type << "'" << std::endl;
+        }
 
         try {
 
@@ -250,7 +274,7 @@ void Application::SetupScene() {
         setupPhase = "Geometry Creation";
         if (objCfg.type == "Terrain") {
             // Params: x=Radius, y=HeightScale, z=NoiseFreq
-            scene->AddTerrain(objCfg.name, objCfg.params.x, 512, 512, objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
+            scene->AddTerrain(objCfg.name, objCfg.params.x, 256, 256, objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
 
             // Update procedural generation targets
             terrainRadius = objCfg.params.x;
@@ -264,11 +288,11 @@ void Application::SetupScene() {
         }
         else if (objCfg.type == "Sphere") {
             // Params: x=Radius
-            scene->AddSphere(objCfg.name, 16, 32, objCfg.params.x, objCfg.position, objCfg.texturePath);
+            scene->AddSphere(objCfg.name, 12, 24, objCfg.params.x, objCfg.position, objCfg.texturePath);
         }
         else if (objCfg.type == "Bowl") {
             // Params: x=Radius
-            scene->AddBowl(objCfg.name, objCfg.params.x, 32, 16, objCfg.position, objCfg.texturePath);
+            scene->AddBowl(objCfg.name, objCfg.params.x, 24, 12, objCfg.position, objCfg.texturePath);
         }
         else if (objCfg.type == "Cube") {
             scene->AddCube(objCfg.name, objCfg.position, objCfg.scale, objCfg.texturePath);
@@ -301,11 +325,15 @@ void Application::SetupScene() {
             spawner.spawnMass = objCfg.spawnMass;
 
             scene->GetRegistry().AddComponent<ObjectSpawnerComponent>(spawnerEntity, spawner);
-            std::cout << "[SetupScene] Object Success: '" << objCfg.name << "' (Spawner)" << std::endl;
+            if (kSceneDebug) {
+                std::cout << "[SetupScene] Object Success: '" << objCfg.name << "' (Spawner)" << std::endl;
+            }
             continue;
         }
         if (objCfg.type == "Environment") {
-            std::cout << "[SetupScene] Object Skip: '" << objCfg.name << "' (Environment handled earlier)" << std::endl;
+            if (kSceneDebug) {
+                std::cout << "[SetupScene] Object Skip: '" << objCfg.name << "' (Environment handled earlier)" << std::endl;
+            }
             continue;
         }
         else if (objCfg.type == "DustCloud") {
@@ -458,7 +486,9 @@ void Application::SetupScene() {
             }
         }
 
-        std::cout << "[SetupScene] Object Success: '" << objCfg.name << "'" << std::endl;
+        if (kSceneDebug) {
+            std::cout << "[SetupScene] Object Success: '" << objCfg.name << "'" << std::endl;
+        }
         }
         catch (const std::exception& e) {
             std::cerr << "[SetupScene] Object Failed: '" << objCfg.name << "' type='" << objCfg.type
@@ -486,7 +516,9 @@ void Application::SetupScene() {
             regionCfg.halfExtents,
             regionCfg.position
         );
-        std::cout << "Loaded Layer Region: " << regionCfg.name << " (Bit: " << regionCfg.assignedLayerBit << ")" << std::endl;
+        if (kSceneDebug) {
+            std::cout << "Loaded Layer Region: " << regionCfg.name << " (Bit: " << regionCfg.assignedLayerBit << ")" << std::endl;
+        }
     }
 
     // 4. Generate Procedural Vegetation
@@ -522,10 +554,33 @@ void Application::RecreateSwapChain() {
 }
 
 void Application::MainLoop() {
+    bool hasPendingVSyncApply = false;
+    bool pendingVSync = config.vsync;
+
+    float perfLogTimer = 0.0f;
+    int perfFrameCount = 0;
+    float perfMinDt = std::numeric_limits<float>::max();
+    float perfMaxDt = 0.0f;
+    double perfUpdateCpuMsAccum = 0.0;
+    double perfDrawCpuMsAccum = 0.0;
+    int perfHitchCount = 0;
+
     while (!window->ShouldClose()) {
+        if (hasPendingVSyncApply && vulkanSwapChain) {
+            config.vsync = pendingVSync;
+            vulkanSwapChain->SetVSyncEnabled(config.vsync);
+            RecreateSwapChain();
+            hasPendingVSyncApply = false;
+        }
+
+        const auto frameStart = std::chrono::high_resolution_clock::now();
+
         const auto currentTime = std::chrono::high_resolution_clock::now();
         deltaTime = std::chrono::duration<float>(currentTime - lastFrameTime).count();
         lastFrameTime = currentTime;
+
+        // Clamp simulation delta to avoid huge catch-up spikes when VSync/frame pacing misses a refresh interval.
+        const float simDeltaTime = std::min(deltaTime, 1.0f / 30.0f);
 
         window->PollEvents();
         ProcessInput();
@@ -551,6 +606,17 @@ void Application::MainLoop() {
         // If the user clicked a scene in the "Load Scene" tab, switch now
         if (!nextScene.empty()) {
             LoadScene(nextScene);
+        }
+
+        bool requestedVsync = config.vsync;
+        int requestedMaxFps = config.maxFps;
+        if (editorUI->ConsumePerformanceSettingsRequest(requestedVsync, requestedMaxFps)) {
+            config.maxFps = std::max(0, requestedMaxFps);
+
+            if (config.vsync != requestedVsync) {
+                pendingVSync = requestedVsync;
+                hasPendingVSyncApply = true;
+            }
         }
 
         ImGui::Render();
@@ -619,14 +685,14 @@ void Application::MainLoop() {
                     render.geometry = GeometryGenerator::CreateCube(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice());
                 }
                 else if (req.type == "Sphere") {
-                    render.geometry = GeometryGenerator::CreateSphere(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 16, 32, 1.0f);
+                    render.geometry = GeometryGenerator::CreateSphere(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 12, 24, 1.0f);
                 }
                 else if (req.type == "Bowl") {
-                    render.geometry = GeometryGenerator::CreateBowl(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 1.0f, 32, 16);
+                    render.geometry = GeometryGenerator::CreateBowl(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 1.0f, 24, 12);
                 }
                 else if (req.type == "Terrain") {
                     // Default to a small terrain patch
-                    render.geometry = GeometryGenerator::CreateTerrain(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 10.0f, 64, 64, 1.5f, 0.1f);
+                    render.geometry = GeometryGenerator::CreateTerrain(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 10.0f, 40, 40, 1.5f, 0.1f);
                 }
             }
         }
@@ -638,7 +704,7 @@ void Application::MainLoop() {
 
         if (!editorUI->IsPaused()) {
             // Normal running state
-            stepDelta = deltaTime * currentTimeScale;
+            stepDelta = simDeltaTime * currentTimeScale;
         }
         else if (editorUI->ConsumeStepRequest()) {
             // Manual step state - uses the custom step size multiplied by speed
@@ -656,10 +722,12 @@ void Application::MainLoop() {
         }
 
 
-        cameraController->Update(deltaTime, *scene, *inputManager);
+        const auto updateStart = std::chrono::high_resolution_clock::now();
+        cameraController->Update(simDeltaTime, *scene, *inputManager);
 
         // 4. Update the scene with the calculated delta
         scene->Update(stepDelta);
+        const auto updateEnd = std::chrono::high_resolution_clock::now();
 
         Entity activeCamEntity = cameraController->GetActiveCameraEntity();
 
@@ -677,10 +745,64 @@ void Application::MainLoop() {
 
             renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask, currentInsideRegionMask);
         }
+        const auto drawEnd = std::chrono::high_resolution_clock::now();
 
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 
         inputManager->Update();
+
+        if (!config.vsync && config.maxFps > 0) {
+            const auto targetFrameDuration = std::chrono::duration_cast<std::chrono::high_resolution_clock::duration>(
+                std::chrono::duration<double>(1.0 / static_cast<double>(config.maxFps))
+            );
+            const auto frameElapsed = std::chrono::high_resolution_clock::now() - frameStart;
+            if (frameElapsed < targetFrameDuration) {
+                std::this_thread::sleep_for(targetFrameDuration - frameElapsed);
+            }
+        }
+
+        if (kPerfDebug) {
+            const double updateCpuMs = std::chrono::duration<double, std::milli>(updateEnd - updateStart).count();
+            const double drawCpuMs = std::chrono::duration<double, std::milli>(drawEnd - updateEnd).count();
+            const double frameCpuMs = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - frameStart).count();
+
+            perfLogTimer += deltaTime;
+            perfFrameCount++;
+            perfMinDt = std::min(perfMinDt, deltaTime);
+            perfMaxDt = std::max(perfMaxDt, deltaTime);
+            perfUpdateCpuMsAccum += updateCpuMs;
+            perfDrawCpuMsAccum += drawCpuMs;
+
+            if (frameCpuMs > kPerfHitchThresholdMs) {
+                perfHitchCount++;
+            }
+
+            if (perfLogTimer >= kPerfLogIntervalSeconds && perfFrameCount > 0) {
+                const float avgFps = static_cast<float>(perfFrameCount) / perfLogTimer;
+                const float minFps = (perfMaxDt > 0.0f) ? (1.0f / perfMaxDt) : 0.0f;
+                const float maxFps = (perfMinDt > 0.0f) ? (1.0f / perfMinDt) : 0.0f;
+                const double avgUpdateCpuMs = perfUpdateCpuMsAccum / static_cast<double>(perfFrameCount);
+                const double avgDrawCpuMs = perfDrawCpuMsAccum / static_cast<double>(perfFrameCount);
+
+                std::cout << std::fixed << std::setprecision(2)
+                    << "[Perf] FPS(avg/min/max): " << avgFps << " / " << minFps << " / " << maxFps
+                    << " | CPUms(update/draw): " << avgUpdateCpuMs << " / " << avgDrawCpuMs
+                    << " | dt(ms): " << (deltaTime * 1000.0f)
+                    << " | entities: " << registry.GetEntityCount()
+                    << " | renderables: " << scene->GetRenderableEntities().size()
+                    << " | vsync: " << (config.vsync ? "ON" : "OFF")
+                    << " | hitches(>" << kPerfHitchThresholdMs << "ms): " << perfHitchCount
+                    << std::endl;
+
+                perfLogTimer = 0.0f;
+                perfFrameCount = 0;
+                perfMinDt = std::numeric_limits<float>::max();
+                perfMaxDt = 0.0f;
+                perfUpdateCpuMsAccum = 0.0;
+                perfDrawCpuMsAccum = 0.0;
+                perfHitchCount = 0;
+            }
+        }
     }
 
     renderer->WaitIdle();

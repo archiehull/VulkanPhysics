@@ -187,6 +187,8 @@ public:
     bool GetRegionsOnlyDebugView() const { return m_RegionsOnlyDebugView; }
 
 private:
+    void FlushDeferredGeometryCleanup();
+
     Registry m_Registry;
     std::vector<std::unique_ptr<ISystem>> m_Systems;
     std::unordered_map<std::string, Entity> m_EntityMap;
@@ -220,6 +222,7 @@ private:
     uint32_t framesInFlight = 2;
 
     std::vector<std::unique_ptr<ParticleSystem>> particleSystems;
+    std::vector<std::shared_ptr<Geometry>> m_DeferredGeometryCleanup;
 
     bool m_RegionsOnlyDebugView = false;
     float m_ElapsedTime = 0.0f;

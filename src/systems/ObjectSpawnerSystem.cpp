@@ -2,6 +2,7 @@
 #include "../rendering/Scene.h"
 #include "../core/Components.h"
 #include <algorithm>
+#include <cmath>
 #include <random>
 
 void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
@@ -36,7 +37,10 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
         const float interval = std::max(0.01f, spawner.spawnInterval);
         spawner.spawnTimer += deltaTime;
 
-        while (spawner.spawnTimer >= interval) {
+        constexpr int kMaxCatchUpSpawnsPerFrame = 4;
+        int spawnsThisFrame = 0;
+
+        while (spawner.spawnTimer >= interval && spawnsThisFrame < kMaxCatchUpSpawnsPerFrame) {
             if (spawner.maxSpawnsPerRun >= 0 && spawner.spawnedThisRun >= spawner.maxSpawnsPerRun) {
                 if (!spawner.alwaysOn) spawner.isRunning = false;
                 break;
@@ -49,6 +53,12 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
 
             spawner.spawnTimer -= interval;
             SpawnObjectFromSpawner(scene, e);
+            ++spawnsThisFrame;
+        }
+
+        if (spawner.spawnTimer > interval) {
+            // Prevent unbounded backlog: keep at most one interval of debt to smooth spawns over frames.
+            spawner.spawnTimer = std::fmod(spawner.spawnTimer, interval);
         }
     }
 }

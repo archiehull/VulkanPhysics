@@ -15,7 +15,7 @@ struct QueueFamilyIndices;
 
 class VulkanSwapChain final {
 public:
-    VulkanSwapChain(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, GLFWwindow* window);
+    VulkanSwapChain(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, GLFWwindow* window, bool enableVsync);
     ~VulkanSwapChain() = default;
 
     // Non-copyable to manage swapchain handle
@@ -33,12 +33,15 @@ public:
     const std::vector<VkImageView>& GetImageViews() const { return swapChainImageViews; }
     VkFormat GetImageFormat() const { return swapChainImageFormat; }
     const VkExtent2D& GetExtent() const { return swapChainExtent; }
+    bool IsVSyncEnabled() const { return enableVsync; }
+    void SetVSyncEnabled(bool enabled) { enableVsync = enabled; }
 
 private:
     VkDevice device;
     VkPhysicalDevice physicalDevice;
     VkSurfaceKHR surface;
     GLFWwindow* window;
+    bool enableVsync = true;
 
     VkSwapchainKHR swapChain = VK_NULL_HANDLE;
     std::vector<VkImage> swapChainImages;

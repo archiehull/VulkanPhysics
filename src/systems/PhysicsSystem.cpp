@@ -238,14 +238,14 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                     }
                 }
             }
+        }
+    }
 
     for (Entity e : pendingDelete) {
         if (!registry.HasComponent<PhysicsComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
             continue;
         }
         scene.DeleteEntity(e);
-    }
-        }
     }
 }
 

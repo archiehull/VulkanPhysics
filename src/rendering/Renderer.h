@@ -143,6 +143,7 @@ private:
     void BeginRenderPass(VkCommandBuffer cmd, VkRenderPass pass, VkFramebuffer fb, const std::vector<VkClearValue>& clearValues) const;
 
     void RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
+    bool ShouldRenderRefractionPass(Scene& scene, int viewMask, int insideRegionMask) const;
     void DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int viewMask, int insideRegionMask);
     void RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
     void RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);

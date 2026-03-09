@@ -72,6 +72,28 @@ public:
     void SetAvailableCameras(const std::vector<std::string>& cameras);
     std::string ConsumeCameraSwitchRequest();
 
+    void SetPerformanceSettings(bool vsyncEnabled, int maxFps) {
+        m_VSyncEnabled = vsyncEnabled;
+        m_FpsCapEnabled = (maxFps > 0);
+        if (maxFps > 0) {
+            m_MaxFps = maxFps;
+        }
+        else if (m_MaxFps <= 0) {
+            m_MaxFps = 144;
+        }
+    }
+
+    bool ConsumePerformanceSettingsRequest(bool& vsyncEnabled, int& maxFps) {
+        if (!m_PerformanceSettingsChanged) {
+            return false;
+        }
+
+        m_PerformanceSettingsChanged = false;
+        vsyncEnabled = m_VSyncEnabled;
+        maxFps = m_FpsCapEnabled ? ((m_MaxFps <= 0) ? 1 : m_MaxFps) : 0;
+        return true;
+    }
+
 private:
     void DrawMainMenuSection(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget, std::string& sceneToLoad, Entity& entityToDelete);
     void DrawLoadSceneMenu(std::string& sceneToLoad);
@@ -119,4 +141,9 @@ private:
     float m_StepSize = 0.0166f; // Default to ~60fps (16.6ms)
     bool m_StepRequested = false;
     bool m_RestartRequested = false;
+
+    bool m_VSyncEnabled = true;
+    bool m_FpsCapEnabled = true;
+    int m_MaxFps = 144;
+    bool m_PerformanceSettingsChanged = false;
 };
