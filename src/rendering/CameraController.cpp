@@ -218,11 +218,16 @@ void CameraController::SwitchCamera(const std::string& name, Scene& scene) {
     auto& registry = scene.GetRegistry();
 
     if (activeCameraEntity != MAX_ENTITIES) {
-        registry.GetComponent<CameraComponent>(activeCameraEntity).isActive = false;
+        if (registry.HasComponent<CameraComponent>(activeCameraEntity)) {
+            registry.GetComponent<CameraComponent>(activeCameraEntity).isActive = false;
+        }
     }
 
     activeCameraName = name;
     activeCameraEntity = cameraEntities[name];
+    if (!registry.HasComponent<CameraComponent>(activeCameraEntity)) {
+        return;
+    }
     registry.GetComponent<CameraComponent>(activeCameraEntity).isActive = true;
 
     const auto& meta = cameraMeta[name];

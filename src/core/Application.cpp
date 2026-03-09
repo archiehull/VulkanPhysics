@@ -3,6 +3,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <algorithm>
 
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
@@ -139,7 +140,17 @@ void Application::LoadScene(const std::string& scenePath) {
     editorUI->SetInputBindings(activeBindings);
 
     // 4. Re-setup scene objects
-    SetupScene();
+    try {
+        SetupScene();
+    }
+    catch (const std::exception& e) {
+        std::cerr << "[LoadScene] SetupScene failed for '" << scenePath << "' with error: " << e.what() << std::endl;
+        throw;
+    }
+    catch (...) {
+        std::cerr << "[LoadScene] SetupScene failed for '" << scenePath << "' with unknown error." << std::endl;
+        throw;
+    }
 
     // 5. Re-initialize systems that depend on the new config
     cameraController = std::make_unique<CameraController>(*scene, config.customCameras);
@@ -170,6 +181,9 @@ void Application::SetupScene() {
     SceneLayers::LayerNames[6] = "Layer G";
     SceneLayers::LayerNames[7] = "Layer H";
 
+    int envThermoPolicyMode = 0;
+    std::vector<std::string> envThermoPolicyEntities;
+
     // 1. Pass Global Configuration to Scene
     for (const auto& objCfg : config.sceneObjects) {
         if (objCfg.type == "Environment") {
@@ -178,6 +192,9 @@ void Application::SetupScene() {
             scene->SetSeasonConfig(objCfg.seasonConfig);
             scene->SetWeatherConfig(objCfg.weatherConfig);
             scene->SetSunHeatBonus(objCfg.sunHeatBonus);
+
+            envThermoPolicyMode = objCfg.thermoPolicyMode;
+            envThermoPolicyEntities = objCfg.thermoPolicyEntities;
             break;
         }
     }
@@ -224,8 +241,13 @@ void Application::SetupScene() {
 
     // 3. Process Explicit Scene Objects
     for (const auto& objCfg : config.sceneObjects) {
+        std::string setupPhase = "Begin";
+        std::cout << "[SetupScene] Object Start: '" << objCfg.name << "' type='" << objCfg.type << "'" << std::endl;
+
+        try {
 
         // --- Geometry Creation ---
+        setupPhase = "Geometry Creation";
         if (objCfg.type == "Terrain") {
             // Params: x=Radius, y=HeightScale, z=NoiseFreq
             scene->AddTerrain(objCfg.name, objCfg.params.x, 512, 512, objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
@@ -260,6 +282,7 @@ void Application::SetupScene() {
             scene->AddGrid(objCfg.name, (int)objCfg.params.x, (int)objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
         }
         else if (objCfg.type == "Spawner") {
+            setupPhase = "Spawner Initialization";
             Entity spawnerEntity = scene->CreateSpawnerEntity(objCfg.name, objCfg.position);
 
             ObjectSpawnerComponent spawner;
@@ -278,16 +301,20 @@ void Application::SetupScene() {
             spawner.spawnMass = objCfg.spawnMass;
 
             scene->GetRegistry().AddComponent<ObjectSpawnerComponent>(spawnerEntity, spawner);
+            std::cout << "[SetupScene] Object Success: '" << objCfg.name << "' (Spawner)" << std::endl;
             continue;
         }
         if (objCfg.type == "Environment") {
+            std::cout << "[SetupScene] Object Skip: '" << objCfg.name << "' (Environment handled earlier)" << std::endl;
             continue;
         }
         else if (objCfg.type == "DustCloud") {
+            setupPhase = "DustCloud Creation";
             scene->CreateDustCloud(objCfg.name, objCfg.position, objCfg.direction, objCfg.speed, objCfg.isActive);
         }
 
         // --- Apply Common Properties ---
+        setupPhase = "Apply Common Properties";
         // (We assume the object was just added to the back of the vector)
         scene->SetObjectTransform(objCfg.name, objCfg.position, objCfg.rotation, objCfg.scale);
         scene->SetObjectVisible(objCfg.name, objCfg.visible);
@@ -296,10 +323,64 @@ void Application::SetupScene() {
         scene->SetObjectShadingMode(objCfg.name, objCfg.shadingMode);
         scene->SetObjectLayerMask(objCfg.name, objCfg.layerMask);
         scene->SetObjectRegionVisibilityMasks(objCfg.name, objCfg.onlyInRegionMask);
-        scene->SetObjectCollision(objCfg.name, objCfg.hasCollision);
-        scene->SetObjectPhysics(objCfg.name, objCfg.isStatic, objCfg.mass);
-        scene->SetObjectPhysicsMaterial(objCfg.name, objCfg.restitution, objCfg.friction);
-        scene->SetObjectCollider(objCfg.name, objCfg.colliderType, objCfg.colliderRadius, objCfg.colliderNormal);        // --- Apply Light ---
+
+        auto& registry = scene->GetRegistry();
+        Entity entity = scene->GetEntityByName(objCfg.name);
+
+        if (entity != MAX_ENTITIES) {
+            setupPhase = "Attach Optional Components";
+            if (objCfg.hasPhysicsConfig && !registry.HasComponent<PhysicsComponent>(entity)) {
+                registry.AddComponent<PhysicsComponent>(entity, PhysicsComponent{});
+            }
+
+            if (objCfg.hasColliderConfig && !registry.HasComponent<ColliderComponent>(entity)) {
+                registry.AddComponent<ColliderComponent>(entity, ColliderComponent{});
+            }
+
+            bool thermoEnabled = false;
+            if (objCfg.hasThermoOverride) {
+                thermoEnabled = objCfg.thermoEnabled;
+            }
+            else {
+                if (envThermoPolicyMode == 0) {
+                    thermoEnabled = objCfg.isFlammable;
+                }
+                else {
+                    const bool listed = std::find(envThermoPolicyEntities.begin(), envThermoPolicyEntities.end(), objCfg.name) != envThermoPolicyEntities.end();
+                    if (envThermoPolicyMode == 1) {
+                        thermoEnabled = !listed;
+                    }
+                    else if (envThermoPolicyMode == 2) {
+                        thermoEnabled = listed;
+                    }
+                }
+            }
+
+            if (thermoEnabled && !registry.HasComponent<ThermoComponent>(entity)) {
+                ThermoComponent thermo;
+                thermo.isFlammable = objCfg.isFlammable;
+                registry.AddComponent<ThermoComponent>(entity, thermo);
+            }
+            else if (!thermoEnabled && registry.HasComponent<ThermoComponent>(entity)) {
+                registry.RemoveComponent<ThermoComponent>(entity);
+            }
+            else if (thermoEnabled && registry.HasComponent<ThermoComponent>(entity)) {
+                registry.GetComponent<ThermoComponent>(entity).isFlammable = objCfg.isFlammable;
+            }
+        }
+
+        if (objCfg.hasColliderConfig) {
+            setupPhase = "Configure Collider";
+            scene->SetObjectCollision(objCfg.name, objCfg.hasCollision);
+            scene->SetObjectCollider(objCfg.name, objCfg.colliderType, objCfg.colliderRadius, objCfg.colliderNormal);
+        }
+
+        if (objCfg.hasPhysicsConfig) {
+            setupPhase = "Configure Physics";
+            scene->SetObjectPhysics(objCfg.name, objCfg.isStatic, objCfg.mass);
+            scene->SetObjectPhysicsMaterial(objCfg.name, objCfg.restitution, objCfg.friction);
+        }
+        // --- Apply Light ---
 
         float collisionRadius = objCfg.colliderRadius;
         float collisionHeight = objCfg.colliderHeight;
@@ -313,9 +394,13 @@ void Application::SetupScene() {
             collisionHeight = 0.5f * gridDepth * std::abs(objCfg.scale.z);
         }
 
-        scene->SetObjectCollisionSize(objCfg.name, collisionRadius, collisionHeight);
+        if (objCfg.hasColliderConfig) {
+            setupPhase = "Configure Collision Size";
+            scene->SetObjectCollisionSize(objCfg.name, collisionRadius, collisionHeight);
+        }
 
         if (objCfg.isDespawner) {
+            setupPhase = "Attach Despawner";
             Entity entity = scene->GetEntityByName(objCfg.name);
             if (entity != MAX_ENTITIES && !scene->GetRegistry().HasComponent<DespawnerComponent>(entity)) {
                 scene->GetRegistry().AddComponent<DespawnerComponent>(entity, DespawnerComponent{});
@@ -323,6 +408,7 @@ void Application::SetupScene() {
         }
 
         if (objCfg.isLight) {
+            setupPhase = "Configure Light";
             scene->AddLight(objCfg.name, objCfg.position, objCfg.lightColor, objCfg.lightIntensity, objCfg.lightType);
             scene->SetLightLayerMask(objCfg.name, objCfg.layerMask);
 
@@ -341,6 +427,7 @@ void Application::SetupScene() {
 
         // --- Apply Orbit ---
         if (objCfg.hasOrbit) {
+            setupPhase = "Configure Orbit";
             // Calculate Axis from "Direction Degrees"
             auto GetTrajectory = [](float degrees) -> glm::vec3 {
                 const float rad = glm::radians(degrees);
@@ -369,6 +456,19 @@ void Application::SetupScene() {
             if (objCfg.isLight) {
                 scene->SetLightOrbit(objCfg.name, objCfg.position, objCfg.orbitRadius, speed, axis, startVector, objCfg.orbitInitialAngle);
             }
+        }
+
+        std::cout << "[SetupScene] Object Success: '" << objCfg.name << "'" << std::endl;
+        }
+        catch (const std::exception& e) {
+            std::cerr << "[SetupScene] Object Failed: '" << objCfg.name << "' type='" << objCfg.type
+                << "' phase='" << setupPhase << "' error='" << e.what() << "'" << std::endl;
+            throw;
+        }
+        catch (...) {
+            std::cerr << "[SetupScene] Object Failed: '" << objCfg.name << "' type='" << objCfg.type
+                << "' phase='" << setupPhase << "' unknown error" << std::endl;
+            throw;
         }
     }
 

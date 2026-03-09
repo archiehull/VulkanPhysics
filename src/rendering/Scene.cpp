@@ -135,7 +135,10 @@ void Scene::CreateEnvironment(const std::string& name) {
 
 void Scene::SetObjectPhysics(const std::string& name, bool isStatic, float mass) {
     Entity e = GetEntityByName(name);
-    if (e != MAX_ENTITIES && m_Registry.HasComponent<PhysicsComponent>(e)) {
+    if (e != MAX_ENTITIES) {
+        if (!m_Registry.HasComponent<PhysicsComponent>(e)) {
+            m_Registry.AddComponent<PhysicsComponent>(e, PhysicsComponent{});
+        }
         auto& phys = m_Registry.GetComponent<PhysicsComponent>(e);
         phys.isStatic = isStatic;
         phys.SetMass(isStatic ? 0.0f : mass);
@@ -158,6 +161,13 @@ void Scene::SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity) {
     AddSphere(name, 16, 16, 1.0f, pos, "textures/default.jpg");
 
     Entity e = GetEntityByName(name);
+
+    if (!m_Registry.HasComponent<PhysicsComponent>(e)) {
+        m_Registry.AddComponent<PhysicsComponent>(e, PhysicsComponent{});
+    }
+    if (!m_Registry.HasComponent<ColliderComponent>(e)) {
+        m_Registry.AddComponent<ColliderComponent>(e, ColliderComponent{});
+    }
 
     auto& phys = m_Registry.GetComponent<PhysicsComponent>(e);
     phys.isStatic = false;
@@ -321,13 +331,11 @@ Entity Scene::AddObjectInternal(const std::string& name, std::shared_ptr<Geometr
 
     m_RenderableEntities.push_back(entity);
 
-    ThermoComponent thermo;
-    thermo.isFlammable = isFlammable;
-    m_Registry.AddComponent<ThermoComponent>(entity, thermo);
-
-    m_Registry.AddComponent<ColliderComponent>(entity, ColliderComponent{});
-    m_Registry.AddComponent<OrbitComponent>(entity, OrbitComponent{});
-    m_Registry.AddComponent<PhysicsComponent>(entity, PhysicsComponent{});
+    if (isFlammable) {
+        ThermoComponent thermo;
+        thermo.isFlammable = true;
+        m_Registry.AddComponent<ThermoComponent>(entity, thermo);
+    }
 
     return entity;
 }
@@ -465,9 +473,6 @@ void Scene::AddTerrain(const std::string& name, float radius, int rings, int seg
     Entity entity = AddObjectInternal(name, std::move(geo), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "terrain";
 
-    auto& collider = m_Registry.GetComponent<ColliderComponent>(entity);
-    collider.hasCollision = false;
-
     m_TerrainConfig.exists = true;
     m_TerrainConfig.radius = radius;
     m_TerrainConfig.heightScale = heightScale;
@@ -484,11 +489,6 @@ void Scene::AddPedestal(const std::string& name, float topRadius, float baseWidt
     auto geo = GeometryGenerator::CreatePedestal(device, physicalDevice, topRadius, baseWidth, height, 512, 512);
     Entity entity = AddObjectInternal(name, std::move(geo), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "pedestal";
-
-    auto& collider = m_Registry.GetComponent<ColliderComponent>(entity);
-    collider.radius = std::max(topRadius, baseWidth);
-    collider.height = height;
-    collider.hasCollision = true;
 }
 
 void Scene::AddCube(const std::string& name, const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
@@ -564,11 +564,9 @@ void Scene::CreateSimpleShadowEntity(Entity targetEntity) {
     // Match the parent object's visibility
     shadowRender.visible = m_Registry.GetComponent<RenderComponent>(targetEntity).visible;
 
-    auto& shadowThermo = m_Registry.GetComponent<ThermoComponent>(shadowEntity);
-    shadowThermo.burnFactor = 1.0f; // Force black color
-
-    auto& shadowCollider = m_Registry.GetComponent<ColliderComponent>(shadowEntity);
-    shadowCollider.hasCollision = false;
+    ThermoComponent shadowThermo;
+    shadowThermo.burnFactor = 1.0f;
+    m_Registry.AddComponent<ThermoComponent>(shadowEntity, shadowThermo);
 
     // Link it back to the parent
     m_Registry.GetComponent<RenderComponent>(targetEntity).simpleShadowEntity = shadowEntity;
@@ -668,7 +666,6 @@ Entity Scene::AddLight(const std::string& name, const glm::vec3& position, const
         transform.position = position;
         transform.UpdateMatrix();
         m_Registry.AddComponent<TransformComponent>(entity, transform);
-        m_Registry.AddComponent<OrbitComponent>(entity, OrbitComponent{});
     }
 
     LightComponent light;
@@ -706,7 +703,10 @@ void Scene::SetObjectCollision(const std::string& name, bool enabled) {
 
 void Scene::SetObjectCollider(const std::string& name, int type, float radius, const glm::vec3& normal) {
     Entity e = GetEntityByName(name);
-    if (e != MAX_ENTITIES && m_Registry.HasComponent<ColliderComponent>(e)) {
+    if (e != MAX_ENTITIES) {
+        if (!m_Registry.HasComponent<ColliderComponent>(e)) {
+        m_Registry.AddComponent<ColliderComponent>(e, ColliderComponent{});
+        }
         auto& col = m_Registry.GetComponent<ColliderComponent>(e);
         col.type = type;
         col.radius = radius;
@@ -963,6 +963,10 @@ void Scene::StopDust() {
 
 void Scene::SetObjectOrbit(const std::string& name, const glm::vec3& center, float radius, float speedRadPerSec, const glm::vec3& axis, const glm::vec3& startVector, float initialAngleRad) {
     Entity e = GetEntityByName(name);
+    if (e != MAX_ENTITIES && !m_Registry.HasComponent<OrbitComponent>(e)) {
+        m_Registry.AddComponent<OrbitComponent>(e, OrbitComponent{});
+    }
+
     if (e != MAX_ENTITIES && m_Registry.HasComponent<OrbitComponent>(e) && m_Registry.HasComponent<TransformComponent>(e)) {
         auto& orbit = m_Registry.GetComponent<OrbitComponent>(e);
         auto& transform = m_Registry.GetComponent<TransformComponent>(e);

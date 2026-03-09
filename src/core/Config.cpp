@@ -213,6 +213,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 if (tokens.size() >= 6) currentObject->onlyInRegionMask = std::stoi(tokens[5]);
             }
             else if (key == "PhysicsProps") {
+                currentObject->hasPhysicsConfig = true;
                 std::vector<std::string> tokens;
                 std::string tok;
                 while (ss >> tok) tokens.push_back(tok);
@@ -240,6 +241,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 if (idx < tokens.size()) currentObject->friction = std::stof(tokens[idx++]);
             }
             else if (key == "ColliderProps") {
+                currentObject->hasColliderConfig = true;
                 ss >> currentObject->colliderType;
                 if (currentObject->colliderType == 1) { // Plane
                     ss >> currentObject->colliderNormal.x >> currentObject->colliderNormal.y >> currentObject->colliderNormal.z;
@@ -255,12 +257,19 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 }
             }
             else if (key == "Orbit") {
+                currentObject->hasOrbitConfig = true;
                 std::string orbitStr;
                 ss >> orbitStr;
                 currentObject->hasOrbit = (orbitStr == "true" || orbitStr == "1");
                 if (currentObject->hasOrbit) {
                     ss >> currentObject->orbitRadius >> currentObject->orbitSpeed >> currentObject->orbitDirection >> currentObject->orbitInitialAngle;
                 }
+            }
+            else if (key == "Thermo") {
+                std::string thermoStr;
+                ss >> thermoStr;
+                currentObject->thermoEnabled = ParseBoolToken(thermoStr);
+                currentObject->hasThermoOverride = true;
             }
             else if (key == "Light") {
                 std::string lightStr;
@@ -311,6 +320,21 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (key == "WeatherDuration") ss >> currentObject->weatherConfig.minPrecipitationDuration >> currentObject->weatherConfig.maxPrecipitationDuration;
             else if (key == "FireSuppression") ss >> currentObject->weatherConfig.fireSuppressionDuration;
             else if (key == "SunHeatBonus") ss >> currentObject->sunHeatBonus;
+            else if (key == "ThermoPolicy") {
+                std::string mode;
+                ss >> mode;
+                std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (mode == "blacklist") currentObject->thermoPolicyMode = 1;
+                else if (mode == "whitelist") currentObject->thermoPolicyMode = 2;
+                else currentObject->thermoPolicyMode = 0;
+            }
+            else if (key == "ThermoEntities") {
+                currentObject->thermoPolicyEntities.clear();
+                std::string entityName;
+                while (ss >> entityName) {
+                    currentObject->thermoPolicyEntities.push_back(entityName);
+                }
+            }
             else if (key == "DustCloudProps") {
                 std::string activeStr;
                 ss >> activeStr >> currentObject->direction.x >> currentObject->direction.y >> currentObject->direction.z >> currentObject->speed;

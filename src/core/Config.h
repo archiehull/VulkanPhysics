@@ -69,9 +69,14 @@ struct SceneObjectConfig {
     int layerMask = SceneLayers::ALL_USED;
     int onlyInRegionMask = 0;
 
-    bool hasCollision = true;
+    bool hasCollision = false;
     bool isStatic = true;
     bool isFlammable = false;
+    bool hasPhysicsConfig = false;
+    bool hasColliderConfig = false;
+    bool hasOrbitConfig = false;
+    bool thermoEnabled = false;
+    bool hasThermoOverride = false;
 
     float mass = 1.0f;
     float restitution = 1.0f;
@@ -103,6 +108,9 @@ struct SceneObjectConfig {
     SeasonConfig seasonConfig;
     WeatherConfig weatherConfig;
     float sunHeatBonus = 60.0f;
+
+    int thermoPolicyMode = 0; // 0=None, 1=Blacklist (all except list), 2=Whitelist (none except list)
+    std::vector<std::string> thermoPolicyEntities;
 
     bool isActive = false;
     glm::vec3 direction = glm::vec3(1.0f, 0.0f, 0.0f);

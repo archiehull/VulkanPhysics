@@ -174,7 +174,8 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
                 thermo.fireLightEntity = newLight;
             }
             // Since we break on creation, it is mathematically guaranteed that `thermo` here is 100% memory safe.
-            if (registry.HasComponent<LightComponent>(thermo.fireLightEntity)) {
+            if (registry.HasComponent<LightComponent>(thermo.fireLightEntity) &&
+                registry.HasComponent<TransformComponent>(thermo.fireLightEntity)) {
                 auto& fireLightTransform = registry.GetComponent<TransformComponent>(thermo.fireLightEntity);
                 auto& fireLightComp = registry.GetComponent<LightComponent>(thermo.fireLightEntity);
 
