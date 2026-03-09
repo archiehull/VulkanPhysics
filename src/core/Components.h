@@ -220,6 +220,10 @@ struct DespawnerComponent {
     bool enabled = true;
 };
 
+struct DeathWallComponent {
+    bool enabled = true;
+};
+
 // 10. Camera Data
 struct CameraComponent {
     float fov = 60.0f;

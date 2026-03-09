@@ -2,6 +2,7 @@
 #include "../rendering/ParticleLibrary.h"
 #include <iostream>
 #include <iomanip>
+#include <cmath>
 
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
@@ -300,6 +301,20 @@ void Application::SetupScene() {
         scene->SetObjectPhysicsMaterial(objCfg.name, objCfg.restitution, objCfg.friction);
         scene->SetObjectCollider(objCfg.name, objCfg.colliderType, objCfg.colliderRadius, objCfg.colliderNormal);        // --- Apply Light ---
 
+        float collisionRadius = objCfg.colliderRadius;
+        float collisionHeight = objCfg.colliderHeight;
+
+        // Auto-fit finite plane collider extents to Grid geometry dimensions.
+        if (objCfg.type == "Grid" && objCfg.colliderType == 1) {
+            const float gridWidth = std::max(0.0f, objCfg.params.y) * std::max(0.0f, objCfg.params.z);
+            const float gridDepth = std::max(0.0f, objCfg.params.x) * std::max(0.0f, objCfg.params.z);
+
+            collisionRadius = 0.5f * gridWidth * std::abs(objCfg.scale.x);
+            collisionHeight = 0.5f * gridDepth * std::abs(objCfg.scale.z);
+        }
+
+        scene->SetObjectCollisionSize(objCfg.name, collisionRadius, collisionHeight);
+
         if (objCfg.isDespawner) {
             Entity entity = scene->GetEntityByName(objCfg.name);
             if (entity != MAX_ENTITIES && !scene->GetRegistry().HasComponent<DespawnerComponent>(entity)) {
@@ -343,6 +358,11 @@ void Application::SetupScene() {
                 scene->SetLightOrbit(objCfg.name, objCfg.position, objCfg.orbitRadius, speed, axis, startVector, objCfg.orbitInitialAngle);
             }
         }
+    }
+
+    if (config.enableDefaultDeathWall) {
+        const float deathWallY = terrainY - 100.0f;
+        scene->CreateDeathWall("__DefaultDeathWall", deathWallY, 5000.0f, 5000.0f);
     }
 
     for (const auto& regionCfg : config.layerRegions) {
@@ -618,7 +638,9 @@ void Application::ProcessInput() {
     }
     if (inputManager->IsActionJustPressed(InputAction::ResetEnvironment)) {
         scene->ResetEnvironment();
+        scene->ResetSpawnerSpawnedObjects();
     }
+
     if (inputManager->IsActionJustPressed(InputAction::ToggleNoclip)) {
         CameraSystem::ToggleNoclip(*scene);
         std::cout << "Noclip toggled via Hotkey\n";

@@ -41,52 +41,52 @@ EndTexture
 # --- STATIC ENVIRONMENT ---
 
 Object FloorPlane
-    Type Model
-    Model models/plane.sjg
+    Type Grid
+    Params 10 10 1.0
     Texture tex_floor_red
     Position 0.0 0.0 0.0
-    Rotation -90.0 0.0 0.0 
-    Scale 5.0 5.0 5.0
-    RenderProps 1 true true true 3
-    PhysicsProps false true true
-    ColliderProps 1 0.0 1.0 0.0 500.0
-    Despawner true
-EndObject
-
-Object BackWall
-    Type Model
-    Model models/plane.sjg
-    Texture tex_checker_floor
-    Position 0.0 10.0 -20.0
     Rotation 0.0 0.0 0.0 
     Scale 5.0 5.0 5.0
     RenderProps 1 true true true 3
     PhysicsProps false true true
-    ColliderProps 1 0.0 0.0 1.0 500.0
+    ColliderProps 1 0.0 1.0 0.0 25.0 25.0
+    Despawner true
+EndObject
+
+Object BackWall
+    Type Grid
+    Params 10 10 1.0
+    Texture tex_checker_floor
+    Position 0.0 10.0 -20.0
+    Rotation 90.0 0.0 0.0 
+    Scale 5.0 5.0 5.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true true
+    ColliderProps 1 0.0 0.0 1.0 25.0 25.0
 EndObject
 
 Object LeftRamp
-    Type Model
-    Model models/plane.sjg
+    Type Grid
+    Params 10 10 1.0
     Texture tex_ramp
     Position -15.0 10.0 0.0
-    Rotation -45.0 90.0 0.0 
+    Rotation 45.0 90.0 0.0 
     Scale 5.0 5.0 5.0
     RenderProps 1 true true true 3
     PhysicsProps false true true
-    ColliderProps 1 0.707 0.707 0.0 500.0
+    ColliderProps 1 0.707 0.707 0.0 25.0 25.0
 EndObject
 
 Object RightRamp
-    Type Model
-    Model models/plane.sjg
+    Type Grid
+    Params 10 10 1.0
     Texture tex_ramp
     Position 15.0 10.0 0.0
-    Rotation -45.0 -90.0 0.0 
+    Rotation 45.0 -90.0 0.0 
     Scale 5.0 5.0 5.0
     RenderProps 1 true true true 3
     PhysicsProps false true true
-    ColliderProps 1 -0.707 0.707 0.0 500.0
+    ColliderProps 1 -0.707 0.707 0.0 25.0 25.0
 EndObject
 
 # --- DYNAMIC BALLS ---

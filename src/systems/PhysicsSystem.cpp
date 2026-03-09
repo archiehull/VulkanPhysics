@@ -40,6 +40,25 @@ namespace {
             phys.forceAccumulator = glm::vec3(0.0f);
         }
     }
+
+    inline bool IsSphereInsideFinitePlaneBounds(const TransformComponent& planeTransform, const ColliderComponent& planeCollider,
+        const glm::vec3& sphereCenter, float sphereRadius) {
+        if (planeCollider.radius <= 0.0f || planeCollider.height <= 0.0f) {
+            return true; // Infinite plane fallback
+        }
+
+        const glm::vec3 n = glm::normalize(planeCollider.normal);
+        const glm::vec3 ref = (std::abs(n.y) < 0.99f) ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+        const glm::vec3 tangent = glm::normalize(glm::cross(ref, n));
+        const glm::vec3 bitangent = glm::normalize(glm::cross(n, tangent));
+
+        const glm::vec3 local = sphereCenter - planeTransform.position;
+        const float u = glm::dot(local, tangent);
+        const float v = glm::dot(local, bitangent);
+
+        return std::abs(u) <= (planeCollider.radius + sphereRadius) &&
+            std::abs(v) <= (planeCollider.height + sphereRadius);
+    }
 }
 
 void PhysicsSystem::Update(Scene& scene, float deltaTime) {
@@ -184,7 +203,8 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 MovingSphere sphereA(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
                 Plane planeB(t2.position, c2.normal, c2.radius);
 
-                if (planeB.Intersects(sphereA.sphere)) {
+                if (planeB.Intersects(sphereA.sphere) &&
+                    IsSphereInsideFinitePlaneBounds(t2, c2, t1.position, c1.radius)) {
                     queueDespawnerDeletion(i, j, p1, p2);
                     const float objectFriction = (p1.friction + p2.friction) * 0.5f;
                     const float contactFriction = glm::clamp(objectFriction * PhysicsSystem::contactFrictionScale, 0.0f, 1.0f);
@@ -203,7 +223,8 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 MovingSphere sphereB(t2.position, c2.radius, p2.velocity, p2.inverseMass, p2.restitution);
                 Plane planeA(t1.position, c1.normal, c1.radius);
 
-                if (planeA.Intersects(sphereB.sphere)) {
+                if (planeA.Intersects(sphereB.sphere) &&
+                    IsSphereInsideFinitePlaneBounds(t1, c1, t2.position, c2.radius)) {
                     queueDespawnerDeletion(i, j, p1, p2);
                     const float objectFriction = (p1.friction + p2.friction) * 0.5f;
                     const float contactFriction = glm::clamp(objectFriction * PhysicsSystem::contactFrictionScale, 0.0f, 1.0f);

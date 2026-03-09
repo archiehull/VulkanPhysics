@@ -230,12 +230,11 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 if (currentObject->colliderType == 1) { // Plane
                     ss >> currentObject->colliderNormal.x >> currentObject->colliderNormal.y >> currentObject->colliderNormal.z;
 
-                    if (!ss.eof()) {
-                        ss >> currentObject->colliderRadius;
-                    }
-                    else {
-                        currentObject->colliderRadius = 0.0f; // 0 = Infinite
-                    }
+                    if (!ss.eof()) ss >> currentObject->colliderRadius;
+                    else currentObject->colliderRadius = 0.0f; // 0 = Infinite
+
+                    if (!ss.eof()) ss >> currentObject->colliderHeight;
+                    else currentObject->colliderHeight = currentObject->colliderRadius;
                 }
                 else { // Sphere
                     ss >> currentObject->colliderRadius;
@@ -311,6 +310,11 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
         }
         // --- Global Settings ---
         else if (key == "WindowSize") ss >> config.windowWidth >> config.windowHeight;
+        else if (key == "EnableDefaultDeathWall") {
+            std::string value;
+            ss >> value;
+            config.enableDefaultDeathWall = (value == "true" || value == "1");
+        }
         else if (key == "ProceduralObjectCount") ss >> config.proceduralObjectCount;
         else if (key == "ProceduralPlant") {
             ProceduralPlantConfig plant;

@@ -55,6 +55,36 @@ Entity Scene::AddLayerRegion(const std::string& name, int layerBit, int volumeTy
     return entity;
 }
 
+Entity Scene::CreateDeathWall(const std::string& name, float yLevel, float halfWidth, float halfDepth) {
+    Entity entity = m_Registry.CreateEntity();
+    m_EntityMap[name] = entity;
+
+    m_Registry.AddComponent<NameComponent>(entity, { name });
+
+    TransformComponent transform;
+    transform.position = glm::vec3(0.0f, yLevel, 0.0f);
+    transform.UpdateMatrix();
+    m_Registry.AddComponent<TransformComponent>(entity, transform);
+
+    ColliderComponent collider;
+    collider.hasCollision = true;
+    collider.type = 1; // Plane
+    collider.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+    collider.radius = std::max(0.0f, halfWidth);
+    collider.height = std::max(0.0f, halfDepth);
+    m_Registry.AddComponent<ColliderComponent>(entity, collider);
+
+    PhysicsComponent physics;
+    physics.isStatic = true;
+    physics.SetMass(0.0f);
+    m_Registry.AddComponent<PhysicsComponent>(entity, physics);
+
+    m_Registry.AddComponent<DespawnerComponent>(entity, DespawnerComponent{});
+    m_Registry.AddComponent<DeathWallComponent>(entity, DeathWallComponent{});
+
+    return entity;
+}
+
 void Scene::CreateEnvironment(const std::string& name) {
     if (m_EnvironmentEntity != MAX_ENTITIES && m_Registry.HasComponent<EnvironmentComponent>(m_EnvironmentEntity)) {
         std::cout << "Environment already exists!" << std::endl;

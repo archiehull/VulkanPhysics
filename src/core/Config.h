@@ -79,6 +79,7 @@ struct SceneObjectConfig {
 
     int colliderType = 0;
     float colliderRadius = 2.0f;
+    float colliderHeight = 5.0f;
     glm::vec3 colliderNormal = glm::vec3(0.0f, 1.0f, 0.0f);
 
     bool hasOrbit = false;
@@ -167,6 +168,7 @@ struct LayerRegionConfig {
 struct AppConfig {
     int windowWidth = 1000;
     int windowHeight = 750;
+    bool enableDefaultDeathWall = true;
 
 
     int proceduralObjectCount = 5;
