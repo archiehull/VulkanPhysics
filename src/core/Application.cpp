@@ -262,8 +262,11 @@ void Application::SetupScene() {
             Entity spawnerEntity = scene->CreateSpawnerEntity(objCfg.name, objCfg.position);
 
             ObjectSpawnerComponent spawner;
-            spawner.enabled = objCfg.spawnerEnabled;
+            spawner.alwaysOn = objCfg.spawnerEnabled;
+            spawner.isRunning = objCfg.spawnerEnabled;
             spawner.spawnInterval = objCfg.spawnInterval;
+            spawner.runDurationSeconds = objCfg.spawnerRunDurationSeconds;
+            spawner.maxSpawnsPerRun = objCfg.spawnerMaxSpawnsPerRun;
             spawner.spawnGeometryType = objCfg.spawnGeometryType;
             spawner.spawnModelPath = objCfg.spawnModelPath;
             spawner.spawnTexturePath = objCfg.spawnTexturePath.empty() ? objCfg.texturePath : objCfg.spawnTexturePath;
@@ -296,6 +299,14 @@ void Application::SetupScene() {
         scene->SetObjectPhysics(objCfg.name, objCfg.isStatic, objCfg.mass);
         scene->SetObjectPhysicsMaterial(objCfg.name, objCfg.restitution, objCfg.friction);
         scene->SetObjectCollider(objCfg.name, objCfg.colliderType, objCfg.colliderRadius, objCfg.colliderNormal);        // --- Apply Light ---
+
+        if (objCfg.isDespawner) {
+            Entity entity = scene->GetEntityByName(objCfg.name);
+            if (entity != MAX_ENTITIES && !scene->GetRegistry().HasComponent<DespawnerComponent>(entity)) {
+                scene->GetRegistry().AddComponent<DespawnerComponent>(entity, DespawnerComponent{});
+            }
+        }
+
         if (objCfg.isLight) {
             scene->AddLight(objCfg.name, objCfg.position, objCfg.lightColor, objCfg.lightIntensity, objCfg.lightType);
             scene->SetLightLayerMask(objCfg.name, objCfg.layerMask);

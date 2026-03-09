@@ -33,18 +33,24 @@ ProceduralTexture tex_ball
     Vertical true
 EndTexture
 
+ProceduralTexture tex_floor_red
+    Type Solid
+    Color1 1.0 0.05 0.05 1.0
+EndTexture
+
 # --- STATIC ENVIRONMENT ---
 
 Object FloorPlane
     Type Model
     Model models/plane.sjg
-    Texture tex_checker_floor
+    Texture tex_floor_red
     Position 0.0 0.0 0.0
     Rotation -90.0 0.0 0.0 
     Scale 5.0 5.0 5.0
     RenderProps 1 true true true 3
     PhysicsProps false true true
     ColliderProps 1 0.0 1.0 0.0 500.0
+    Despawner true
 EndObject
 
 Object BackWall
@@ -89,7 +95,8 @@ Object LeftBallSpawner
     Type Spawner
     Position -12.0 14.0 0.0
     SpawnerEnabled true
-    SpawnInterval 1.0
+    SpawnInterval 2.0
+    SpawnerMaxSpawns 5
     SpawnGeometry Sphere
     SpawnTexture tex_ball
     SpawnScale 1.2 1.2 1.2
@@ -103,7 +110,8 @@ Object RightBallSpawner
     Type Spawner
     Position 12.0 14.0 0.0
     SpawnerEnabled true
-    SpawnInterval 1.0
+    SpawnInterval 2.0
+    SpawnerMaxSpawns 5
     SpawnGeometry Sphere
     SpawnTexture tex_ball
     SpawnScale 1.2 1.2 1.2
@@ -119,7 +127,16 @@ Object MainSun
     Type Sphere
     Params 0.5
     Position 0.0 50.0 40.0
-    Light true 1.0 1.0 1.0 2.0 0
+    Light true 1.0 0.98 0.95 1.4 0
+    RenderProps 1 false false false 3
+    PhysicsProps false false true
+EndObject
+
+Object FillLight
+    Type Sphere
+    Params 0.35
+    Position 0.0 18.0 12.0
+    Light true 0.55 0.65 1.0 0.9 2
     RenderProps 1 false false false 3
     PhysicsProps false false true
 EndObject

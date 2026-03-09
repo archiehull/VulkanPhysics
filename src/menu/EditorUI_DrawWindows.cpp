@@ -691,6 +691,20 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
             }
 
             // --- 11. Environment Component ---
+            if (registry.HasComponent<DespawnerComponent>(e)) {
+                bool open = ImGui::TreeNodeEx("DespawnerComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                if (ImGui::Button("Remove##Despawner")) registry.RemoveComponent<DespawnerComponent>(e);
+
+                if (open && registry.HasComponent<DespawnerComponent>(e)) {
+                    auto& comp = registry.GetComponent<DespawnerComponent>(e);
+                    ImGui::Checkbox("Enabled", &comp.enabled);
+                    ImGui::TextDisabled("Deletes dynamic objects that collide with this entity.");
+                    ImGui::TreePop();
+                }
+            }
+
+            // --- 11. Environment Component ---
             if (registry.HasComponent<ObjectSpawnerComponent>(e)) {
                 bool open = ImGui::TreeNodeEx("ObjectSpawnerComponent", ImGuiTreeNodeFlags_DefaultOpen);
                 ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
@@ -699,8 +713,35 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 if (open && registry.HasComponent<ObjectSpawnerComponent>(e)) {
                     auto& comp = registry.GetComponent<ObjectSpawnerComponent>(e);
 
-                    ImGui::Checkbox("Enabled", &comp.enabled);
+                    ImGui::Checkbox("Always On", &comp.alwaysOn);
+                    if (comp.alwaysOn) {
+                        comp.isRunning = true;
+                    }
+                    else {
+                        if (!comp.isRunning) {
+                            if (ImGui::Button("Run##SpawnerRun")) {
+                                comp.isRunning = true;
+                                comp.spawnTimer = 0.0f;
+                                comp.runElapsedSeconds = 0.0f;
+                                comp.spawnedThisRun = 0;
+                            }
+                        }
+                        else {
+                            if (ImGui::Button("Stop##SpawnerRun")) {
+                                comp.isRunning = false;
+                            }
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Reset Run##SpawnerRun")) {
+                            comp.spawnTimer = 0.0f;
+                            comp.runElapsedSeconds = 0.0f;
+                            comp.spawnedThisRun = 0;
+                        }
+                    }
+
                     ImGui::DragFloat("Spawn Interval (s)", &comp.spawnInterval, 0.05f, 0.05f, 60.0f);
+                    ImGui::DragFloat("Run Duration (s, -1 inf)", &comp.runDurationSeconds, 0.1f, -1.0f, 3600.0f);
+                    ImGui::InputInt("Max Spawns Per Run (-1 inf)", &comp.maxSpawnsPerRun);
                     ImGui::DragFloat3("Spawn Scale", &comp.spawnScale.x, 0.05f, 0.05f, 100.0f);
                     ImGui::DragFloat("Spawn Mass", &comp.spawnMass, 0.1f, 0.01f, 1000.0f);
 
@@ -757,7 +798,9 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         ImGui::DragFloat3("Random Velocity Range", &comp.randomVelocityRange.x, 0.1f, 0.0f, 200.0f);
                     }
 
-                    ImGui::TextDisabled("Spawned Count: %d", comp.spawnedCount);
+                    ImGui::TextDisabled("Status: %s", comp.isRunning ? "Running" : "Stopped");
+                    ImGui::TextDisabled("Spawned This Run: %d", comp.spawnedThisRun);
+                    ImGui::TextDisabled("Total Spawned: %d", comp.spawnedCount);
 
                     ImGui::TreePop();
                 }
@@ -937,6 +980,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 addMenuItem((AttachedEmitterComponent*)nullptr, "AttachedEmitterComponent", e);
                 addMenuItem((EnvironmentComponent*)nullptr, "EnvironmentComponent", e);
                 addMenuItem((DustCloudComponent*)nullptr, "DustCloudComponent", e);
+                addMenuItem((DespawnerComponent*)nullptr, "DespawnerComponent", e);
                 addMenuItem((ObjectSpawnerComponent*)nullptr, "ObjectSpawnerComponent", e);
                 addMenuItem((LayerRegionComponent*)nullptr, "LayerRegionComponent", e);
                 ImGui::EndMenu();

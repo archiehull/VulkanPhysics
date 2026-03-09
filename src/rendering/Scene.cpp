@@ -126,7 +126,10 @@ void Scene::ResetSpawnerSpawnedObjects() {
         if (m_Registry.HasComponent<ObjectSpawnerComponent>(e)) {
             auto& spawner = m_Registry.GetComponent<ObjectSpawnerComponent>(e);
             spawner.spawnTimer = 0.0f;
+            spawner.runElapsedSeconds = 0.0f;
+            spawner.spawnedThisRun = 0;
             spawner.spawnedCount = 0;
+            spawner.isRunning = spawner.alwaysOn;
         }
     }
 }

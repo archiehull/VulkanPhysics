@@ -546,8 +546,35 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             if (ImGui::BeginMenu(menuLabel.c_str())) {
                 ImGui::PushID(static_cast<int>(e));
 
-                ImGui::Checkbox("Enabled", &spawner.enabled);
+                ImGui::Checkbox("Always On", &spawner.alwaysOn);
+                if (spawner.alwaysOn) {
+                    spawner.isRunning = true;
+                }
+                else {
+                    if (!spawner.isRunning) {
+                        if (ImGui::Button("Run")) {
+                            spawner.isRunning = true;
+                            spawner.spawnTimer = 0.0f;
+                            spawner.runElapsedSeconds = 0.0f;
+                            spawner.spawnedThisRun = 0;
+                        }
+                    }
+                    else {
+                        if (ImGui::Button("Stop")) {
+                            spawner.isRunning = false;
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Reset Run")) {
+                        spawner.spawnTimer = 0.0f;
+                        spawner.runElapsedSeconds = 0.0f;
+                        spawner.spawnedThisRun = 0;
+                    }
+                }
+
                 ImGui::DragFloat("Spawn Interval (s)", &spawner.spawnInterval, 0.05f, 0.05f, 60.0f);
+                ImGui::DragFloat("Run Duration (s, -1 inf)", &spawner.runDurationSeconds, 0.1f, -1.0f, 3600.0f);
+                ImGui::InputInt("Max Spawns Per Run (-1 inf)", &spawner.maxSpawnsPerRun);
                 ImGui::DragFloat3("Spawn Scale", &spawner.spawnScale.x, 0.05f, 0.05f, 100.0f);
                 ImGui::DragFloat("Spawn Mass", &spawner.spawnMass, 0.1f, 0.01f, 1000.0f);
 
@@ -593,7 +620,9 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                     ImGui::DragFloat3("Random Velocity Range", &spawner.randomVelocityRange.x, 0.1f, 0.0f, 200.0f);
                 }
 
-                ImGui::TextDisabled("Spawned Count: %d", spawner.spawnedCount);
+                ImGui::TextDisabled("Status: %s", spawner.isRunning ? "Running" : "Stopped");
+                ImGui::TextDisabled("Spawned This Run: %d", spawner.spawnedThisRun);
+                ImGui::TextDisabled("Total Spawned: %d", spawner.spawnedCount);
 
                 ImGui::PopID();
                 ImGui::EndMenu();

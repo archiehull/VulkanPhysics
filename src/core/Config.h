@@ -105,6 +105,8 @@ struct SceneObjectConfig {
 
     bool spawnerEnabled = true;
     float spawnInterval = 1.0f;
+    float spawnerRunDurationSeconds = -1.0f;
+    int spawnerMaxSpawnsPerRun = -1;
     std::string spawnGeometryType = "Sphere";
     std::string spawnModelPath = "";
     std::string spawnTexturePath = "textures/default.jpg";
@@ -113,6 +115,8 @@ struct SceneObjectConfig {
     bool randomizeSpawnVelocity = false;
     glm::vec3 spawnVelocityRandomRange = glm::vec3(0.0f);
     float spawnMass = 1.0f;
+
+    bool isDespawner = false;
 };
 
 // --- Procedural Texture Configuration ---

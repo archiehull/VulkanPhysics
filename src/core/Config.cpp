@@ -281,7 +281,14 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 ss >> value;
                 currentObject->spawnerEnabled = (value == "true" || value == "1");
             }
+            else if (key == "SpawnerAlwaysOn") {
+                std::string value;
+                ss >> value;
+                currentObject->spawnerEnabled = (value == "true" || value == "1");
+            }
             else if (key == "SpawnInterval") ss >> currentObject->spawnInterval;
+            else if (key == "SpawnerRunDuration") ss >> currentObject->spawnerRunDurationSeconds;
+            else if (key == "SpawnerMaxSpawns") ss >> currentObject->spawnerMaxSpawnsPerRun;
             else if (key == "SpawnGeometry") ss >> currentObject->spawnGeometryType;
             else if (key == "SpawnModel") ss >> currentObject->spawnModelPath;
             else if (key == "SpawnTexture") ss >> currentObject->spawnTexturePath;
@@ -296,6 +303,11 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 ss >> currentObject->spawnVelocityRandomRange.x >> currentObject->spawnVelocityRandomRange.y >> currentObject->spawnVelocityRandomRange.z;
             }
             else if (key == "SpawnMass") ss >> currentObject->spawnMass;
+            else if (key == "Despawner") {
+                std::string value;
+                ss >> value;
+                currentObject->isDespawner = (value == "true" || value == "1");
+            }
         }
         // --- Global Settings ---
         else if (key == "WindowSize") ss >> config.windowWidth >> config.windowHeight;

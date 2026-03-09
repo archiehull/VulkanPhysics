@@ -188,9 +188,16 @@ struct DustCloudComponent {
 };
 
 struct ObjectSpawnerComponent {
-    bool enabled = true;
+    bool alwaysOn = true;
+    bool isRunning = true;
+
     float spawnInterval = 1.0f;
     float spawnTimer = 0.0f;
+
+    float runDurationSeconds = -1.0f; // -1 = unlimited
+    float runElapsedSeconds = 0.0f;
+    int maxSpawnsPerRun = -1;         // -1 = unlimited
+    int spawnedThisRun = 0;
 
     std::string spawnGeometryType = "Sphere"; // Sphere, Cube, Model
     std::string spawnModelPath = "";
@@ -207,6 +214,10 @@ struct ObjectSpawnerComponent {
 
 struct SpawnedFromSpawnerComponent {
     Entity sourceSpawner = MAX_ENTITIES;
+};
+
+struct DespawnerComponent {
+    bool enabled = true;
 };
 
 // 10. Camera Data

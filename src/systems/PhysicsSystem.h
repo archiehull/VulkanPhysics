@@ -37,7 +37,7 @@ public:
 
 private:
     void Integrate(Registry& registry, float dt);
-    void ResolveCollisions(Registry& registry, float dt);
+    void ResolveCollisions(Scene& scene, Registry& registry, float dt);
     bool IsCollidable(const Registry& reg, Entity e);
     void ApplyPositionCorrection(struct TransformComponent& t1, struct TransformComponent& t2, float r1, float r2, bool static1, bool static2);
     void ApplySpherePlaneCorrection(struct TransformComponent& sphereTrans, float radius, const class Plane& plane);

@@ -5,6 +5,7 @@
 #include <Plane.h>
 #include <PhysicsHelper.h>
 #include <cmath>
+#include <unordered_set>
 
 // Default settings
 int PhysicsSystem::subSteps = 4;
@@ -48,7 +49,7 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
 
     for (int i = 0; i < subSteps; ++i) {
         Integrate(registry, dt);
-        ResolveCollisions(registry, dt);
+        ResolveCollisions(scene, registry, dt);
     }
 }
 
@@ -122,9 +123,24 @@ void PhysicsSystem::ApplySpherePlaneCorrection(TransformComponent& sphereTrans, 
     }
 }
 
-void PhysicsSystem::ResolveCollisions(Registry& registry, float dt) {
+void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt) {
     const auto entityCount = registry.GetEntityCount();
     bool useForce = (currentResolutionMethod == ResolutionMethod::Force);
+    std::unordered_set<Entity> pendingDelete;
+
+    auto queueDespawnerDeletion = [&](Entity a, Entity b, const PhysicsComponent& physA, const PhysicsComponent& physB) {
+        const bool aIsDespawner = registry.HasComponent<DespawnerComponent>(a) &&
+            registry.GetComponent<DespawnerComponent>(a).enabled;
+        const bool bIsDespawner = registry.HasComponent<DespawnerComponent>(b) &&
+            registry.GetComponent<DespawnerComponent>(b).enabled;
+
+        if (aIsDespawner && !bIsDespawner && !physB.isStatic) {
+            pendingDelete.insert(b);
+        }
+        if (bIsDespawner && !aIsDespawner && !physA.isStatic) {
+            pendingDelete.insert(a);
+        }
+    };
 
     for (Entity i = 0; i < entityCount; ++i) {
         for (Entity j = i + 1; j < entityCount; ++j) {
@@ -147,6 +163,7 @@ void PhysicsSystem::ResolveCollisions(Registry& registry, float dt) {
                 sphereB.forceAccumulator = p2.forceAccumulator; // Load accumulator
 
                 if (sphereA.sphere.CollideWith(sphereB.sphere)) {
+                    queueDespawnerDeletion(i, j, p1, p2);
                     ResolveElasticCollision(sphereA, sphereB, useForce, dt);
 
                     // Write results back to ECS components
@@ -168,6 +185,7 @@ void PhysicsSystem::ResolveCollisions(Registry& registry, float dt) {
                 Plane planeB(t2.position, c2.normal, c2.radius);
 
                 if (planeB.Intersects(sphereA.sphere)) {
+                    queueDespawnerDeletion(i, j, p1, p2);
                     const float objectFriction = (p1.friction + p2.friction) * 0.5f;
                     const float contactFriction = glm::clamp(objectFriction * PhysicsSystem::contactFrictionScale, 0.0f, 1.0f);
 
@@ -186,6 +204,7 @@ void PhysicsSystem::ResolveCollisions(Registry& registry, float dt) {
                 Plane planeA(t1.position, c1.normal, c1.radius);
 
                 if (planeA.Intersects(sphereB.sphere)) {
+                    queueDespawnerDeletion(i, j, p1, p2);
                     const float objectFriction = (p1.friction + p2.friction) * 0.5f;
                     const float contactFriction = glm::clamp(objectFriction * PhysicsSystem::contactFrictionScale, 0.0f, 1.0f);
 
@@ -198,6 +217,13 @@ void PhysicsSystem::ResolveCollisions(Registry& registry, float dt) {
                     }
                 }
             }
+
+    for (Entity e : pendingDelete) {
+        if (!registry.HasComponent<PhysicsComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
+            continue;
+        }
+        scene.DeleteEntity(e);
+    }
         }
     }
 }

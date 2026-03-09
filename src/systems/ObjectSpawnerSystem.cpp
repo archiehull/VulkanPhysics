@@ -17,12 +17,36 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
         }
 
         auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
-        if (!spawner.enabled) continue;
+        if (spawner.alwaysOn) {
+            spawner.isRunning = true;
+        }
+        if (!spawner.isRunning) continue;
+
+        if (spawner.maxSpawnsPerRun >= 0 && spawner.spawnedThisRun >= spawner.maxSpawnsPerRun) {
+            if (!spawner.alwaysOn) spawner.isRunning = false;
+            continue;
+        }
+
+        spawner.runElapsedSeconds += deltaTime;
+        if (!spawner.alwaysOn && spawner.runDurationSeconds > 0.0f && spawner.runElapsedSeconds >= spawner.runDurationSeconds) {
+            spawner.isRunning = false;
+            continue;
+        }
 
         const float interval = std::max(0.01f, spawner.spawnInterval);
         spawner.spawnTimer += deltaTime;
 
         while (spawner.spawnTimer >= interval) {
+            if (spawner.maxSpawnsPerRun >= 0 && spawner.spawnedThisRun >= spawner.maxSpawnsPerRun) {
+                if (!spawner.alwaysOn) spawner.isRunning = false;
+                break;
+            }
+
+            if (!spawner.alwaysOn && spawner.runDurationSeconds > 0.0f && spawner.runElapsedSeconds >= spawner.runDurationSeconds) {
+                spawner.isRunning = false;
+                break;
+            }
+
             spawner.spawnTimer -= interval;
             SpawnObjectFromSpawner(scene, e);
         }
@@ -45,6 +69,7 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     }
 
     const std::string spawnedName = spawnerName + "_Spawned_" + std::to_string(spawner.spawnedCount++);
+    spawner.spawnedThisRun++;
     const glm::vec3 spawnPos = transform.position;
 
     const std::string& geometryType = spawner.spawnGeometryType;
