@@ -4,6 +4,7 @@
 #include <iostream>
 #include <algorithm>
 #include <filesystem>
+#include <cctype>
 
 namespace fs = std::filesystem;
 
@@ -34,6 +35,19 @@ std::vector<SceneOption> ConfigLoader::GetAvailableScenes(const std::string& roo
 }
 
 enum class ConfigSection { None, Settings, Scene, Input };
+
+static bool ParseBoolToken(const std::string& value) {
+    return value == "true" || value == "1";
+}
+
+static int ParseFlickerPresetToken(std::string preset) {
+    std::transform(preset.begin(), preset.end(), preset.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (preset == "fire") return 1;
+    if (preset == "candle") return 2;
+    if (preset == "faulty") return 3;
+    if (preset == "pulse") return 4;
+    return 0;
+}
 
 void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
     if (!fs::exists(filepath) || !fs::is_regular_file(filepath)) {
@@ -251,10 +265,37 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (key == "Light") {
                 std::string lightStr;
                 ss >> lightStr;
-                currentObject->isLight = (lightStr == "true" || lightStr == "1");
+                currentObject->isLight = ParseBoolToken(lightStr);
                 if (currentObject->isLight) {
                     ss >> currentObject->lightColor.x >> currentObject->lightColor.y >> currentObject->lightColor.z >> currentObject->lightIntensity >> currentObject->lightType;
+
+                    // Optional inline flicker fields: enabled amount preset
+                    std::string flickerEnabledStr;
+                    if (ss >> flickerEnabledStr) {
+                        currentObject->lightFlickerEnabled = ParseBoolToken(flickerEnabledStr);
+
+                        if (ss >> currentObject->lightFlickerAmount) {
+                            std::string flickerPresetStr;
+                            if (ss >> flickerPresetStr) {
+                                currentObject->lightFlickerPreset = ParseFlickerPresetToken(flickerPresetStr);
+                            }
+                        }
+                        currentObject->hasExplicitLightFlicker = true;
+                    }
                 }
+            }
+            else if (key == "LightFlicker") {
+                std::string enabledStr;
+                ss >> enabledStr >> currentObject->lightFlickerAmount;
+
+                currentObject->lightFlickerEnabled = ParseBoolToken(enabledStr);
+
+                std::string presetStr;
+                if (ss >> presetStr) {
+                    currentObject->lightFlickerPreset = ParseFlickerPresetToken(presetStr);
+                }
+
+                currentObject->hasExplicitLightFlicker = true;
             }
             else if (key == "DustCloudProps") {
                 std::string activeStr;

@@ -8,6 +8,37 @@
 #include <iostream>
 #include <algorithm>
 #include <random>
+#include <cmath>
+
+namespace {
+float ComputeFlickerPresetValue(int preset, float t, float phase) {
+    switch (preset) {
+    case 1: { // Fire
+        const float f = 0.55f
+            + 0.25f * std::sin(t * 17.0f + phase)
+            + 0.15f * std::sin(t * 31.0f + phase * 1.7f)
+            + 0.10f * std::sin(t * 57.0f + phase * 0.73f);
+        return glm::clamp(f, 0.0f, 1.0f);
+    }
+    case 2: { // Candle
+        const float f = 0.72f
+            + 0.18f * std::sin(t * 7.0f + phase)
+            + 0.10f * std::sin(t * 13.0f + phase * 0.61f);
+        return glm::clamp(f, 0.0f, 1.0f);
+    }
+    case 3: { // Faulty / electrical stutter
+        const float smooth = 0.65f + 0.35f * std::sin(t * 9.0f + phase);
+        const float stutter = std::sin(t * 43.0f + phase * 2.1f);
+        const float dip = (stutter > 0.84f) ? 0.12f : 1.0f;
+        return glm::clamp(smooth * dip, 0.0f, 1.0f);
+    }
+    case 4: // Pulse
+        return 0.5f + 0.5f * std::sin(t * 3.0f + phase);
+    default:
+        return 1.0f;
+    }
+}
+}
 
 // ECS Systems
 #include "../systems/OrbitSystem.h"
@@ -644,6 +675,7 @@ Entity Scene::AddLight(const std::string& name, const glm::vec3& position, const
     light.color = color;
     light.intensity = intensity;
     light.type = type;
+    light.flickerPhase = static_cast<float>(entity) * 0.137f;
     m_Registry.AddComponent<LightComponent>(entity, light);
 
     m_LightEntities.push_back(entity);
@@ -1006,6 +1038,7 @@ void Scene::ClearProceduralRegistry() {
 }
 
 void Scene::Update(float deltaTime) {
+    m_ElapsedTime += std::max(0.0f, deltaTime);
     for (auto& sys : m_Systems) {
         sys->Update(*this, deltaTime);
     }
@@ -1023,7 +1056,13 @@ std::vector<Light> Scene::GetLights() const {
             Light vLight{};
             vLight.position = glm::vec3(transComp.matrix[3]);
             vLight.color = lightComp.color;
-            vLight.intensity = lightComp.intensity;
+            float finalIntensity = lightComp.intensity;
+            if (lightComp.flickerEnabled && lightComp.flickerAmount > 0.001f) {
+                const float pattern = ComputeFlickerPresetValue(lightComp.flickerPreset, m_ElapsedTime, lightComp.flickerPhase);
+                const float amount = glm::clamp(lightComp.flickerAmount, 0.0f, 1.0f);
+                finalIntensity *= (1.0f - amount) + (amount * pattern);
+            }
+            vLight.intensity = finalIntensity;
             vLight.type = lightComp.type;
             vLight.layerMask = lightComp.layerMask;
 
@@ -1101,6 +1140,16 @@ void Scene::SetLightLayerMask(const std::string& name, int mask) {
     Entity e = GetEntityByName(name);
     if (e != MAX_ENTITIES && m_Registry.HasComponent<LightComponent>(e)) {
         m_Registry.GetComponent<LightComponent>(e).layerMask = mask;
+    }
+}
+
+void Scene::SetLightFlicker(const std::string& name, bool enabled, float amount, int preset) {
+    Entity e = GetEntityByName(name);
+    if (e != MAX_ENTITIES && m_Registry.HasComponent<LightComponent>(e)) {
+        auto& light = m_Registry.GetComponent<LightComponent>(e);
+        light.flickerEnabled = enabled;
+        light.flickerAmount = glm::clamp(amount, 0.0f, 1.0f);
+        light.flickerPreset = glm::clamp(preset, 0, 4);
     }
 }
 

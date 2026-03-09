@@ -142,6 +142,7 @@ public:
     void SetObjectLayerMask(const std::string& name, int mask);
     void SetObjectRegionVisibilityMasks(const std::string& name, int onlyInRegionMask);
     void SetLightLayerMask(const std::string& name, int mask);
+    void SetLightFlicker(const std::string& name, bool enabled, float amount, int preset);
 
     void SetObjectCastsShadow(const std::string& name, bool casts);
     void SetObjectReceivesShadows(const std::string& name, bool receives);
@@ -221,4 +222,5 @@ private:
     std::vector<std::unique_ptr<ParticleSystem>> particleSystems;
 
     bool m_RegionsOnlyDebugView = false;
+    float m_ElapsedTime = 0.0f;
 };

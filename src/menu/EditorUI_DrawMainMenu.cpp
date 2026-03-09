@@ -475,10 +475,11 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
 
                 if (registry.HasComponent<TransformComponent>(e)) {
                     auto& transform = registry.GetComponent<TransformComponent>(e);
-                    glm::vec3 pos = glm::vec3(transform.matrix[3]);
                     ImGui::TextDisabled("Transform Data");
                     ImGui::Separator();
-                    ImGui::Text("Position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+                    if (ImGui::DragFloat3("Position", &transform.position.x, 0.1f)) {
+                        transform.UpdateMatrix();
+                    }
                     ImGui::Spacing();
                 }
 
@@ -496,6 +497,18 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                     if (light.intensity < 0.001f) light.intensity = 0.0f;
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Logarithmic scale for finer control at low values (0-100 range)");
+
+                ImGui::Checkbox("Enable Flicker", &light.flickerEnabled);
+                ImGui::SliderFloat("Flicker Amount", &light.flickerAmount, 0.0f, 1.0f, "%.2f");
+
+                const char* flickerPresets[] = { "None", "Fire", "Candle", "Faulty", "Pulse" };
+                ImGui::Combo("Flicker Preset", &light.flickerPreset, flickerPresets, IM_ARRAYSIZE(flickerPresets));
+
+                if (ImGui::Button("Use Fire Flicker Preset")) {
+                    light.flickerEnabled = true;
+                    light.flickerPreset = 1;
+                    light.flickerAmount = 0.65f;
+                }
 
                 const char* lightTypes[] = { "Sun / Directional", "Fire (Harsh Falloff)", "Standard Point", "Spotlight" };
                 int safeTypeIndex = (light.type >= 0 && light.type <= 3) ? light.type : 2;

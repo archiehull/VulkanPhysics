@@ -92,6 +92,10 @@ struct SceneObjectConfig {
     glm::vec3 lightColor = glm::vec3(1.0f);
     float lightIntensity = 1.0f;
     int lightType = 0;
+    bool lightFlickerEnabled = false;
+    float lightFlickerAmount = 0.5f;
+    int lightFlickerPreset = 0; // 0=None, 1=Fire, 2=Candle, 3=Faulty, 4=Pulse
+    bool hasExplicitLightFlicker = false;
 
     std::vector<AttachedParticleConfig> attachedParticles;
 

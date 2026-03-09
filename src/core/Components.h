@@ -135,6 +135,11 @@ struct LightComponent {
     int type = 0; // 0=Sun, 1=Fire, 2=Point, 3=Spotlight
     int layerMask = SceneLayers::LAYER_A;
 
+    bool flickerEnabled = false;
+    float flickerAmount = 0.5f;
+    int flickerPreset = 0; // 0=None, 1=Fire, 2=Candle, 3=Faulty, 4=Pulse
+    float flickerPhase = 0.0f;
+
     // --- NEW Spotlight Variables ---
     glm::vec3 direction = glm::vec3(0.0f, -1.0f, 0.0f); // Default points straight down
     float cutoffAngle = 25.0f; // Cone width in degrees

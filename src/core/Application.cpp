@@ -325,6 +325,18 @@ void Application::SetupScene() {
         if (objCfg.isLight) {
             scene->AddLight(objCfg.name, objCfg.position, objCfg.lightColor, objCfg.lightIntensity, objCfg.lightType);
             scene->SetLightLayerMask(objCfg.name, objCfg.layerMask);
+
+            bool flickerEnabled = objCfg.lightFlickerEnabled;
+            float flickerAmount = objCfg.lightFlickerAmount;
+            int flickerPreset = objCfg.lightFlickerPreset;
+
+            if (objCfg.lightType == 1 && !objCfg.hasExplicitLightFlicker) {
+                flickerEnabled = true;
+                flickerAmount = 0.65f;
+                flickerPreset = 1; // Fire
+            }
+
+            scene->SetLightFlicker(objCfg.name, flickerEnabled, flickerAmount, flickerPreset);
         }
 
         // --- Apply Orbit ---

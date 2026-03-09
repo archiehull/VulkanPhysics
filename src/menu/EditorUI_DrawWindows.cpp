@@ -452,8 +452,27 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
                 if (open && registry.HasComponent<LightComponent>(e)) {
                     auto& comp = registry.GetComponent<LightComponent>(e);
+
+                    if (registry.HasComponent<TransformComponent>(e)) {
+                        auto& tr = registry.GetComponent<TransformComponent>(e);
+                        if (ImGui::DragFloat3("Position", &tr.position.x, 0.1f)) {
+                            tr.UpdateMatrix();
+                        }
+                    }
+
                     ImGui::ColorEdit3("Color", &comp.color.x, ImGuiColorEditFlags_Float);
                     ImGui::DragFloat("Intensity", &comp.intensity, 0.1f, 0.0f, 1000.0f);
+
+                    ImGui::Checkbox("Enable Flicker", &comp.flickerEnabled);
+                    ImGui::SliderFloat("Flicker Amount", &comp.flickerAmount, 0.0f, 1.0f, "%.2f");
+                    const char* flickerPresets[] = { "None", "Fire", "Candle", "Faulty", "Pulse" };
+                    ImGui::Combo("Flicker Preset", &comp.flickerPreset, flickerPresets, IM_ARRAYSIZE(flickerPresets));
+
+                    if (ImGui::Button("Apply Fire Flicker")) {
+                        comp.flickerEnabled = true;
+                        comp.flickerAmount = 0.65f;
+                        comp.flickerPreset = 1;
+                    }
 
                     const char* lightTypes[] = { "Sun", "Fire", "Point", "Spotlight" };
                     ImGui::Combo("Type", &comp.type, lightTypes, IM_ARRAYSIZE(lightTypes));
