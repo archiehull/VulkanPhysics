@@ -49,6 +49,7 @@
     <ClCompile Include="src\rendering\SkyboxPass.cpp" />
     <ClCompile Include="src\rendering\Texture.cpp" />
     <ClCompile Include="src\systems\CameraSystem.cpp" />
+    <ClCompile Include="src\systems\ObjectSpawnerSystem.cpp" />
     <ClCompile Include="src\systems\OrbitSystem.cpp" />
     <ClCompile Include="src\systems\ParticleUpdateSystem.cpp" />
     <ClCompile Include="src\systems\PhysicsSystem.cpp" />
@@ -93,6 +94,7 @@
     <ClInclude Include="src\rendering\Texture.h" />
     <ClInclude Include="src\systems\CameraSystem.h" />
     <ClInclude Include="src\systems\ISystem.h" />
+    <ClInclude Include="src\systems\ObjectSpawnerSystem.h" />
     <ClInclude Include="src\systems\OrbitSystem.h" />
     <ClInclude Include="src\systems\ParticleUpdateSystem.h" />
     <ClInclude Include="src\systems\PhysicsSystem.h" />

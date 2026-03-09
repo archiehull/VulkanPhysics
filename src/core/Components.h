@@ -187,6 +187,28 @@ struct DustCloudComponent {
     float speed = 15.0f;
 };
 
+struct ObjectSpawnerComponent {
+    bool enabled = true;
+    float spawnInterval = 1.0f;
+    float spawnTimer = 0.0f;
+
+    std::string spawnGeometryType = "Sphere"; // Sphere, Cube, Model
+    std::string spawnModelPath = "";
+    std::string spawnTexturePath = "textures/default.jpg";
+    glm::vec3 spawnScale = glm::vec3(1.0f);
+
+    glm::vec3 spawnVelocity = glm::vec3(0.0f, 10.0f, 0.0f);
+    bool randomizeVelocity = false;
+    glm::vec3 randomVelocityRange = glm::vec3(0.0f);
+
+    float spawnMass = 1.0f;
+    int spawnedCount = 0;
+};
+
+struct SpawnedFromSpawnerComponent {
+    Entity sourceSpawner = MAX_ENTITIES;
+};
+
 // 10. Camera Data
 struct CameraComponent {
     float fov = 60.0f;

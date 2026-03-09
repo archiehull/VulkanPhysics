@@ -85,6 +85,34 @@ EndObject
 
 # --- DYNAMIC BALLS ---
 
+Object LeftBallSpawner
+    Type Spawner
+    Position -12.0 14.0 0.0
+    SpawnerEnabled true
+    SpawnInterval 1.0
+    SpawnGeometry Sphere
+    SpawnTexture tex_ball
+    SpawnScale 1.2 1.2 1.2
+    SpawnVelocity 14.0 3.0 0.0
+    RandomSpawnVelocity false
+    SpawnVelocityRandomRange 0.0 0.0 0.0
+    SpawnMass 1.0
+EndObject
+
+Object RightBallSpawner
+    Type Spawner
+    Position 12.0 14.0 0.0
+    SpawnerEnabled true
+    SpawnInterval 1.0
+    SpawnGeometry Sphere
+    SpawnTexture tex_ball
+    SpawnScale 1.2 1.2 1.2
+    SpawnVelocity -14.0 3.0 0.0
+    RandomSpawnVelocity false
+    SpawnVelocityRandomRange 0.0 0.0 0.0
+    SpawnMass 1.0
+EndObject
+
 # --- LIGHTING ---
 
 Object MainSun

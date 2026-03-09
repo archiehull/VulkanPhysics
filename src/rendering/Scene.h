@@ -52,6 +52,7 @@ public:
 
     void CreateEnvironment(const std::string& name = "GlobalEnvironment");
     Entity CreateDustCloud(const std::string& name, const glm::vec3& position, const glm::vec3& direction, float speed, bool isActive = false);
+    Entity CreateSpawnerEntity(const std::string& name, const glm::vec3& position);
 
     float RadiusAdjustment(const float radius, const float deltaY) const;
 
@@ -172,6 +173,7 @@ public:
     void SetObjectPhysics(const std::string& name, bool isStatic, float mass);
     void SetObjectPhysicsMaterial(const std::string& name, float restitution, float friction);
     void SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity);
+    void ResetSpawnerSpawnedObjects();
 
 	void SetObjectCollider(const std::string& name, int type, float radius, const glm::vec3& normal);
 

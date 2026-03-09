@@ -183,6 +183,9 @@
     <ClCompile Include="src\menu\EditorUI_DrawWindows.cpp">
       <Filter>Source Files\src\menu</Filter>
     </ClCompile>
+    <ClCompile Include="src\systems\ObjectSpawnerSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Window.h">
@@ -318,6 +321,9 @@
       <Filter>Source Files\src\menu</Filter>
     </ClInclude>
     <ClInclude Include="src\core\EditorUI.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\ObjectSpawnerSystem.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

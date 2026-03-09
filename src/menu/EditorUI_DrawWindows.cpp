@@ -691,6 +691,79 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
             }
 
             // --- 11. Environment Component ---
+            if (registry.HasComponent<ObjectSpawnerComponent>(e)) {
+                bool open = ImGui::TreeNodeEx("ObjectSpawnerComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                if (ImGui::Button("Remove##Spawner")) registry.RemoveComponent<ObjectSpawnerComponent>(e);
+
+                if (open && registry.HasComponent<ObjectSpawnerComponent>(e)) {
+                    auto& comp = registry.GetComponent<ObjectSpawnerComponent>(e);
+
+                    ImGui::Checkbox("Enabled", &comp.enabled);
+                    ImGui::DragFloat("Spawn Interval (s)", &comp.spawnInterval, 0.05f, 0.05f, 60.0f);
+                    ImGui::DragFloat3("Spawn Scale", &comp.spawnScale.x, 0.05f, 0.05f, 100.0f);
+                    ImGui::DragFloat("Spawn Mass", &comp.spawnMass, 0.1f, 0.01f, 1000.0f);
+
+                    const char* geoTypes[] = { "Sphere", "Cube", "Model" };
+                    int geoTypeIdx = 0;
+                    if (comp.spawnGeometryType == "Cube") geoTypeIdx = 1;
+                    else if (comp.spawnGeometryType == "Model") geoTypeIdx = 2;
+
+                    if (ImGui::Combo("Spawn Geometry", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes))) {
+                        comp.spawnGeometryType = geoTypes[geoTypeIdx];
+                    }
+
+                    if (comp.spawnGeometryType == "Model") {
+                        std::string comboId = "##SpawnModelCombo" + std::to_string(it->id) + "_" + std::to_string(e);
+                        const char* preview = comp.spawnModelPath.empty() ? "Select model..." : comp.spawnModelPath.c_str();
+                        if (ImGui::BeginCombo(comboId.c_str(), preview)) {
+                            for (const auto& modelPath : m_AvailableModels) {
+                                bool selected = (comp.spawnModelPath == modelPath);
+                                if (ImGui::Selectable(modelPath.c_str(), selected)) {
+                                    comp.spawnModelPath = modelPath;
+                                }
+                                if (selected) ImGui::SetItemDefaultFocus();
+                            }
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::SameLine();
+                        if (ImGui::Button(("Refresh Models##Spawner" + std::to_string(it->id) + "_" + std::to_string(e)).c_str())) {
+                            RefreshModelList();
+                        }
+                    }
+
+                    std::string texComboId = "##SpawnTextureCombo" + std::to_string(it->id) + "_" + std::to_string(e);
+                    const char* texPreview = comp.spawnTexturePath.empty() ? "Select texture..." : comp.spawnTexturePath.c_str();
+                    if (ImGui::BeginCombo(texComboId.c_str(), texPreview)) {
+                        for (const auto& texPath : m_AvailableTextures) {
+                            bool selected = (comp.spawnTexturePath == texPath);
+                            if (ImGui::Selectable(texPath.c_str(), selected)) {
+                                comp.spawnTexturePath = texPath;
+                            }
+                            if (selected) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button(("Refresh Textures##Spawner" + std::to_string(it->id) + "_" + std::to_string(e)).c_str())) {
+                        RefreshTextureList();
+                    }
+
+                    ImGui::DragFloat3("Base Velocity", &comp.spawnVelocity.x, 0.1f);
+                    ImGui::Checkbox("Randomise Velocity", &comp.randomizeVelocity);
+                    if (comp.randomizeVelocity) {
+                        ImGui::DragFloat3("Random Velocity Range", &comp.randomVelocityRange.x, 0.1f, 0.0f, 200.0f);
+                    }
+
+                    ImGui::TextDisabled("Spawned Count: %d", comp.spawnedCount);
+
+                    ImGui::TreePop();
+                }
+            }
+
+            // --- 11. Environment Component ---
             if (registry.HasComponent<EnvironmentComponent>(e)) {
                 bool open = ImGui::TreeNodeEx("EnvironmentComponent", ImGuiTreeNodeFlags_DefaultOpen);
                 ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
@@ -864,6 +937,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 addMenuItem((AttachedEmitterComponent*)nullptr, "AttachedEmitterComponent", e);
                 addMenuItem((EnvironmentComponent*)nullptr, "EnvironmentComponent", e);
                 addMenuItem((DustCloudComponent*)nullptr, "DustCloudComponent", e);
+                addMenuItem((ObjectSpawnerComponent*)nullptr, "ObjectSpawnerComponent", e);
                 addMenuItem((LayerRegionComponent*)nullptr, "LayerRegionComponent", e);
                 ImGui::EndMenu();
             }

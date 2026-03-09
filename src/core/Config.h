@@ -102,6 +102,17 @@ struct SceneObjectConfig {
     bool isActive = false;
     glm::vec3 direction = glm::vec3(1.0f, 0.0f, 0.0f);
     float speed = 15.0f;
+
+    bool spawnerEnabled = true;
+    float spawnInterval = 1.0f;
+    std::string spawnGeometryType = "Sphere";
+    std::string spawnModelPath = "";
+    std::string spawnTexturePath = "textures/default.jpg";
+    glm::vec3 spawnScale = glm::vec3(1.0f);
+    glm::vec3 spawnVelocity = glm::vec3(0.0f, 10.0f, 0.0f);
+    bool randomizeSpawnVelocity = false;
+    glm::vec3 spawnVelocityRandomRange = glm::vec3(0.0f);
+    float spawnMass = 1.0f;
 };
 
 // --- Procedural Texture Configuration ---

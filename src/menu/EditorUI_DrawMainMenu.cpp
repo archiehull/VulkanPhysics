@@ -529,6 +529,92 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         ImGui::EndMenu();
     }
 
+    if (ImGui::BeginMenu("Spawners")) {
+        Registry& registry = scene.GetRegistry();
+        bool hasSpawners = false;
+
+        for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+            if (!registry.HasComponent<ObjectSpawnerComponent>(e)) continue;
+            hasSpawners = true;
+
+            auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+            std::string spawnerName = registry.HasComponent<NameComponent>(e)
+                ? registry.GetComponent<NameComponent>(e).name
+                : ("Spawner " + std::to_string(e));
+
+            std::string menuLabel = spawnerName + "###SpawnerMenu_" + std::to_string(e);
+            if (ImGui::BeginMenu(menuLabel.c_str())) {
+                ImGui::PushID(static_cast<int>(e));
+
+                ImGui::Checkbox("Enabled", &spawner.enabled);
+                ImGui::DragFloat("Spawn Interval (s)", &spawner.spawnInterval, 0.05f, 0.05f, 60.0f);
+                ImGui::DragFloat3("Spawn Scale", &spawner.spawnScale.x, 0.05f, 0.05f, 100.0f);
+                ImGui::DragFloat("Spawn Mass", &spawner.spawnMass, 0.1f, 0.01f, 1000.0f);
+
+                const char* geometryTypes[] = { "Sphere", "Cube", "Model" };
+                int geometryIndex = 0;
+                if (spawner.spawnGeometryType == "Cube") geometryIndex = 1;
+                else if (spawner.spawnGeometryType == "Model") geometryIndex = 2;
+
+                if (ImGui::Combo("Spawn Geometry", &geometryIndex, geometryTypes, IM_ARRAYSIZE(geometryTypes))) {
+                    spawner.spawnGeometryType = geometryTypes[geometryIndex];
+                }
+
+                if (spawner.spawnGeometryType == "Model") {
+                    std::string modelPreview = spawner.spawnModelPath.empty() ? "Select model..." : spawner.spawnModelPath;
+                    if (ImGui::BeginCombo("Spawn Model", modelPreview.c_str())) {
+                        for (const auto& modelPath : m_AvailableModels) {
+                            bool selected = (spawner.spawnModelPath == modelPath);
+                            if (ImGui::Selectable(modelPath.c_str(), selected)) {
+                                spawner.spawnModelPath = modelPath;
+                            }
+                            if (selected) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
+
+                std::string texPreview = spawner.spawnTexturePath.empty() ? "Select texture..." : spawner.spawnTexturePath;
+                if (ImGui::BeginCombo("Spawn Texture", texPreview.c_str())) {
+                    for (const auto& texPath : m_AvailableTextures) {
+                        bool selected = (spawner.spawnTexturePath == texPath);
+                        if (ImGui::Selectable(texPath.c_str(), selected)) {
+                            spawner.spawnTexturePath = texPath;
+                        }
+                        if (selected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+
+                ImGui::Separator();
+                ImGui::DragFloat3("Base Velocity", &spawner.spawnVelocity.x, 0.1f);
+                ImGui::Checkbox("Randomise Velocity", &spawner.randomizeVelocity);
+                if (spawner.randomizeVelocity) {
+                    ImGui::DragFloat3("Random Velocity Range", &spawner.randomVelocityRange.x, 0.1f, 0.0f, 200.0f);
+                }
+
+                ImGui::TextDisabled("Spawned Count: %d", spawner.spawnedCount);
+
+                ImGui::PopID();
+                ImGui::EndMenu();
+            }
+        }
+
+        if (!hasSpawners) {
+            ImGui::MenuItem("No spawners in scene", nullptr, false, false);
+        }
+
+        ImGui::Separator();
+        if (ImGui::MenuItem("Refresh Model List")) {
+            RefreshModelList();
+        }
+        if (ImGui::MenuItem("Refresh Texture List")) {
+            RefreshTextureList();
+        }
+
+        ImGui::EndMenu();
+    }
+
     if (ImGui::BeginMenu("Simulation")) {
         std::string pauseLabel = m_IsPaused ? "Start Simulation  [Space]" : "Pause Simulation  [Space]";
         if (ImGui::Selectable(pauseLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {

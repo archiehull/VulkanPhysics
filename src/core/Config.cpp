@@ -276,6 +276,26 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 ss >> activeStr >> currentObject->direction.x >> currentObject->direction.y >> currentObject->direction.z >> currentObject->speed;
                 currentObject->isActive = (activeStr == "true" || activeStr == "1");
             }
+            else if (key == "SpawnerEnabled") {
+                std::string value;
+                ss >> value;
+                currentObject->spawnerEnabled = (value == "true" || value == "1");
+            }
+            else if (key == "SpawnInterval") ss >> currentObject->spawnInterval;
+            else if (key == "SpawnGeometry") ss >> currentObject->spawnGeometryType;
+            else if (key == "SpawnModel") ss >> currentObject->spawnModelPath;
+            else if (key == "SpawnTexture") ss >> currentObject->spawnTexturePath;
+            else if (key == "SpawnScale") ss >> currentObject->spawnScale.x >> currentObject->spawnScale.y >> currentObject->spawnScale.z;
+            else if (key == "SpawnVelocity") ss >> currentObject->spawnVelocity.x >> currentObject->spawnVelocity.y >> currentObject->spawnVelocity.z;
+            else if (key == "RandomSpawnVelocity") {
+                std::string value;
+                ss >> value;
+                currentObject->randomizeSpawnVelocity = (value == "true" || value == "1");
+            }
+            else if (key == "SpawnVelocityRandomRange") {
+                ss >> currentObject->spawnVelocityRandomRange.x >> currentObject->spawnVelocityRandomRange.y >> currentObject->spawnVelocityRandomRange.z;
+            }
+            else if (key == "SpawnMass") ss >> currentObject->spawnMass;
         }
         // --- Global Settings ---
         else if (key == "WindowSize") ss >> config.windowWidth >> config.windowHeight;

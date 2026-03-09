@@ -18,6 +18,7 @@
 #include "../systems/ParticleUpdateSystem.h"
 #include "../systems/CameraSystem.h"
 #include "../systems/PhysicsSystem.h"
+#include "../systems/ObjectSpawnerSystem.h"
 
 Entity Scene::AddLayerRegion(const std::string& name, int layerBit, int volumeType, float radius, const glm::vec3& halfExtents, const glm::vec3& position) {
     Entity entity = m_Registry.CreateEntity();
@@ -106,6 +107,28 @@ void Scene::SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity) {
     auto& col = m_Registry.GetComponent<ColliderComponent>(e);
     col.radius = 1.0f;
     col.hasCollision = true;
+}
+
+void Scene::ResetSpawnerSpawnedObjects() {
+    std::vector<Entity> entitiesToDelete;
+
+    for (Entity e = 0; e < m_Registry.GetEntityCount(); ++e) {
+        if (m_Registry.HasComponent<SpawnedFromSpawnerComponent>(e)) {
+            entitiesToDelete.push_back(e);
+        }
+    }
+
+    for (Entity e : entitiesToDelete) {
+        DeleteEntity(e);
+    }
+
+    for (Entity e = 0; e < m_Registry.GetEntityCount(); ++e) {
+        if (m_Registry.HasComponent<ObjectSpawnerComponent>(e)) {
+            auto& spawner = m_Registry.GetComponent<ObjectSpawnerComponent>(e);
+            spawner.spawnTimer = 0.0f;
+            spawner.spawnedCount = 0;
+        }
+    }
 }
 
 Entity Scene::GetEntityByName(const std::string& name) const {
@@ -292,6 +315,7 @@ void Scene::Initialize() {
     m_Systems.push_back(std::make_unique<SimpleShadowSystem>());
     m_Systems.push_back(std::make_unique<ThermodynamicsSystem>());
     m_Systems.push_back(std::make_unique<PhysicsSystem>());
+    m_Systems.push_back(std::make_unique<ObjectSpawnerSystem>());
 }
 
 void Scene::RegisterProceduralObject(const std::string& modelPath, const std::string& texturePath, float frequency, const glm::vec3& minScale, const glm::vec3& maxScale, const glm::vec3& baseRotation, bool isFlammable) {
@@ -590,6 +614,20 @@ Entity Scene::AddLight(const std::string& name, const glm::vec3& position, const
     m_Registry.AddComponent<LightComponent>(entity, light);
 
     m_LightEntities.push_back(entity);
+
+    return entity;
+}
+
+Entity Scene::CreateSpawnerEntity(const std::string& name, const glm::vec3& position) {
+    Entity entity = m_Registry.CreateEntity();
+    m_EntityMap[name] = entity;
+
+    m_Registry.AddComponent<NameComponent>(entity, { name });
+
+    TransformComponent transform;
+    transform.position = position;
+    transform.UpdateMatrix();
+    m_Registry.AddComponent<TransformComponent>(entity, transform);
 
     return entity;
 }

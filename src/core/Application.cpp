@@ -111,7 +111,7 @@ void Application::InitVulkan() {
 
     // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/worlds/", "desert");
+    editorUI->Initialize("src/worlds/", "physicstest1");
 
     for (const auto& cam : config.customCameras) {
         camNames.push_back(cam.name);
@@ -258,6 +258,24 @@ void Application::SetupScene() {
             // Params: x=Rows, y=Cols, z=CellSize
             scene->AddGrid(objCfg.name, (int)objCfg.params.x, (int)objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
         }
+        else if (objCfg.type == "Spawner") {
+            Entity spawnerEntity = scene->CreateSpawnerEntity(objCfg.name, objCfg.position);
+
+            ObjectSpawnerComponent spawner;
+            spawner.enabled = objCfg.spawnerEnabled;
+            spawner.spawnInterval = objCfg.spawnInterval;
+            spawner.spawnGeometryType = objCfg.spawnGeometryType;
+            spawner.spawnModelPath = objCfg.spawnModelPath;
+            spawner.spawnTexturePath = objCfg.spawnTexturePath.empty() ? objCfg.texturePath : objCfg.spawnTexturePath;
+            spawner.spawnScale = objCfg.spawnScale;
+            spawner.spawnVelocity = objCfg.spawnVelocity;
+            spawner.randomizeVelocity = objCfg.randomizeSpawnVelocity;
+            spawner.randomVelocityRange = objCfg.spawnVelocityRandomRange;
+            spawner.spawnMass = objCfg.spawnMass;
+
+            scene->GetRegistry().AddComponent<ObjectSpawnerComponent>(spawnerEntity, spawner);
+            continue;
+        }
         if (objCfg.type == "Environment") {
             continue;
         }
@@ -397,6 +415,7 @@ void Application::MainLoop() {
         // 1. Handle Restart
         if (editorUI->ConsumeRestartRequest()) {
             scene->ResetEnvironment();
+            scene->ResetSpawnerSpawnedObjects();
         }
 
         std::string selectedCam = editorUI->ConsumeCameraSwitchRequest();
