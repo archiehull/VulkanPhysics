@@ -191,11 +191,40 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
         ImGui::Separator();
         ImGui::Spacing();
 
+        auto hasVisibleEntityData = [&](Entity e) -> bool {
+            return registry.HasComponent<NameComponent>(e)
+                || registry.HasComponent<TransformComponent>(e)
+                || registry.HasComponent<RenderComponent>(e)
+                || registry.HasComponent<LightComponent>(e)
+                || registry.HasComponent<CameraComponent>(e)
+                || registry.HasComponent<PhysicsComponent>(e)
+                || registry.HasComponent<ColliderComponent>(e)
+                || registry.HasComponent<ThermoComponent>(e)
+                || registry.HasComponent<EnvironmentComponent>(e)
+                || registry.HasComponent<OrbitComponent>(e)
+                || registry.HasComponent<LayerRegionComponent>(e)
+                || registry.HasComponent<ObjectSpawnerComponent>(e)
+                || registry.HasComponent<DustCloudComponent>(e)
+                || registry.HasComponent<DespawnerComponent>(e)
+                || registry.HasComponent<SpawnedFromSpawnerComponent>(e)
+                || registry.HasComponent<DeathWallComponent>(e)
+                || registry.HasComponent<AttachedEmitterComponent>(e);
+            };
+
+        if (it->selectedEntity != MAX_ENTITIES &&
+            (it->selectedEntity >= count || !hasVisibleEntityData(it->selectedEntity))) {
+            it->selectedEntity = MAX_ENTITIES;
+        }
+
         // --- LEFT PANE: Selectable Entity List (Retractable) ---
         if (it->showList) {
             ImGui::BeginChild("EntityListPane", ImVec2(250, 0), true);
 
             for (Entity e = 0; e < count; ++e) {
+                if (!hasVisibleEntityData(e)) {
+                    continue;
+                }
+
                 std::string entityName = "Entity " + std::to_string(e);
                 if (registry.HasComponent<NameComponent>(e)) {
                     entityName = registry.GetComponent<NameComponent>(e).name + " (ID: " + std::to_string(e) + ")";
