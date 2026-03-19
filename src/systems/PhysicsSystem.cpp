@@ -85,10 +85,20 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                 }
 
                 // Use helper API directly for damping/drag
-                MovingSphere helperBody(transform.position, 1.0f, physics.velocity, physics.inverseMass, physics.restitution);
+                float colRadius = 1.0f;
+                if (registry.HasComponent<ColliderComponent>(i)) {
+                    colRadius = registry.GetComponent<ColliderComponent>(i).radius;
+                }
+
+                MovingSphere helperBody(transform.position, colRadius, physics.velocity, physics.inverseMass, physics.restitution);
                 helperBody.forceAccumulator = physics.forceAccumulator;
                 // Load current orientation from physics component so rotations persist
                 helperBody.orientation = physics.orientation;
+                // Load rotational state and inertia
+                helperBody.angularVelocity = physics.angularVelocity;
+                helperBody.torqueAccumulator = physics.torqueAccumulator;
+                helperBody.inertiaTensor = physics.inertiaTensor;
+                helperBody.inverseInertiaTensor = physics.inverseInertiaTensor;
 
                 if (applyLinearDamping) {
                     ApplyLinearDamping(helperBody, linearDampingFactor, dt);
@@ -128,14 +138,12 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                     transform.position += (k1_x + 2.0f * k2_x + 2.0f * k3_x + k4_x) * (dt / 6.0f);
                 }
 
-                // --- Angular integration: update orientation from angular velocity ---
-                const float angularSpeed = glm::length(physics.angularVelocity);
-                if (angularSpeed > 1e-6f) {
-                    const glm::vec3 axis = physics.angularVelocity / angularSpeed;
-                    // Apply rotation on helper body and write back
-                    ApplyAngularDisplacement(helperBody, axis, angularSpeed * dt);
-                    physics.orientation = helperBody.orientation;
-                }
+                // --- Angular integration: use torque/inertia to update angular velocity & orientation ---
+                IntegrateAngularVelocity(helperBody, dt);
+                // Write rotational results back into ECS component
+                physics.angularVelocity = helperBody.angularVelocity;
+                physics.orientation = helperBody.orientation;
+                physics.torqueAccumulator = helperBody.torqueAccumulator; // should be cleared by integrator
 
                 physics.forceAccumulator = glm::vec3(0.0f);
 

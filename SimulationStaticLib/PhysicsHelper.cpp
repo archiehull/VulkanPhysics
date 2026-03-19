@@ -4,8 +4,19 @@
 #include <cmath>
 
 MovingSphere::MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, float invM, float rest)
-	: sphere(pos, r), velocity(vel), forceAccumulator(0.0f), invMass(invM), restitution(rest), orientation(glm::mat3(1.0f)), angularVelocity(glm::vec3(0.0f))
+	: sphere(pos, r), velocity(vel), forceAccumulator(0.0f), invMass(invM), restitution(rest), orientation(glm::mat3(1.0f)), angularVelocity(glm::vec3(0.0f)), torqueAccumulator(glm::vec3(0.0f)), inertiaTensor(glm::mat3(1.0f)), inverseInertiaTensor(glm::mat3(1.0f))
 {
+	// Compute inertia for a solid sphere if dynamic (invMass > 0)
+	if (invMass > 0.0f) {
+		float mass = 1.0f / invMass;
+		float i = (2.0f / 5.0f) * mass * (r * r);
+		inertiaTensor = glm::mat3(i);
+		inverseInertiaTensor = glm::mat3(1.0f / i);
+	}
+	else {
+		inertiaTensor = glm::mat3(0.0f);
+		inverseInertiaTensor = glm::mat3(0.0f);
+	}
 }
 
 void ResolveElasticCollision(MovingSphere& a, MovingSphere& b, bool useForce, float dt)
@@ -84,6 +95,21 @@ void ApplyForce(MovingSphere& body, const glm::vec3& force)
 {
 	if (body.invMass <= 0.0f) return;
 	body.forceAccumulator += force;
+}
+
+// Apply force at a world-space point. Adds linear force and accumulates torque.
+void ApplyForceAtPoint(MovingSphere& body, const glm::vec3& force, const glm::vec3& point) {
+    if (body.invMass <= 0.0f) return;
+
+    // Linear contribution: force acts on center of mass as well
+    body.forceAccumulator += force;
+
+    // r = point - centerOfMass
+    glm::vec3 r = point - body.sphere.Position();
+
+    // Torque = r x F
+    glm::vec3 torque = glm::cross(r, force);
+    body.torqueAccumulator += torque;
 }
 
 float GetTotalSystemEnergy(const MovingSphere* bodies, int count)
@@ -169,10 +195,20 @@ void IntegrateAngularVelocity(MovingSphere& body, float dt)
 {
 	if (dt <= 0.0f) return;
 
+	// Convert accumulated torque into angular acceleration: alpha = I^-1 * tau
+	if (glm::length(body.torqueAccumulator) > 0.0f) {
+		// Multiply inverse inertia matrix by torque vector
+		glm::vec3 angularAcceleration = body.inverseInertiaTensor * body.torqueAccumulator;
+		body.angularVelocity += angularAcceleration * dt;
+	}
+
 	const float speed = glm::length(body.angularVelocity);
 	if (speed <= 1e-8f) return; // nothing to do
 
 	const glm::vec3 axis = body.angularVelocity / speed;
 	const float angle = speed * dt; // radians rotated this step
 	ApplyAngularDisplacement(body, axis, angle);
+
+	// clear torque accumulator after integration
+	body.torqueAccumulator = glm::vec3(0.0f);
 }

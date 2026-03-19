@@ -125,6 +125,28 @@ struct PhysicsComponent {
 
     // Orientation stored as a 3x3 rotation matrix (column-major). Identity = no rotation
     glm::mat3 orientation = glm::mat3(1.0f);
+
+    // --- NEW: Torque & Inertia ---
+    // Accumulated torque for the current frame (world-space)
+    glm::vec3 torqueAccumulator = glm::vec3(0.0f);
+
+    // Inertia tensor (body-space) and inverse. For a sphere this can be set
+    // using SetSphereInertia(). Stored as 3x3 matrices.
+    glm::mat3 inertiaTensor = glm::mat3(1.0f);
+    glm::mat3 inverseInertiaTensor = glm::mat3(1.0f);
+
+    // Helper to initialize inertia for a solid sphere: I = (2/5) * m * r^2
+    void SetSphereInertia(float radius) {
+        if (isStatic || mass <= 0.0f) {
+            inertiaTensor = glm::mat3(0.0f);
+            inverseInertiaTensor = glm::mat3(0.0f);
+        }
+        else {
+            float i = (2.0f / 5.0f) * mass * (radius * radius);
+            inertiaTensor = glm::mat3(i);
+            inverseInertiaTensor = glm::mat3(1.0f / i);
+        }
+    }
 };
 
 struct ColliderComponent {

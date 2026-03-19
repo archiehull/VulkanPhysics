@@ -16,6 +16,11 @@ struct MovingSphere {
     // NEW: Angular velocity in radians/sec around local axis
     glm::vec3 angularVelocity = glm::vec3(0.0f);
 
+    // NEW: Torque & Inertia (body-space)
+    glm::vec3 torqueAccumulator = glm::vec3(0.0f);
+    glm::mat3 inertiaTensor = glm::mat3(1.0f);
+    glm::mat3 inverseInertiaTensor = glm::mat3(1.0f);
+
     MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, float invM = 1.0f, float rest = 1.0f);
 };
 
@@ -39,24 +44,20 @@ void ApplyImpulse(MovingSphere& body, const glm::vec3& impulse);
 // Apply force (integrated over time)
 void ApplyForce(MovingSphere& body, const glm::vec3& force);
 
-// Calculate total system energy (useful for energy conservation checks)
+// Apply a force at a world-space point (generates linear force + torque)
+void ApplyForceAtPoint(MovingSphere& body, const glm::vec3& force, const glm::vec3& point);
+
 float GetTotalSystemEnergy(const MovingSphere* bodies, int count);
 
-// Calculate total system momentum
 glm::vec3 GetTotalSystemMomentum(const MovingSphere* bodies, int count);
 
-// Calculate relative velocity at collision point
 glm::vec3 GetRelativeVelocity(const MovingSphere& a, const MovingSphere& b);
 
-// Calculate coefficient of restitution from velocities
 float CalculateRestitutionFromVelocities(const glm::vec3& v1Before, const glm::vec3& v1After, const glm::vec3& normal);
 
-// Damping/drag utilities
 void ApplyLinearDamping(MovingSphere& body, float damping, float dt);
 void ApplyQuadraticDrag(MovingSphere& body, float dragCoefficient, float dt);
 
-// Apply an angular displacement (rotation) about an axis by angleRadians
 void ApplyAngularDisplacement(MovingSphere& body, const glm::vec3& axis, float angleRadians);
 
-// Integrate angular velocity over timestep (updates orientation)
 void IntegrateAngularVelocity(MovingSphere& body, float dt);
