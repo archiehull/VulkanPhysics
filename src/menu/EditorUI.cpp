@@ -104,9 +104,15 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
     ImGui::GetIO().FontGlobalScale = m_UIScale;
 
+    // Draw main menu first (top bar)
     DrawMainMenuSection(deltaTime, currentTemp, seasonName, scene, activeOrbitTarget, sceneToLoad, entityToDelete);
-    DrawPostMainMenuSection(scene, entityToDelete);
+
+    // Property windows may set `entityToDelete` (Delete button lives in property windows)
+    // Ensure we draw property windows before the post-main-menu processing so deletion takes effect
     DrawPropertyWindowsSection(scene, entityToDelete);
+
+    // Post main-menu section performs cleanup actions such as handling entity deletions
+    DrawPostMainMenuSection(scene, entityToDelete);
 
     return sceneToLoad;
 }
