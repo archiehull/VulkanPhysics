@@ -116,9 +116,22 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
         velocity.z += distZ(rng);
     }
 
+    // Prepare angular velocity
+    glm::vec3 angVel = spawner.spawnAngularVelocity;
+    if (spawner.randomizeAngularVelocity) {
+        static std::mt19937 rng_ang(std::random_device{}());
+        std::uniform_real_distribution<float> aX(-spawner.randomAngularVelocityRange.x, spawner.randomAngularVelocityRange.x);
+        std::uniform_real_distribution<float> aY(-spawner.randomAngularVelocityRange.y, spawner.randomAngularVelocityRange.y);
+        std::uniform_real_distribution<float> aZ(-spawner.randomAngularVelocityRange.z, spawner.randomAngularVelocityRange.z);
+        angVel.x += aX(rng_ang);
+        angVel.y += aY(rng_ang);
+        angVel.z += aZ(rng_ang);
+    }
+
     if (registry.HasComponent<PhysicsComponent>(spawnedEntity)) {
         auto& phys = registry.GetComponent<PhysicsComponent>(spawnedEntity);
         phys.isStatic = false;
         phys.velocity = velocity;
+        phys.angularVelocity = angVel; // assign initial spin
     }
 }

@@ -118,6 +118,13 @@ struct PhysicsComponent {
             inverseMass = 1.0f / mass;
         }
     }
+
+    // --- ROTATIONAL STATE ---
+    // The direction is the axis of rotation, magnitude is radians per second
+    glm::vec3 angularVelocity = glm::vec3(0.0f);
+
+    // Orientation stored as a 3x3 rotation matrix (column-major). Identity = no rotation
+    glm::mat3 orientation = glm::mat3(1.0f);
 };
 
 struct ColliderComponent {
@@ -212,6 +219,11 @@ struct ObjectSpawnerComponent {
     glm::vec3 spawnVelocity = glm::vec3(0.0f, 10.0f, 0.0f);
     bool randomizeVelocity = false;
     glm::vec3 randomVelocityRange = glm::vec3(0.0f);
+
+    // === NEW: Angular Velocity (radians/sec). Direction = axis, magnitude = speed ===
+    glm::vec3 spawnAngularVelocity = glm::vec3(0.0f);
+    bool randomizeAngularVelocity = false;
+    glm::vec3 randomAngularVelocityRange = glm::vec3(0.0f);
 
     float spawnMass = 1.0f;
     int spawnedCount = 0;

@@ -87,6 +87,8 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                 // Use helper API directly for damping/drag
                 MovingSphere helperBody(transform.position, 1.0f, physics.velocity, physics.inverseMass, physics.restitution);
                 helperBody.forceAccumulator = physics.forceAccumulator;
+                // Load current orientation from physics component so rotations persist
+                helperBody.orientation = physics.orientation;
 
                 if (applyLinearDamping) {
                     ApplyLinearDamping(helperBody, linearDampingFactor, dt);
@@ -126,8 +128,23 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                     transform.position += (k1_x + 2.0f * k2_x + 2.0f * k3_x + k4_x) * (dt / 6.0f);
                 }
 
+                // --- Angular integration: update orientation from angular velocity ---
+                const float angularSpeed = glm::length(physics.angularVelocity);
+                if (angularSpeed > 1e-6f) {
+                    const glm::vec3 axis = physics.angularVelocity / angularSpeed;
+                    // Apply rotation on helper body and write back
+                    ApplyAngularDisplacement(helperBody, axis, angularSpeed * dt);
+                    physics.orientation = helperBody.orientation;
+                }
+
                 physics.forceAccumulator = glm::vec3(0.0f);
-                transform.UpdateMatrix();
+
+                // Sync orientation + position + scale into transform.matrix for renderer
+                glm::mat4 translation = glm::translate(glm::mat4(1.0f), transform.position);
+                glm::mat4 rotationMat = glm::mat4(physics.orientation);
+                glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), transform.scale);
+                transform.matrix = translation * rotationMat * scaleMat;
+                // Note: Do not call UpdateMatrix() which would overwrite matrix from Euler degrees
             }
         }
     }

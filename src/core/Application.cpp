@@ -123,7 +123,7 @@ void Application::InitVulkan() {
 
     // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/worlds/", "desert");
+    editorUI->Initialize("src/worlds/", "physicstest1");
     editorUI->SetPerformanceSettings(config.vsync, config.maxFps);
 
     for (const auto& cam : config.customCameras) {
@@ -322,6 +322,10 @@ void Application::SetupScene() {
             spawner.spawnVelocity = objCfg.spawnVelocity;
             spawner.randomizeVelocity = objCfg.randomizeSpawnVelocity;
             spawner.randomVelocityRange = objCfg.spawnVelocityRandomRange;
+            // NEW: angular velocity config
+            spawner.spawnAngularVelocity = objCfg.spawnAngularVelocity;
+            spawner.randomizeAngularVelocity = objCfg.randomizeSpawnAngularVelocity;
+            spawner.randomAngularVelocityRange = objCfg.spawnAngularVelocityRandomRange;
             spawner.spawnMass = objCfg.spawnMass;
 
             scene->GetRegistry().AddComponent<ObjectSpawnerComponent>(spawnerEntity, spawner);

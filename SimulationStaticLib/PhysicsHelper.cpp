@@ -4,7 +4,7 @@
 #include <cmath>
 
 MovingSphere::MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, float invM, float rest)
-	: sphere(pos, r), velocity(vel), forceAccumulator(0.0f), invMass(invM), restitution(rest)
+	: sphere(pos, r), velocity(vel), forceAccumulator(0.0f), invMass(invM), restitution(rest), orientation(glm::mat3(1.0f)), angularVelocity(glm::vec3(0.0f))
 {
 }
 
@@ -151,4 +151,28 @@ void ApplyQuadraticDrag(MovingSphere& body, float dragCoefficient, float dt)
 	// F * dt => impulse, then apply with invMass
 	const glm::vec3 dragImpulse = dragDir * dragMagnitude * dt;
 	ApplyImpulse(body, dragImpulse);
+}
+
+// Apply an angular displacement (rotation) around axis by angleRadians
+void ApplyAngularDisplacement(MovingSphere& body, const glm::vec3& axis, float angleRadians)
+{
+	// Build a 4x4 rotation then extract the 3x3 portion
+	glm::mat4 rot4 = glm::rotate(glm::mat4(1.0f), angleRadians, glm::normalize(axis));
+	glm::mat3 rot3 = glm::mat3(rot4);
+
+	// Apply rotation: newOrientation = rot * oldOrientation
+	body.orientation = rot3 * body.orientation;
+}
+
+// Integrate angular velocity to update orientation
+void IntegrateAngularVelocity(MovingSphere& body, float dt)
+{
+	if (dt <= 0.0f) return;
+
+	const float speed = glm::length(body.angularVelocity);
+	if (speed <= 1e-8f) return; // nothing to do
+
+	const glm::vec3 axis = body.angularVelocity / speed;
+	const float angle = speed * dt; // radians rotated this step
+	ApplyAngularDisplacement(body, axis, angle);
 }

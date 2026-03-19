@@ -846,6 +846,17 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         ImGui::DragFloat3("Random Velocity Range", &comp.randomVelocityRange.x, 0.1f, 0.0f, 200.0f);
                     }
 
+                    // --- NEW: Angular Velocity for spawned objects ---
+                    ImGui::Separator();
+                    ImGui::TextDisabled("Angular Velocity (radians/sec)");
+                    ImGui::DragFloat3("Base Spin", &comp.spawnAngularVelocity.x, 0.1f);
+                    ImGui::Checkbox("Randomise Spin", &comp.randomizeAngularVelocity);
+                    if (comp.randomizeAngularVelocity) {
+                        ImGui::Indent();
+                        ImGui::DragFloat3("Spin Variance", &comp.randomAngularVelocityRange.x, 0.1f, 0.0f, 200.0f);
+                        ImGui::Unindent();
+                    }
+
                     ImGui::TextDisabled("Status: %s", comp.isRunning ? "Running" : "Stopped");
                     ImGui::TextDisabled("Spawned This Run: %d", comp.spawnedThisRun);
                     ImGui::TextDisabled("Total Spawned: %d", comp.spawnedCount);

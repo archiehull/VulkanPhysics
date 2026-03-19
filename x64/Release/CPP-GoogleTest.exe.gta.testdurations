@@ -88,5 +88,15 @@
     <TestDuration Test="Physics_FixedCollision.SphereFixedCylinder_SideReflection" Duration="1" />
     <TestDuration Test="Physics_Collision.TwoMoving_Glancing" Duration="1" />
     <TestDuration Test="Physics_Collision.UnequalMass_HeadOn" Duration="1" />
+    <TestDuration Test="OrientationTests.Rotate_X_90" Duration="1" />
+    <TestDuration Test="OrientationTests.Rotate_Y_180" Duration="1" />
+    <TestDuration Test="OrientationTests.Rotate_Z_270" Duration="1" />
+    <TestDuration Test="OrientationTests.Rotate_XY_Combination" Duration="1" />
+    <TestDuration Test="Physics_HelperAPI.ApplyImpulse_DynamicBody" Duration="1" />
+    <TestDuration Test="Physics_HelperAPI.ApplyImpulse_StaticBody_NoChange" Duration="1" />
+    <TestDuration Test="Physics_HelperAPI.TotalSystemEnergyAndMomentum" Duration="1" />
+    <TestDuration Test="Physics_HelperAPI.CalculateRestitutionFromVelocities_HeadOn" Duration="1" />
+    <TestDuration Test="Physics_HelperAPI.ApplyLinearDamping_ReducesSpeed" Duration="1" />
+    <TestDuration Test="Physics_HelperAPI.ApplyQuadraticDrag_ReducesSpeed" Duration="1" />
   </TestDurations>
 </GtaTestDurations>

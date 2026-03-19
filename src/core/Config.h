@@ -127,6 +127,13 @@ struct SceneObjectConfig {
     glm::vec3 spawnVelocity = glm::vec3(0.0f, 10.0f, 0.0f);
     bool randomizeSpawnVelocity = false;
     glm::vec3 spawnVelocityRandomRange = glm::vec3(0.0f);
+
+    // --- NEW: Spawn Angular Velocity configuration ---
+    // Direction = axis of rotation, magnitude = radians per second
+    glm::vec3 spawnAngularVelocity = glm::vec3(0.0f);
+    bool randomizeSpawnAngularVelocity = false;
+    glm::vec3 spawnAngularVelocityRandomRange = glm::vec3(0.0f);
+
     float spawnMass = 1.0f;
 
     bool isDespawner = false;

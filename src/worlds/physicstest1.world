@@ -101,8 +101,11 @@ Object LeftBallSpawner
     SpawnTexture tex_ball
     SpawnScale 1.2 1.2 1.2
     SpawnVelocity 14.0 3.0 0.0
+    SpawnAngularVelocity 0.0 0.0 6.0
     RandomSpawnVelocity false
     SpawnVelocityRandomRange 0.0 0.0 0.0
+    RandomSpawnAngularVelocity false
+    SpawnAngularVelocityRandomRange 0.0 0.0 0.0
     SpawnMass 1.0
 EndObject
 
@@ -116,8 +119,11 @@ Object RightBallSpawner
     SpawnTexture tex_ball
     SpawnScale 1.2 1.2 1.2
     SpawnVelocity -14.0 3.0 0.0
+    SpawnAngularVelocity 0.0 6.0 0.0
     RandomSpawnVelocity false
     SpawnVelocityRandomRange 0.0 0.0 0.0
+    RandomSpawnAngularVelocity false
+    SpawnAngularVelocityRandomRange 0.0 0.0 0.0
     SpawnMass 1.0
 EndObject
 

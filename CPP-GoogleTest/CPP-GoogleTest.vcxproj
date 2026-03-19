@@ -102,8 +102,10 @@
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AngularVelocityTests.cpp" />
     <ClCompile Include="ColliderTests.cpp" />
     <ClCompile Include="CylinderTests.cpp" />
+    <ClCompile Include="OrientationTests.cpp" />
     <ClCompile Include="PhysicsIntegration.cpp" />
     <ClCompile Include="PlaneTests.cpp" />
     <ClCompile Include="PhysicsTests.cpp" />

@@ -366,6 +366,17 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (key == "SpawnVelocityRandomRange") {
                 ss >> currentObject->spawnVelocityRandomRange.x >> currentObject->spawnVelocityRandomRange.y >> currentObject->spawnVelocityRandomRange.z;
             }
+            else if (key == "SpawnAngularVelocity") {
+                ss >> currentObject->spawnAngularVelocity.x >> currentObject->spawnAngularVelocity.y >> currentObject->spawnAngularVelocity.z;
+            }
+            else if (key == "RandomSpawnAngularVelocity") {
+                std::string value;
+                ss >> value;
+                currentObject->randomizeSpawnAngularVelocity = (value == "true" || value == "1");
+            }
+            else if (key == "SpawnAngularVelocityRandomRange") {
+                ss >> currentObject->spawnAngularVelocityRandomRange.x >> currentObject->spawnAngularVelocityRandomRange.y >> currentObject->spawnAngularVelocityRandomRange.z;
+            }
             else if (key == "SpawnMass") ss >> currentObject->spawnMass;
             else if (key == "Despawner") {
                 std::string value;
