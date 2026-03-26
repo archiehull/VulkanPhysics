@@ -1020,6 +1020,19 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
             ImGui::Spacing();
 
+            // --- 13. Despawner Component ---
+            if (registry.HasComponent<DespawnerComponent>(e)) {
+                bool open = ImGui::TreeNodeEx("DespawnerComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                if (ImGui::Button("Remove##Despawner")) registry.RemoveComponent<DespawnerComponent>(e);
+
+                if (open && registry.HasComponent<DespawnerComponent>(e)) {
+                    auto& comp = registry.GetComponent<DespawnerComponent>(e);
+                    ImGui::Checkbox("Enabled", &comp.enabled);
+                    ImGui::TreePop();
+                }
+            }
+
             // --- Component Assignment Menu ---
             if (ImGui::BeginMenu("Add Component...")) {
                 addMenuItem((NameComponent*)nullptr, "NameComponent", e);
