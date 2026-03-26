@@ -236,23 +236,6 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         }
 
 
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Make it green
-        if (ImGui::MenuItem("Create New Entity")) {
-            static int newEntityCount = 1;
-            std::string name = "NewEntity_" + std::to_string(newEntityCount++);
-
-            // Spawn a default 1x1 cube. AddCube safely registers it in the 
-            // Scene's Renderable arrays and attaches all base components!
-            scene.AddCube(name, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f), "");
-
-            // Force open a properties window if none exist
-            if (m_PropertyWindows.empty()) {
-                m_PropertyWindows.push_back({ m_NextPropertyWindowId++, MAX_ENTITIES, true, true });
-            }
-        }
-        ImGui::PopStyleColor();
-
-
         if (ImGui::MenuItem("Open New Properties Window")) {
             m_PropertyWindows.push_back({ m_NextPropertyWindowId++, MAX_ENTITIES, true, true });
         }

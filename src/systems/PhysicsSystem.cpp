@@ -64,6 +64,85 @@ namespace {
 void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
 
+    // --- Spring forces: iterate entities with SpringComponent and apply forces before integration ---
+    const Entity entityCount = registry.GetEntityCount();
+    for (Entity e = 0; e < entityCount; ++e) {
+        if (!registry.HasComponent<SpringComponent>(e) ||
+            !registry.HasComponent<TransformComponent>(e) ||
+            !registry.HasComponent<PhysicsComponent>(e)) {
+            continue;
+        }
+
+        auto& spring = registry.GetComponent<SpringComponent>(e);
+        auto& transformA = registry.GetComponent<TransformComponent>(e);
+        auto& physicsA = registry.GetComponent<PhysicsComponent>(e);
+
+        glm::vec3 posA = transformA.position;
+        glm::vec3 velA = physicsA.velocity;
+
+        // If the spring is anchored to a fixed point in space, apply that force once
+        if (!spring.isAttachedToEntity) {
+            glm::vec3 posB = spring.fixedAnchorPoint;
+            glm::vec3 velB = glm::vec3(0.0f);
+
+            glm::vec3 deltaPos = posB - posA;
+            float distance = glm::length(deltaPos);
+            if (distance <= 0.0001f) continue;
+            glm::vec3 direction = deltaPos / distance;
+
+            float displacement = distance - spring.restingLength;
+            float springForceMagnitude = spring.stiffness * displacement;
+
+            glm::vec3 relativeVelocity = velB - velA;
+            float velocityAlongSpring = glm::dot(relativeVelocity, direction);
+            float dampingForceMagnitude = spring.damping * velocityAlongSpring;
+
+            glm::vec3 totalForceOnA = direction * (springForceMagnitude + dampingForceMagnitude);
+            physicsA.ApplyForce(totalForceOnA);
+
+            // No opposite force applied (anchor is fixed in space)
+            continue;
+        }
+
+        // Otherwise, iterate all connected entities and apply pairwise spring forces
+        for (Entity target : spring.connectedEntities) {
+            if (target == MAX_ENTITIES) continue;
+            if (target >= entityCount) continue;
+
+            // It's valid to have springs pointing to entities without physics (they'll be ignored)
+            if (!registry.HasComponent<TransformComponent>(target)) continue;
+
+            glm::vec3 posB = registry.GetComponent<TransformComponent>(target).position;
+            glm::vec3 velB = glm::vec3(0.0f);
+            if (registry.HasComponent<PhysicsComponent>(target)) {
+                velB = registry.GetComponent<PhysicsComponent>(target).velocity;
+            }
+
+            glm::vec3 deltaPos = posB - posA;
+            float distance = glm::length(deltaPos);
+            if (distance <= 0.0001f) continue;
+            glm::vec3 direction = deltaPos / distance;
+
+            float displacement = distance - spring.restingLength;
+            float springForceMagnitude = spring.stiffness * displacement;
+
+            glm::vec3 relativeVelocity = velB - velA;
+            float velocityAlongSpring = glm::dot(relativeVelocity, direction);
+            float dampingForceMagnitude = spring.damping * velocityAlongSpring;
+
+            glm::vec3 totalForceOnA = direction * (springForceMagnitude + dampingForceMagnitude);
+
+            // Apply to A
+            physicsA.ApplyForce(totalForceOnA);
+
+            // Apply equal and opposite to B if it has physics
+            if (registry.HasComponent<PhysicsComponent>(target)) {
+                auto& physicsB = registry.GetComponent<PhysicsComponent>(target);
+                physicsB.ApplyForce(-totalForceOnA);
+            }
+        }
+    }
+
     const float dt = deltaTime / static_cast<float>(subSteps);
 
     for (int i = 0; i < subSteps; ++i) {

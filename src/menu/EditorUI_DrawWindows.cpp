@@ -191,6 +191,24 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
         ImGui::Separator();
         ImGui::Spacing();
 
+        // Create New Entity button
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+        if (ImGui::Button("Create New Entity", ImVec2(-1, 0))) {
+            static int newEntityCount = 1;
+            std::string name = "NewEntity_" + std::to_string(newEntityCount++);
+            // Spawn a default 1x1 cube
+            scene.AddCube(name, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f), "");
+            // Ensure at least one properties window exists
+            if (m_PropertyWindows.empty()) {
+                m_PropertyWindows.push_back({ m_NextPropertyWindowId++, MAX_ENTITIES, true, true });
+            }
+        }
+        ImGui::PopStyleColor(3);
+
+        ImGui::Spacing();
+
         auto hasVisibleEntityData = [&](Entity e) -> bool {
             return registry.HasComponent<NameComponent>(e)
                 || registry.HasComponent<TransformComponent>(e)
@@ -207,7 +225,6 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 || registry.HasComponent<DustCloudComponent>(e)
                 || registry.HasComponent<DespawnerComponent>(e)
                 || registry.HasComponent<SpawnedFromSpawnerComponent>(e)
-                || registry.HasComponent<DeathWallComponent>(e)
                 || registry.HasComponent<AttachedEmitterComponent>(e);
             };
 
@@ -250,7 +267,21 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 headerName += " (" + registry.GetComponent<NameComponent>(e).name + ")";
             }
 
-            ImGui::TextDisabled("%s", headerName.c_str());
+            // --- Show indicator if this entity is attached to any spring ---
+            bool isAttachedToAnySpring = false;
+            for (Entity s = 0; s < registry.GetEntityCount(); ++s) {
+                if (!registry.HasComponent<SpringComponent>(s)) continue;
+                const auto& sp = registry.GetComponent<SpringComponent>(s);
+                if (!sp.isAttachedToEntity) continue;
+                if (std::find(sp.connectedEntities.begin(), sp.connectedEntities.end(), e) != sp.connectedEntities.end()) {
+                    isAttachedToAnySpring = true;
+                    break;
+                }
+            }
+            if (isAttachedToAnySpring) {
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "[ Attached to a Spring Constraint ]");
+            }
+
             ImGui::Separator();
             ImGui::Spacing();
 
@@ -738,134 +769,98 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 }
             }
 
-            // --- 11. Environment Component ---
-            if (registry.HasComponent<DespawnerComponent>(e)) {
-                bool open = ImGui::TreeNodeEx("DespawnerComponent", ImGuiTreeNodeFlags_DefaultOpen);
+            // --- 11. Spring Component ---
+            if (registry.HasComponent<SpringComponent>(e)) {
+                bool open = ImGui::TreeNodeEx("SpringComponent", ImGuiTreeNodeFlags_DefaultOpen);
                 ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
-                if (ImGui::Button("Remove##Despawner")) registry.RemoveComponent<DespawnerComponent>(e);
+                if (ImGui::Button("Remove##Spring")) registry.RemoveComponent<SpringComponent>(e);
 
-                if (open && registry.HasComponent<DespawnerComponent>(e)) {
-                    auto& comp = registry.GetComponent<DespawnerComponent>(e);
-                    ImGui::Checkbox("Enabled", &comp.enabled);
-                    ImGui::TextDisabled("Deletes dynamic objects that collide with this entity.");
-                    ImGui::TreePop();
-                }
-            }
+                if (open && registry.HasComponent<SpringComponent>(e)) {
+                    auto& spring = registry.GetComponent<SpringComponent>(e);
 
-            // --- 11. Environment Component ---
-            if (registry.HasComponent<ObjectSpawnerComponent>(e)) {
-                bool open = ImGui::TreeNodeEx("ObjectSpawnerComponent", ImGuiTreeNodeFlags_DefaultOpen);
-                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
-                if (ImGui::Button("Remove##Spawner")) registry.RemoveComponent<ObjectSpawnerComponent>(e);
+                    ImGui::Checkbox("Attached to Entities", &spring.isAttachedToEntity);
 
-                if (open && registry.HasComponent<ObjectSpawnerComponent>(e)) {
-                    auto& comp = registry.GetComponent<ObjectSpawnerComponent>(e);
-
-                    ImGui::Checkbox("Always On", &comp.alwaysOn);
-                    if (comp.alwaysOn) {
-                        comp.isRunning = true;
+                    if (!spring.isAttachedToEntity) {
+                        ImGui::DragFloat3("Anchor Point", &spring.fixedAnchorPoint.x, 0.1f);
+                        // Set anchor to this entity's transform if available
+                        if (registry.HasComponent<TransformComponent>(e)) {
+                            if (ImGui::Button("Set Anchor to Current Transform")) {
+                                spring.fixedAnchorPoint = registry.GetComponent<TransformComponent>(e).position;
+                            }
+                        }
                     }
                     else {
-                        if (!comp.isRunning) {
-                            if (ImGui::Button("Run##SpawnerRun")) {
-                                comp.isRunning = true;
-                                comp.spawnTimer = 0.0f;
-                                comp.runElapsedSeconds = 0.0f;
-                                comp.spawnedThisRun = 0;
+                        ImGui::Text("Connected Entities:");
+                        ImGui::Separator();
+
+                        // List current connections with remove buttons
+                        for (size_t i = 0; i < spring.connectedEntities.size(); ++i) {
+                            Entity id = spring.connectedEntities[i];
+                            std::string label = "ID: " + std::to_string(id);
+                            if (id < registry.GetEntityCount() && registry.HasComponent<NameComponent>(id)) {
+                                label += " (" + registry.GetComponent<NameComponent>(id).name + ")";
                             }
-                        }
-                        else {
-                            if (ImGui::Button("Stop##SpawnerRun")) {
-                                comp.isRunning = false;
+                            ImGui::Text("%s", label.c_str());
+                            ImGui::SameLine();
+                            ImGui::PushID(static_cast<int>(i));
+                            if (ImGui::Button("Remove")) {
+                                spring.connectedEntities.erase(spring.connectedEntities.begin() + i);
+                                ImGui::PopID();
+                                break;
                             }
+                            ImGui::PopID();
                         }
+
+                        ImGui::Separator();
+
+                        // Add by ID input
+                        static int newEntityId = -1;
+                        ImGui::InputInt("Entity ID to Add", &newEntityId);
                         ImGui::SameLine();
-                        if (ImGui::Button("Reset Run##SpawnerRun")) {
-                            comp.spawnTimer = 0.0f;
-                            comp.runElapsedSeconds = 0.0f;
-                            comp.spawnedThisRun = 0;
-                        }
-                    }
-
-                    ImGui::DragFloat("Spawn Interval (s)", &comp.spawnInterval, 0.05f, 0.05f, 60.0f);
-                    ImGui::DragFloat("Run Duration (s, -1 inf)", &comp.runDurationSeconds, 0.1f, -1.0f, 3600.0f);
-                    ImGui::InputInt("Max Spawns Per Run (-1 inf)", &comp.maxSpawnsPerRun);
-                    ImGui::DragFloat3("Spawn Scale", &comp.spawnScale.x, 0.05f, 0.05f, 100.0f);
-                    ImGui::DragFloat("Spawn Mass", &comp.spawnMass, 0.1f, 0.01f, 1000.0f);
-
-                    const char* geoTypes[] = { "Sphere", "Cube", "Model" };
-                    int geoTypeIdx = 0;
-                    if (comp.spawnGeometryType == "Cube") geoTypeIdx = 1;
-                    else if (comp.spawnGeometryType == "Model") geoTypeIdx = 2;
-
-                    if (ImGui::Combo("Spawn Geometry", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes))) {
-                        comp.spawnGeometryType = geoTypes[geoTypeIdx];
-                    }
-
-                    if (comp.spawnGeometryType == "Model") {
-                        std::string comboId = "##SpawnModelCombo" + std::to_string(it->id) + "_" + std::to_string(e);
-                        const char* preview = comp.spawnModelPath.empty() ? "Select model..." : comp.spawnModelPath.c_str();
-                        if (ImGui::BeginCombo(comboId.c_str(), preview)) {
-                            for (const auto& modelPath : m_AvailableModels) {
-                                bool selected = (comp.spawnModelPath == modelPath);
-                                if (ImGui::Selectable(modelPath.c_str(), selected)) {
-                                    comp.spawnModelPath = modelPath;
+                        if (ImGui::Button("Add")) {
+                            if (newEntityId >= 0 && static_cast<Entity>(newEntityId) != e && newEntityId < static_cast<int>(registry.GetEntityCount())) {
+                                if (std::find(spring.connectedEntities.begin(), spring.connectedEntities.end(), static_cast<Entity>(newEntityId)) == spring.connectedEntities.end()) {
+                                    spring.connectedEntities.push_back(static_cast<Entity>(newEntityId));
                                 }
-                                if (selected) ImGui::SetItemDefaultFocus();
                             }
-                            ImGui::EndCombo();
                         }
 
-                        ImGui::SameLine();
-                        if (ImGui::Button(("Refresh Models##Spawner" + std::to_string(it->id) + "_" + std::to_string(e)).c_str())) {
-                            RefreshModelList();
-                        }
-                    }
+                        ImGui::Separator();
 
-                    std::string texComboId = "##SpawnTextureCombo" + std::to_string(it->id) + "_" + std::to_string(e);
-                    const char* texPreview = comp.spawnTexturePath.empty() ? "Select texture..." : comp.spawnTexturePath.c_str();
-                    if (ImGui::BeginCombo(texComboId.c_str(), texPreview)) {
-                        for (const auto& texPath : m_AvailableTextures) {
-                            bool selected = (comp.spawnTexturePath == texPath);
-                            if (ImGui::Selectable(texPath.c_str(), selected)) {
-                                comp.spawnTexturePath = texPath;
+                        // Add from scene list for convenience (entities that have transforms)
+                        ImGui::TextDisabled("Attach from Scene:");
+                        ImGui::BeginChild("SpringAttachList", ImVec2(0, 120), true);
+                        for (Entity cand = 0; cand < registry.GetEntityCount(); ++cand) {
+                            if (cand == e) continue; // don't attach self
+                            if (!registry.HasComponent<TransformComponent>(cand)) continue;
+
+                            std::string candLabel = "ID: " + std::to_string(cand);
+                            if (registry.HasComponent<NameComponent>(cand)) {
+                                candLabel += " (" + registry.GetComponent<NameComponent>(cand).name + ")";
                             }
-                            if (selected) ImGui::SetItemDefaultFocus();
+
+                            ImGui::PushID(static_cast<int>(cand));
+                            ImGui::Text("%s", candLabel.c_str());
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 120.0f);
+                            if (ImGui::Button("Add")) {
+                                if (std::find(spring.connectedEntities.begin(), spring.connectedEntities.end(), cand) == spring.connectedEntities.end()) {
+                                    spring.connectedEntities.push_back(cand);
+                                }
+                            }
+                            ImGui::PopID();
                         }
-                        ImGui::EndCombo();
+                        ImGui::EndChild();
                     }
 
-                    ImGui::SameLine();
-                    if (ImGui::Button(("Refresh Textures##Spawner" + std::to_string(it->id) + "_" + std::to_string(e)).c_str())) {
-                        RefreshTextureList();
-                    }
-
-                    ImGui::DragFloat3("Base Velocity", &comp.spawnVelocity.x, 0.1f);
-                    ImGui::Checkbox("Randomise Velocity", &comp.randomizeVelocity);
-                    if (comp.randomizeVelocity) {
-                        ImGui::DragFloat3("Random Velocity Range", &comp.randomVelocityRange.x, 0.1f, 0.0f, 200.0f);
-                    }
-
-                    // --- NEW: Angular Velocity for spawned objects ---
-                    ImGui::Separator();
-                    ImGui::TextDisabled("Angular Velocity (radians/sec)");
-                    ImGui::DragFloat3("Base Spin", &comp.spawnAngularVelocity.x, 0.1f);
-                    ImGui::Checkbox("Randomise Spin", &comp.randomizeAngularVelocity);
-                    if (comp.randomizeAngularVelocity) {
-                        ImGui::Indent();
-                        ImGui::DragFloat3("Spin Variance", &comp.randomAngularVelocityRange.x, 0.1f, 0.0f, 200.0f);
-                        ImGui::Unindent();
-                    }
-
-                    ImGui::TextDisabled("Status: %s", comp.isRunning ? "Running" : "Stopped");
-                    ImGui::TextDisabled("Spawned This Run: %d", comp.spawnedThisRun);
-                    ImGui::TextDisabled("Total Spawned: %d", comp.spawnedCount);
+                    ImGui::DragFloat("Resting Length", &spring.restingLength, 0.1f, 0.0f, 100.0f);
+                    ImGui::DragFloat("Stiffness (k)", &spring.stiffness, 0.1f, 0.0f, 1000.0f);
+                    ImGui::DragFloat("Damping (b)", &spring.damping, 0.01f, 0.0f, 100.0f);
 
                     ImGui::TreePop();
                 }
             }
 
-            // --- 11. Environment Component ---
+            // --- 12. Environment Component ---
             if (registry.HasComponent<EnvironmentComponent>(e)) {
                 bool open = ImGui::TreeNodeEx("EnvironmentComponent", ImGuiTreeNodeFlags_DefaultOpen);
                 ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
@@ -1034,13 +1029,13 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 addMenuItem((ThermoComponent*)nullptr, "ThermoComponent", e);
                 addMenuItem((ColliderComponent*)nullptr, "ColliderComponent", e);
                 addMenuItem((PhysicsComponent*)nullptr, "PhysicsComponent", e);
+                addMenuItem((SpringComponent*)nullptr, "SpringComponent", e);
                 addMenuItem((LightComponent*)nullptr, "LightComponent", e);
                 addMenuItem((CameraComponent*)nullptr, "CameraComponent", e);
                 addMenuItem((AttachedEmitterComponent*)nullptr, "AttachedEmitterComponent", e);
                 addMenuItem((EnvironmentComponent*)nullptr, "EnvironmentComponent", e);
                 addMenuItem((DustCloudComponent*)nullptr, "DustCloudComponent", e);
                 addMenuItem((DespawnerComponent*)nullptr, "DespawnerComponent", e);
-                addMenuItem((ObjectSpawnerComponent*)nullptr, "ObjectSpawnerComponent", e);
                 addMenuItem((LayerRegionComponent*)nullptr, "LayerRegionComponent", e);
                 ImGui::EndMenu();
             }

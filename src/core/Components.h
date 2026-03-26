@@ -119,6 +119,13 @@ struct PhysicsComponent {
         }
     }
 
+    // Allow external systems to add forces to this component in a consistent way
+    void ApplyForce(const glm::vec3& force) {
+        if (!isStatic) {
+            forceAccumulator += force;
+        }
+    }
+
     // --- ROTATIONAL STATE ---
     // The direction is the axis of rotation, magnitude is radians per second
     glm::vec3 angularVelocity = glm::vec3(0.0f);
@@ -147,6 +154,18 @@ struct PhysicsComponent {
             inverseInertiaTensor = glm::mat3(1.0f / i);
         }
     }
+};
+
+struct SpringComponent {
+    std::vector<Entity> connectedEntities; // Multiple entities can be attached to this spring hub
+    glm::vec3 fixedAnchorPoint = glm::vec3(0.0f); // Used if not attached to entities
+
+    float restingLength = 1.0f; // Lr: The length at which the spring is at rest
+    float stiffness = 10.0f;    // k: The spring constant (higher = stiffer)
+    float damping = 1.0f;       // b: Damping coefficient to prevent infinite oscillation
+
+    // Optional: flag to determine if it's attached to entities or anchored to a point in space
+    bool isAttachedToEntity = false; 
 };
 
 struct ColliderComponent {
@@ -256,10 +275,6 @@ struct SpawnedFromSpawnerComponent {
 };
 
 struct DespawnerComponent {
-    bool enabled = true;
-};
-
-struct DeathWallComponent {
     bool enabled = true;
 };
 

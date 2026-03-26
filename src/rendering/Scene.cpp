@@ -112,7 +112,6 @@ Entity Scene::CreateDeathWall(const std::string& name, float yLevel, float halfW
     m_Registry.AddComponent<PhysicsComponent>(entity, physics);
 
     m_Registry.AddComponent<DespawnerComponent>(entity, DespawnerComponent{});
-    m_Registry.AddComponent<DeathWallComponent>(entity, DeathWallComponent{});
 
     return entity;
 }
