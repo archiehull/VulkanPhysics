@@ -661,6 +661,11 @@ void Application::MainLoop() {
             PhysicsSystem::SetQuadraticDrag(quadraticDragEnabled, quadraticDragCoeff);
         }
 
+        bool showSpringVisuals = false;
+        if (editorUI->ConsumeSpringVisualizationRequest(showSpringVisuals)) {
+            scene->SetSpringVisualizationEnabled(showSpringVisuals);
+        }
+
         ImGui::Render();
 
         // 1. Handle Restart

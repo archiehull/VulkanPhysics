@@ -43,6 +43,8 @@ struct RenderComponent {
     std::string geometryName = "Unknown";
     std::string texturePath;
     std::string originalTexturePath;
+    bool useDebugOverlay = false;
+    glm::vec4 debugOverlayColor = glm::vec4(0.0f);
 
     Entity simpleShadowEntity = MAX_ENTITIES;
     float simpleShadowRadius = -1.0f;

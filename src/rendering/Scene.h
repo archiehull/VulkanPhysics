@@ -186,8 +186,15 @@ public:
     void SetRegionsOnlyDebugView(bool enabled) { m_RegionsOnlyDebugView = enabled; }
     bool GetRegionsOnlyDebugView() const { return m_RegionsOnlyDebugView; }
 
+    void SetSpringVisualizationEnabled(bool enabled);
+    bool GetSpringVisualizationEnabled() const { return m_ShowSpringVisuals; }
+
 private:
     void FlushDeferredGeometryCleanup();
+    void UpdateSpringVisuals();
+    void ClearSpringVisuals();
+    Entity GetOrCreateSpringVisualEntity(const std::string& key);
+    glm::vec4 ComputeSpringVisualColor(float currentLength, float restLength) const;
 
     Registry m_Registry;
     std::vector<std::unique_ptr<ISystem>> m_Systems;
@@ -223,7 +230,10 @@ private:
 
     std::vector<std::unique_ptr<ParticleSystem>> particleSystems;
     std::vector<std::shared_ptr<Geometry>> m_DeferredGeometryCleanup;
+    std::unordered_map<std::string, Entity> m_SpringVisualEntities;
+    std::shared_ptr<Geometry> m_SpringVisualGeometry;
 
     bool m_RegionsOnlyDebugView = false;
+    bool m_ShowSpringVisuals = false;
     float m_ElapsedTime = 0.0f;
 };

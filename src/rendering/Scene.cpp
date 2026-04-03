@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <random>
 #include <cmath>
+#include <unordered_set>
 
 namespace {
 float ComputeFlickerPresetValue(int preset, float t, float phase) {
@@ -369,6 +370,9 @@ void Scene::Initialize() {
     //Entity dustEntity = m_Registry.CreateEntity();
     //m_Registry.AddComponent<NameComponent>(dustEntity, { "GlobalDustCloud" });
     //m_Registry.AddComponent<DustCloudComponent>(dustEntity, DustCloudComponent{});
+
+    m_SpringVisualGeometry = std::shared_ptr<Geometry>(GeometryGenerator::CreateCube(device, physicalDevice));
+
 
     m_EnvironmentEntity = MAX_ENTITIES;
 
@@ -1035,10 +1039,147 @@ void Scene::ClearProceduralRegistry() {
     proceduralRegistry.clear();
 }
 
+void Scene::SetSpringVisualizationEnabled(bool enabled) {
+    m_ShowSpringVisuals = enabled;
+    if (!m_ShowSpringVisuals) {
+        ClearSpringVisuals();
+    }
+}
+
+glm::vec4 Scene::ComputeSpringVisualColor(float currentLength, float restLength) const {
+    const float safeRest = std::max(restLength, 0.001f);
+    const float stretch = std::abs(currentLength - safeRest) / safeRest;
+    const float t = glm::clamp(stretch, 0.0f, 1.0f);
+    const glm::vec3 relaxed(0.1f, 1.0f, 0.1f);
+    const glm::vec3 tense(1.0f, 0.15f, 0.1f);
+    return glm::vec4(glm::mix(relaxed, tense, t), 1.0f);
+}
+
+Entity Scene::GetOrCreateSpringVisualEntity(const std::string& key) {
+    auto it = m_SpringVisualEntities.find(key);
+    if (it != m_SpringVisualEntities.end()) {
+        const Entity existing = it->second;
+        if (existing < m_Registry.GetEntityCount() &&
+            m_Registry.HasComponent<TransformComponent>(existing) &&
+            m_Registry.HasComponent<RenderComponent>(existing)) {
+            return existing;
+        }
+    }
+
+    Entity visualEntity = m_Registry.CreateEntity();
+
+    TransformComponent transform;
+    transform.UpdateMatrix();
+    m_Registry.AddComponent<TransformComponent>(visualEntity, transform);
+
+    RenderComponent render;
+    render.geometry = m_SpringVisualGeometry;
+    render.geometryName = "spring_visual";
+    render.texturePath = "";
+    render.originalTexturePath = "";
+    render.shadingMode = 1;
+    render.castsShadow = false;
+    render.originalCastsShadow = false;
+    render.receiveShadows = false;
+    render.layerMask = SceneLayers::ALL;
+    render.onlyInRegionMask = 0;
+    render.useDebugOverlay = true;
+    render.debugOverlayColor = glm::vec4(0.1f, 1.0f, 0.1f, 1.0f);
+    m_Registry.AddComponent<RenderComponent>(visualEntity, render);
+
+    m_RenderableEntities.push_back(visualEntity);
+    m_SpringVisualEntities[key] = visualEntity;
+    return visualEntity;
+}
+
+void Scene::ClearSpringVisuals() {
+    for (const auto& [_, entity] : m_SpringVisualEntities) {
+        if (entity < m_Registry.GetEntityCount()) {
+            DeleteEntity(entity);
+        }
+    }
+    m_SpringVisualEntities.clear();
+}
+
+void Scene::UpdateSpringVisuals() {
+    std::unordered_set<std::string> activeKeys;
+    auto& registry = m_Registry;
+    const Entity entityCount = registry.GetEntityCount();
+    constexpr float kThickness = 0.03f;
+
+    auto updateVisual = [&](const std::string& key, const glm::vec3& posA, const glm::vec3& posB, float restLength) {
+        const glm::vec3 delta = posB - posA;
+        const float distance = glm::length(delta);
+        if (distance <= 0.0001f) {
+            return;
+        }
+
+        const glm::vec3 direction = delta / distance;
+        const glm::vec3 midpoint = posA + (delta * 0.5f);
+
+        const float yaw = std::atan2(direction.x, direction.z);
+        const float pitch = -std::asin(glm::clamp(direction.y, -1.0f, 1.0f));
+        const glm::vec3 eulerDegrees = glm::degrees(glm::vec3(pitch, yaw, 0.0f));
+
+        Entity visualEntity = GetOrCreateSpringVisualEntity(key);
+        auto& transform = registry.GetComponent<TransformComponent>(visualEntity);
+        transform.position = midpoint;
+        transform.rotation = eulerDegrees;
+        transform.scale = glm::vec3(kThickness, kThickness, distance);
+        transform.UpdateMatrix();
+
+        auto& render = registry.GetComponent<RenderComponent>(visualEntity);
+        render.visible = true;
+        render.useDebugOverlay = true;
+        render.debugOverlayColor = ComputeSpringVisualColor(distance, restLength);
+
+        activeKeys.insert(key);
+    };
+
+    for (Entity e = 0; e < entityCount; ++e) {
+        if (!registry.HasComponent<SpringComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
+            continue;
+        }
+
+        auto& spring = registry.GetComponent<SpringComponent>(e);
+        const glm::vec3 posA = registry.GetComponent<TransformComponent>(e).position;
+
+        if (!spring.isAttachedToEntity) {
+            const std::string key = "SpringVis_" + std::to_string(e) + "_Fixed";
+            updateVisual(key, posA, spring.fixedAnchorPoint, spring.restingLength);
+            continue;
+        }
+
+        for (size_t i = 0; i < spring.connectedEntities.size(); ++i) {
+            const Entity target = spring.connectedEntities[i];
+            if (target == MAX_ENTITIES || target >= entityCount) continue;
+            if (!registry.HasComponent<TransformComponent>(target)) continue;
+
+            const glm::vec3 posB = registry.GetComponent<TransformComponent>(target).position;
+            const std::string key = "SpringVis_" + std::to_string(e) + "_" + std::to_string(i);
+            updateVisual(key, posA, posB, spring.restingLength);
+        }
+    }
+
+    for (auto it = m_SpringVisualEntities.begin(); it != m_SpringVisualEntities.end(); ) {
+        if (activeKeys.find(it->first) == activeKeys.end()) {
+            DeleteEntity(it->second);
+            it = m_SpringVisualEntities.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
 void Scene::Update(float deltaTime) {
     m_ElapsedTime += std::max(0.0f, deltaTime);
     for (auto& sys : m_Systems) {
         sys->Update(*this, deltaTime);
+    }
+
+    if (m_ShowSpringVisuals) {
+        UpdateSpringVisuals();
     }
 }
 
@@ -1095,6 +1236,7 @@ void Scene::Clear() {
     m_RenderableEntities.clear();
     m_LightEntities.clear();
     particleSystems.clear();
+    m_SpringVisualEntities.clear();
 
     FlushDeferredGeometryCleanup();
 

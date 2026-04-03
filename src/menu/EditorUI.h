@@ -115,6 +115,16 @@ public:
         return true;
     }
 
+    bool ConsumeSpringVisualizationRequest(bool& enabled) {
+        if (!m_SpringVisualizationChanged) {
+            return false;
+        }
+
+        m_SpringVisualizationChanged = false;
+        enabled = m_ShowSpringVisuals;
+        return true;
+    }
+
 private:
     void DrawMainMenuSection(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget, std::string& sceneToLoad, Entity& entityToDelete);
     void DrawLoadSceneMenu(std::string& sceneToLoad);
@@ -174,4 +184,7 @@ private:
     bool m_QuadraticDragEnabled = false;
     float m_QuadraticDragCoeff = 0.01f;
     bool m_PhysicsSettingsChanged = false;
+
+    bool m_ShowSpringVisuals = false;
+    bool m_SpringVisualizationChanged = false;
 };

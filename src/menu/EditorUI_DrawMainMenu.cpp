@@ -761,6 +761,11 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                     m_PhysicsSettingsChanged = true;
                 }
             }
+
+            ImGui::Spacing();
+            if (ImGui::Checkbox("Visualize Springs", &m_ShowSpringVisuals)) {
+                m_SpringVisualizationChanged = true;
+            }
         }
 
         ImGui::EndMenu();
