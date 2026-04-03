@@ -14,7 +14,7 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
     for (Entity e = 0; e < count; ++e) {
         if (!registry.HasComponent<ObjectSpawnerComponent>(e) ||
             !registry.HasComponent<TransformComponent>(e)) {
-            continue;
+            continue; 
         }
 
         auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);

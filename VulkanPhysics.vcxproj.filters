@@ -184,7 +184,7 @@
       <Filter>Source Files\src\menu</Filter>
     </ClCompile>
     <ClCompile Include="src\systems\ObjectSpawnerSystem.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\src\systems</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

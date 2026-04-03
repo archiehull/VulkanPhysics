@@ -170,7 +170,7 @@ void ShadowPass::CreatePipeline(VkDescriptorSetLayout globalSetLayout) {
     config.descriptorSetLayouts = { globalSetLayout };
 
     config.cullMode = VK_CULL_MODE_NONE;
-    config.depthBiasEnable = false;
+    config.depthBiasEnable = true;
 
     config.depthTestEnable = true;
     config.depthWriteEnable = true;

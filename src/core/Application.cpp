@@ -545,6 +545,8 @@ void Application::RecreateSwapChain() {
 
     vkDeviceWaitIdle(vulkanDevice->GetDevice());
 
+    ImGui_ImplVulkan_Shutdown();
+
     renderer->Cleanup();
     vulkanSwapChain->Cleanup();
 

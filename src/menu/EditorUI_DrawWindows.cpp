@@ -293,12 +293,25 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
             }
             ImGui::PopStyleColor(3);
 
+            const bool isCamera = registry.HasComponent<CameraComponent>(e);
             const bool canFocusObject = registry.HasComponent<TransformComponent>(e);
-            if (!canFocusObject) ImGui::BeginDisabled();
-            if (ImGui::Button("Focus Camera on Object", ImVec2(-1, 0)) && canFocusObject) {
-                m_ViewRequested = e;
+
+            if (isCamera) {
+                if (ImGui::Button("Switch to this Camera", ImVec2(-1, 0))) {
+                    for (Entity camTarget = 0; camTarget < registry.GetEntityCount(); ++camTarget) {
+                        if (registry.HasComponent<CameraComponent>(camTarget)) {
+                            registry.GetComponent<CameraComponent>(camTarget).isActive = (camTarget == e);
+                        }
+                    }
+                }
             }
-            if (!canFocusObject) ImGui::EndDisabled();
+            else {
+                if (!canFocusObject) ImGui::BeginDisabled();
+                if (ImGui::Button("Focus Camera on Object", ImVec2(-1, 0)) && canFocusObject) {
+                    m_ViewRequested = e;
+                }
+                if (!canFocusObject) ImGui::EndDisabled();
+            }
 
             ImGui::Spacing();
 
@@ -689,8 +702,6 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         auto& col = registry.GetComponent<ColliderComponent>(e);
                         ImGui::DragFloat("Bulldozer Radius", &col.radius, 0.1f, 0.5f, 50.0f);
                     }
-
-                    ImGui::TreePop();
 
                     ImGui::Spacing();
                     ImGui::TextDisabled("Active Render Layers");

@@ -22,6 +22,8 @@ Renderer::Renderer(VulkanDevice* deviceArg, VulkanSwapChain* swapChainArg)
 void Renderer::Initialize() {
     CreateRenderPass();
 
+    CreateCommandBuffer();
+
     // 1. Main Offscreen Framebuffer (Color + Depth)
     CreateOffScreenResources();
     renderPass->CreateOffScreenFramebuffer(offScreenImageView, depthImageView, swapChain->GetExtent());
@@ -48,7 +50,6 @@ void Renderer::Initialize() {
     }
 
     CreateUniformBuffers();
-    CreateCommandBuffer();
 
     CreateTextureDescriptorSetLayout();
     CreateTextureDescriptorPool();
@@ -619,6 +620,16 @@ void Renderer::CreateOffScreenResources() {
 
     refractionImageView = VulkanUtils::CreateImageView(
         device->GetDevice(), refractionImage, imageFormat, VK_IMAGE_ASPECT_COLOR_BIT
+    );
+
+    VulkanUtils::TransitionImageLayout(
+        device->GetDevice(),
+        commandBuffer->GetCommandPool(),
+        device->GetGraphicsQueue(),
+        refractionImage,
+        imageFormat,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
     );
 
     VkSamplerCreateInfo samplerInfo{};
