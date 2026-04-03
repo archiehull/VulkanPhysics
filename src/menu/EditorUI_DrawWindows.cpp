@@ -267,19 +267,38 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 headerName += " (" + registry.GetComponent<NameComponent>(e).name + ")";
             }
 
-            // --- Show indicator if this entity is attached to any spring ---
-            bool isAttachedToAnySpring = false;
+            // --- Show incoming spring connections (reverse lookup) ---
+            bool incomingSpringHeaderDrawn = false;
             for (Entity s = 0; s < registry.GetEntityCount(); ++s) {
                 if (!registry.HasComponent<SpringComponent>(s)) continue;
-                const auto& sp = registry.GetComponent<SpringComponent>(s);
+
+                auto& sp = registry.GetComponent<SpringComponent>(s);
                 if (!sp.isAttachedToEntity) continue;
-                if (std::find(sp.connectedEntities.begin(), sp.connectedEntities.end(), e) != sp.connectedEntities.end()) {
-                    isAttachedToAnySpring = true;
-                    break;
+
+                auto itConn = std::find(sp.connectedEntities.begin(), sp.connectedEntities.end(), e);
+                if (itConn == sp.connectedEntities.end()) continue;
+
+                if (!incomingSpringHeaderDrawn) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "[ Driven by External Springs ]");
+                    incomingSpringHeaderDrawn = true;
                 }
-            }
-            if (isAttachedToAnySpring) {
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "[ Attached to a Spring Constraint ]");
+
+                std::string anchorName = "Entity " + std::to_string(s);
+                if (registry.HasComponent<NameComponent>(s)) {
+                    anchorName = registry.GetComponent<NameComponent>(s).name;
+                }
+
+                ImGui::PushID(static_cast<int>(s));
+                ImGui::BulletText("Anchored to: %s", anchorName.c_str());
+                ImGui::SameLine();
+                if (ImGui::SmallButton("View Anchor")) {
+                    it->selectedEntity = s;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Disconnect")) {
+                    sp.connectedEntities.erase(itConn);
+                }
+                ImGui::PopID();
             }
 
             ImGui::Separator();
@@ -789,10 +808,10 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 if (open && registry.HasComponent<SpringComponent>(e)) {
                     auto& spring = registry.GetComponent<SpringComponent>(e);
 
-                    ImGui::Checkbox("Attached to Entities", &spring.isAttachedToEntity);
+                    ImGui::Checkbox("Dynamic Entity Anchor", &spring.isAttachedToEntity);
 
                     if (!spring.isAttachedToEntity) {
-                        ImGui::DragFloat3("Anchor Point", &spring.fixedAnchorPoint.x, 0.1f);
+                        ImGui::DragFloat3("World Anchor Point", &spring.fixedAnchorPoint.x, 0.1f);
                         // Set anchor to this entity's transform if available
                         if (registry.HasComponent<TransformComponent>(e)) {
                             if (ImGui::Button("Set Anchor to Current Transform")) {
@@ -801,6 +820,15 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         }
                     }
                     else {
+                        ImGui::TextDisabled("Anchor: This Entity's Transform (Real-time)");
+                        if (registry.HasComponent<TransformComponent>(e)) {
+                            const glm::vec3 pos = registry.GetComponent<TransformComponent>(e).position;
+                            ImGui::Text("Current Pos: [%.2f, %.2f, %.2f]", pos.x, pos.y, pos.z);
+                        }
+                        else {
+                            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Warning: Missing TransformComponent");
+                        }
+
                         ImGui::Text("Connected Entities:");
                         ImGui::Separator();
 

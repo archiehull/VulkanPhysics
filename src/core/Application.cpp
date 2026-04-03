@@ -14,6 +14,7 @@
 #include "../geometry/OBJLoader.h"
 #include "../geometry/SJGLoader.h"
 #include "../systems/CameraSystem.h"
+#include "../systems/PhysicsSystem.h"
 
 namespace {
     constexpr bool kSceneDebug = false;
@@ -490,6 +491,31 @@ void Application::SetupScene() {
             }
         }
 
+        // --- Apply Springs ---
+        if (objCfg.hasSpringConfig) {
+            setupPhase = "Configure Springs";
+            Entity anchorEnt = scene->GetEntityByName(objCfg.name);
+            
+            if (anchorEnt != MAX_ENTITIES) {
+                SpringComponent spring;
+                spring.isAttachedToEntity = true;
+                spring.restingLength = objCfg.springRestingLength;
+                spring.stiffness = objCfg.springStiffness;
+                spring.damping = objCfg.springDamping;
+
+                for (const auto& targetName : objCfg.springConnections) {
+                    Entity targetEnt = scene->GetEntityByName(targetName);
+                    if (targetEnt != MAX_ENTITIES) {
+                        spring.connectedEntities.push_back(targetEnt);
+                    } else {
+                        std::cerr << "Warning: Spring target '" << targetName << "' not found for anchor '" << objCfg.name << "'. Ensure the child object is defined BEFORE the anchor in the .world file.\n";
+                    }
+                }
+                
+                scene->GetRegistry().AddComponent<SpringComponent>(anchorEnt, spring);
+            }
+        }
+
         if (kSceneDebug) {
             std::cout << "[SetupScene] Object Success: '" << objCfg.name << "'" << std::endl;
         }
@@ -623,6 +649,16 @@ void Application::MainLoop() {
                 pendingVSync = requestedVsync;
                 hasPendingVSyncApply = true;
             }
+        }
+
+        // Handle physics settings changes
+        bool linearDampingEnabled;
+        float linearDampingFactor;
+        bool quadraticDragEnabled;
+        float quadraticDragCoeff;
+        if (editorUI->ConsumePhysicsSettingsRequest(linearDampingEnabled, linearDampingFactor, quadraticDragEnabled, quadraticDragCoeff)) {
+            PhysicsSystem::SetLinearDamping(linearDampingEnabled, linearDampingFactor);
+            PhysicsSystem::SetQuadraticDrag(quadraticDragEnabled, quadraticDragCoeff);
         }
 
         ImGui::Render();

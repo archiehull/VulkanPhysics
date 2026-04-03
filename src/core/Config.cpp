@@ -265,6 +265,15 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                     ss >> currentObject->orbitRadius >> currentObject->orbitSpeed >> currentObject->orbitDirection >> currentObject->orbitInitialAngle;
                 }
             }
+            else if (key == "SpringProps") {
+                currentObject->hasSpringConfig = true;
+                ss >> currentObject->springRestingLength >> currentObject->springStiffness >> currentObject->springDamping;
+            }
+            else if (key == "SpringConnect") {
+                std::string targetName;
+                ss >> targetName;
+                currentObject->springConnections.push_back(targetName);
+            }
             else if (key == "Thermo") {
                 std::string thermoStr;
                 ss >> thermoStr;

@@ -137,6 +137,13 @@ struct SceneObjectConfig {
     float spawnMass = 1.0f;
 
     bool isDespawner = false;
+
+    // ---> ADD SPRING CONFIG FIELDS HERE <---
+    bool hasSpringConfig = false;
+    float springRestingLength = 10.0f;
+    float springStiffness = 50.0f;
+    float springDamping = 5.0f;
+    std::vector<std::string> springConnections;
 };
 
 // --- Procedural Texture Configuration ---

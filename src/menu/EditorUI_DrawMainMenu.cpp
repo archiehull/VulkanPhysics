@@ -737,6 +737,30 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                     PhysicsSystem::gravityDirection *= -1.0f;
                 }
             }
+
+            ImGui::Spacing();
+            ImGui::Text("Air Resistance / Damping");
+
+            if (ImGui::Checkbox("Linear Damping", &m_LinearDampingEnabled)) {
+                m_PhysicsSettingsChanged = true;
+            }
+
+            if (m_LinearDampingEnabled) {
+                if (ImGui::SliderFloat("Damping Factor", &m_LinearDampingFactor, 0.9f, 1.0f, "%.3f")) {
+                    m_PhysicsSettingsChanged = true;
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Higher values = less damping (1.0 = no damping)");
+            }
+
+            if (ImGui::Checkbox("Quadratic Drag", &m_QuadraticDragEnabled)) {
+                m_PhysicsSettingsChanged = true;
+            }
+
+            if (m_QuadraticDragEnabled) {
+                if (ImGui::SliderFloat("Drag Coefficient", &m_QuadraticDragCoeff, 0.0f, 0.1f, "%.4f")) {
+                    m_PhysicsSettingsChanged = true;
+                }
+            }
         }
 
         ImGui::EndMenu();

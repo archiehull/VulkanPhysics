@@ -165,7 +165,7 @@ struct SpringComponent {
     float damping = 1.0f;       // b: Damping coefficient to prevent infinite oscillation
 
     // Optional: flag to determine if it's attached to entities or anchored to a point in space
-    bool isAttachedToEntity = false; 
+    bool isAttachedToEntity = true;
 };
 
 struct ColliderComponent {

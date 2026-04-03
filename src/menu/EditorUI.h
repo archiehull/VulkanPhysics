@@ -94,6 +94,27 @@ public:
         return true;
     }
 
+    // Physics settings
+    void SetPhysicsSettings(bool linearDampingEnabled, float linearDampingFactor, bool quadraticDragEnabled, float quadraticDragCoeff) {
+        m_LinearDampingEnabled = linearDampingEnabled;
+        m_LinearDampingFactor = linearDampingFactor;
+        m_QuadraticDragEnabled = quadraticDragEnabled;
+        m_QuadraticDragCoeff = quadraticDragCoeff;
+    }
+
+    bool ConsumePhysicsSettingsRequest(bool& linearDampingEnabled, float& linearDampingFactor, bool& quadraticDragEnabled, float& quadraticDragCoeff) {
+        if (!m_PhysicsSettingsChanged) {
+            return false;
+        }
+
+        m_PhysicsSettingsChanged = false;
+        linearDampingEnabled = m_LinearDampingEnabled;
+        linearDampingFactor = m_LinearDampingFactor;
+        quadraticDragEnabled = m_QuadraticDragEnabled;
+        quadraticDragCoeff = m_QuadraticDragCoeff;
+        return true;
+    }
+
 private:
     void DrawMainMenuSection(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget, std::string& sceneToLoad, Entity& entityToDelete);
     void DrawLoadSceneMenu(std::string& sceneToLoad);
@@ -146,4 +167,11 @@ private:
     bool m_FpsCapEnabled = true;
     int m_MaxFps = 144;
     bool m_PerformanceSettingsChanged = false;
+
+    // Physics settings
+    bool m_LinearDampingEnabled = true;
+    float m_LinearDampingFactor = 0.98f;
+    bool m_QuadraticDragEnabled = false;
+    float m_QuadraticDragCoeff = 0.01f;
+    bool m_PhysicsSettingsChanged = false;
 };
