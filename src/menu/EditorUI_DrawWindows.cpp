@@ -54,6 +54,9 @@ if (m_ShowControlsWindow) {
 }
 
 void EditorUI::DrawPropertyWindowsSection(Scene& scene, Entity& entityToDelete) {
+    // ADD THIS LINE
+    std::vector<Entity> popoutRequests;
+
     auto isLayerUsed = [&](int bit) -> bool {
         if (bit == 0) return true; // Always keep Base World visible
 
@@ -178,36 +181,49 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
     }
 
     ImGui::SetNextWindowSize(ImVec2(850, 600), ImGuiCond_FirstUseEver);
+    
+    // REPLACE the std::string windowTitle line with this block:
     std::string windowTitle = "Entity Properties (Window " + std::to_string(it->id) + ")###PropWin" + std::to_string(it->id);
+    if (!it->showList && it->selectedEntity != MAX_ENTITIES && it->selectedEntity < scene.GetRegistry().GetEntityCount()) {
+        std::string eName = "Entity " + std::to_string(it->selectedEntity);
+        if (scene.GetRegistry().HasComponent<NameComponent>(it->selectedEntity)) {
+            eName = scene.GetRegistry().GetComponent<NameComponent>(it->selectedEntity).name;
+        }
+        windowTitle = eName + " Properties###PropWin" + std::to_string(it->id);
+    }
+    // END REPLACE
 
     if (ImGui::Begin(windowTitle.c_str(), &it->isOpen)) {
         Registry& registry = scene.GetRegistry();
         Entity count = registry.GetEntityCount();
 
-        // Top bar for the window (Retract button)
-        if (ImGui::Button(it->showList ? "<< Hide Entity List" : ">> Show Entity List")) {
-            it->showList = !it->showList;
-        }
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        // Create New Entity button
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
-        if (ImGui::Button("Create New Entity", ImVec2(-1, 0))) {
-            static int newEntityCount = 1;
-            std::string name = "NewEntity_" + std::to_string(newEntityCount++);
-            // Spawn a default 1x1 cube
-            scene.AddCube(name, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f), "");
-            // Ensure at least one properties window exists
-            if (m_PropertyWindows.empty()) {
-                m_PropertyWindows.push_back({ m_NextPropertyWindowId++, MAX_ENTITIES, true, true });
+        // Wrap the top bar buttons so they only show on the main window
+        if (!it->isPopout) {
+            // Top bar for the window (Retract button)
+            if (ImGui::Button(it->showList ? "<< Hide Entity List" : ">> Show Entity List")) {
+                it->showList = !it->showList;
             }
-        }
-        ImGui::PopStyleColor(3);
+            ImGui::Separator();
+            ImGui::Spacing();
 
-        ImGui::Spacing();
+            // Create New Entity button
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+            if (ImGui::Button("Create New Entity", ImVec2(-1, 0))) {
+                static int newEntityCount = 1;
+                std::string name = "NewEntity_" + std::to_string(newEntityCount++);
+                // Spawn a default 1x1 cube
+                scene.AddCube(name, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f), "");
+                // Ensure at least one properties window exists
+                if (m_PropertyWindows.empty()) {
+                    m_PropertyWindows.push_back({ m_NextPropertyWindowId++, MAX_ENTITIES, true, true, false });
+                }
+            }
+            ImGui::PopStyleColor(3);
+
+            ImGui::Spacing();
+        }
 
         auto hasVisibleEntityData = [&](Entity e) -> bool {
             return registry.HasComponent<NameComponent>(e)
@@ -303,6 +319,14 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
             ImGui::Separator();
             ImGui::Spacing();
+
+            // WRAP THE POP-OUT BUTTON IN THIS CHECK
+            if (!it->isPopout) {
+                if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
+                    popoutRequests.push_back(e);
+                }
+                ImGui::Spacing();
+            }
 
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.2f, 0.2f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
@@ -1102,6 +1126,11 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
     ImGui::End();
 
     ++it;
-}
+} // End of m_PropertyWindows loop
 
+// ADD THIS AT THE VERY END OF THE FUNCTION
+for (Entity popEntity : popoutRequests) {
+    // Add new window: { id, selectedEntity, showList, isOpen, isPopout }
+    m_PropertyWindows.push_back({ m_NextPropertyWindowId++, popEntity, false, true, true });
+}
 }

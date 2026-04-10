@@ -155,6 +155,7 @@ private:
         Entity selectedEntity;
         bool showList;
         bool isOpen;
+        bool isPopout = false;
     };
     std::vector<PropertyWindowData> m_PropertyWindows;
     int m_NextPropertyWindowId = 1;

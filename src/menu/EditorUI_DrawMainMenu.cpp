@@ -210,6 +210,11 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                         entityToDelete = layerEntity;
                     }
 
+                    ImGui::Separator();
+                    if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
+                        m_PropertyWindows.push_back({ m_NextPropertyWindowId++, layerEntity, false, true, true });
+                    }
+
                     ImGui::PopID();
                     ImGui::EndMenu();
                 }
@@ -452,6 +457,11 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                     }
                 }
 
+                ImGui::Separator();
+                if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
+                    m_PropertyWindows.push_back({ m_NextPropertyWindowId++, e, false, true, true });
+                }
+
                 ImGui::EndMenu();
             }
             else if (cam.isActive) {
@@ -539,6 +549,11 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 }
 
                 ImGui::Text("Layer Mask: %s", layerMaskToString(light.layerMask).c_str());
+
+                ImGui::Separator();
+                if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
+                    m_PropertyWindows.push_back({ m_NextPropertyWindowId++, e, false, true, true });
+                }
 
                 ImGui::EndMenu();
             }
@@ -648,6 +663,11 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 ImGui::TextDisabled("Status: %s", spawner.isRunning ? "Running" : "Stopped");
                 ImGui::TextDisabled("Spawned This Run: %d", spawner.spawnedThisRun);
                 ImGui::TextDisabled("Total Spawned: %d", spawner.spawnedCount);
+
+                ImGui::Separator();
+                if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
+                    m_PropertyWindows.push_back({ m_NextPropertyWindowId++, e, false, true, true });
+                }
 
                 ImGui::PopID();
                 ImGui::EndMenu();
@@ -1397,6 +1417,11 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
 
                         drawAttachedEmitter(fireId, "Fire", ParticleLibrary::GetFireProps().texturePath);
                         drawAttachedEmitter(smokeId, "Smoke", ParticleLibrary::GetSmokeProps().texturePath);
+                    }
+
+                    ImGui::Separator();
+                    if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
+                        m_PropertyWindows.push_back({ m_NextPropertyWindowId++, e, false, true, true });
                     }
 
                     ImGui::EndMenu();

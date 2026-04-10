@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <GtaTestDurations xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <Executable>C:\Users\663073\Workspace\VulkanPhysics\x64\Release\CPP-GoogleTest.exe</Executable>
+  <Executable>C:\Users\a\Desktop\VulkanPhysics\x64\Release\CPP-GoogleTest.exe</Executable>
   <TestDurations>
     <TestDuration Test="Collider_Polymorphic.SphereAsCollider" Duration="1" />
     <TestDuration Test="Collider_Polymorphic.PlaneAsCollider" Duration="1" />
@@ -98,5 +98,11 @@
     <TestDuration Test="Physics_HelperAPI.CalculateRestitutionFromVelocities_HeadOn" Duration="1" />
     <TestDuration Test="Physics_HelperAPI.ApplyLinearDamping_ReducesSpeed" Duration="1" />
     <TestDuration Test="Physics_HelperAPI.ApplyQuadraticDrag_ReducesSpeed" Duration="1" />
+    <TestDuration Test="AngularVelocityTests.Rotate_X_90_PerSec_For_1Sec" Duration="1" />
+    <TestDuration Test="AngularVelocityTests.Rotate_Y_180_PerSec_For_2Sec" Duration="1" />
+    <TestDuration Test="AngularVelocityTests.Rotate_Z_270_PerSec_For_3Sec" Duration="1" />
+    <TestDuration Test="AngularVelocityTests.Rotate_Combo_XY_For_4Sec" Duration="1" />
+    <TestDuration Test="SpringComponent_Physics.AtRest_NoForceApplied" Duration="1" />
+    <TestDuration Test="SpringComponent_Physics.SpringAndDamping_ApplyOppositeForces" Duration="1" />
   </TestDurations>
 </GtaTestDurations>

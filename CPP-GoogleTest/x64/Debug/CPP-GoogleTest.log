@@ -1,7 +1,41 @@
-﻿  PhysicsTests.cpp
+﻿  AngularVelocityTests.cpp
+C:\Users\a\Desktop\VulkanPhysics\CPP-GoogleTest\AngularVelocityTests.cpp(3,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
+  (compiling source file '/AngularVelocityTests.cpp')
+  
+  ColliderTests.cpp
+C:\Users\a\Desktop\VulkanPhysics\SimulationStaticLib\Collider.h(2,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
+  (compiling source file '/ColliderTests.cpp')
+  
+  CylinderTests.cpp
+C:\Users\a\Desktop\VulkanPhysics\SimulationStaticLib\Collider.h(2,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
+  (compiling source file '/CylinderTests.cpp')
+  
+  OrientationTests.cpp
+C:\Users\a\Desktop\VulkanPhysics\CPP-GoogleTest\OrientationTests.cpp(3,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
+  (compiling source file '/OrientationTests.cpp')
+  
+  PhysicsIntegration.cpp
+C:\Users\a\Desktop\VulkanPhysics\SimulationStaticLib\Collider.h(2,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
+  (compiling source file '/PhysicsIntegration.cpp')
+  
+  PlaneTests.cpp
+C:\Users\a\Desktop\VulkanPhysics\SimulationStaticLib\Collider.h(2,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
+  (compiling source file '/PlaneTests.cpp')
+  
+  PhysicsTests.cpp
+C:\Users\a\Desktop\VulkanPhysics\SimulationStaticLib\Collider.h(2,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
+  (compiling source file '/PhysicsTests.cpp')
+  
   SphereTests.cpp
-C:\Users\663073\Workspace\Simulation-and-Concurrency\Workshops\Workshop4\CPP-Simulation\CPP-GoogleTest\SphereTests.cpp(168,17): warning C4305: 'initializing': truncation from 'double' to 'float'
+C:\Users\a\Desktop\VulkanPhysics\SimulationStaticLib\Collider.h(2,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
   (compiling source file '/SphereTests.cpp')
   
+  SpringTests.cpp
+C:\Users\a\Desktop\VulkanPhysics\src\core\Components.h(3,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
+  (compiling source file '/SpringTests.cpp')
+  
+  test.cpp
+C:\Users\a\Desktop\VulkanPhysics\SimulationStaticLib\Collider.h(2,10): error C1083: Cannot open include file: 'glm/glm.hpp': No such file or directory
+  (compiling source file '/test.cpp')
+  
   Generating Code...
-  CPP-GoogleTest.vcxproj -> C:\Users\663073\Workspace\Simulation-and-Concurrency\Workshops\Workshop4\CPP-Simulation\x64\Debug\CPP-GoogleTest.exe

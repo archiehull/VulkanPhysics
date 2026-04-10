@@ -22,7 +22,7 @@ float PhysicsSystem::sleepTangentialThreshold = 0.12f;
 // Drag / damping defaults (disabled by default for behavior stability)
 bool PhysicsSystem::applyLinearDamping = true;
 float PhysicsSystem::linearDampingFactor = 0.98f;
-bool PhysicsSystem::applyQuadraticDrag = false;
+bool PhysicsSystem::applyQuadraticDrag = true;
 float PhysicsSystem::quadraticDragCoefficient = 0.01f;
 
 namespace {
