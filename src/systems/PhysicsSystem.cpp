@@ -273,19 +273,32 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
             if (c1.type == 0 && c2.type == 0) { // Sphere vs Sphere
                 MovingSphere sphereA(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
                 sphereA.forceAccumulator = p1.forceAccumulator; // Load accumulator
+                sphereA.torqueAccumulator = p1.torqueAccumulator;
+                sphereA.angularVelocity = p1.angularVelocity;
+                sphereA.inertiaTensor = p1.inertiaTensor;
+                sphereA.inverseInertiaTensor = p1.inverseInertiaTensor;
 
                 MovingSphere sphereB(t2.position, c2.radius, p2.velocity, p2.inverseMass, p2.restitution);
                 sphereB.forceAccumulator = p2.forceAccumulator; // Load accumulator
+                sphereB.torqueAccumulator = p2.torqueAccumulator;
+                sphereB.angularVelocity = p2.angularVelocity;
+                sphereB.inertiaTensor = p2.inertiaTensor;
+                sphereB.inverseInertiaTensor = p2.inverseInertiaTensor;
 
                 if (sphereA.sphere.CollideWith(sphereB.sphere)) {
                     queueDespawnerDeletion(i, j, p1, p2);
-                    ResolveElasticCollision(sphereA, sphereB, useForce, dt);
+                    const float contactFriction = ComputeContactFriction(p1.friction, p2.friction, PhysicsSystem::contactFrictionScale);
+                    ResolveElasticCollision(sphereA, sphereB, useForce, dt, contactFriction);
 
                     // Write results back to ECS components
                     p1.velocity = sphereA.velocity;
                     p2.velocity = sphereB.velocity;
+                    p1.angularVelocity = sphereA.angularVelocity;
+                    p2.angularVelocity = sphereB.angularVelocity;
                     p1.forceAccumulator = sphereA.forceAccumulator;
                     p2.forceAccumulator = sphereB.forceAccumulator;
+                    p1.torqueAccumulator = sphereA.torqueAccumulator;
+                    p2.torqueAccumulator = sphereB.torqueAccumulator;
 
                     if (!useForce) {
                         // Only correct position immediately if we are using instantaneous impulses. 
@@ -297,18 +310,21 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
             // Sphere vs Plane
             else if (c1.type == 0 && c2.type == 1) {
                 MovingSphere sphereA(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
+                sphereA.angularVelocity = p1.angularVelocity;
+                sphereA.inertiaTensor = p1.inertiaTensor;
+                sphereA.inverseInertiaTensor = p1.inverseInertiaTensor;
                 Plane planeB(t2.position, c2.normal, c2.radius);
 
                 if (planeB.Intersects(sphereA.sphere) &&
                     IsSphereInsideFinitePlaneBounds(t2, c2, t1.position, c1.radius)) {
                     queueDespawnerDeletion(i, j, p1, p2);
-                    const float objectFriction = (p1.friction + p2.friction) * 0.5f;
-                    const float contactFriction = glm::clamp(objectFriction * PhysicsSystem::contactFrictionScale, 0.0f, 1.0f);
+                    const float contactFriction = ComputeContactFriction(p1.friction, p2.friction, PhysicsSystem::contactFrictionScale);
 
                     ResolveSpherePlaneCollision(sphereA, planeB, p2.restitution, contactFriction);
 
                     if (!p1.isStatic) {
                         p1.velocity = sphereA.velocity;
+                        p1.angularVelocity = sphereA.angularVelocity;
                         ApplySpherePlaneCorrection(t1, c1.radius, planeB);
                         ApplySleepThreshold(p1, planeB);
                     }
@@ -317,18 +333,21 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
             // Plane vs Sphere
             else if (c1.type == 1 && c2.type == 0) {
                 MovingSphere sphereB(t2.position, c2.radius, p2.velocity, p2.inverseMass, p2.restitution);
+                sphereB.angularVelocity = p2.angularVelocity;
+                sphereB.inertiaTensor = p2.inertiaTensor;
+                sphereB.inverseInertiaTensor = p2.inverseInertiaTensor;
                 Plane planeA(t1.position, c1.normal, c1.radius);
 
                 if (planeA.Intersects(sphereB.sphere) &&
                     IsSphereInsideFinitePlaneBounds(t1, c1, t2.position, c2.radius)) {
                     queueDespawnerDeletion(i, j, p1, p2);
-                    const float objectFriction = (p1.friction + p2.friction) * 0.5f;
-                    const float contactFriction = glm::clamp(objectFriction * PhysicsSystem::contactFrictionScale, 0.0f, 1.0f);
+                    const float contactFriction = ComputeContactFriction(p1.friction, p2.friction, PhysicsSystem::contactFrictionScale);
 
                     ResolveSpherePlaneCollision(sphereB, planeA, p1.restitution, contactFriction);
 
                     if (!p2.isStatic) {
                         p2.velocity = sphereB.velocity;
+                        p2.angularVelocity = sphereB.angularVelocity;
                         ApplySpherePlaneCorrection(t2, c2.radius, planeA);
                         ApplySleepThreshold(p2, planeA);
                     }

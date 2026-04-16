@@ -1,5 +1,5 @@
-﻿  SpringTests.cpp
+﻿  AngularVelocityTests.cpp
   SimulationStaticLib.lib(Collider.obj) : MSIL .netmodule or module compiled with /GL found; restarting link with /LTCG; add /LTCG to the link command line to improve linker performance
   Generating code
   Finished generating code
-  CPP-GoogleTest.vcxproj -> C:\Users\a\Desktop\VulkanPhysics\x64\Release\CPP-GoogleTest.exe
+  CPP-GoogleTest.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\CPP-GoogleTest.exe

@@ -28,6 +28,7 @@ private:
     void MainLoop();
     void Cleanup();
     void RecreateSwapChain();
+    void ReloadCurrentScene();
 
     void LoadScene(const std::string& scenePath);
 
@@ -53,6 +54,7 @@ private:
     std::chrono::time_point<std::chrono::high_resolution_clock> lastFrameTime;
 
     AppConfig config;
+    std::string currentScenePath;
 
     float deltaTime = 0.0f;
     float timeScale = 1.0f;

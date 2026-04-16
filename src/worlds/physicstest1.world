@@ -153,7 +153,7 @@ Object SpringChild1
     Type Sphere
     Params 0.8
     Texture tex_ball
-    Position 5.0 20.0 0.0
+    Position 5.0 50.0 0.0
     RenderProps 1 true true true 3
     PhysicsProps false true false 1.0 0.8 0.5
     ColliderProps 0 0.8
@@ -163,7 +163,7 @@ Object SpringChild2
     Type Sphere
     Params 0.8
     Texture tex_ball
-    Position -5.0 20.0 0.0
+    Position -5.0 50.0 0.0
     RenderProps 1 true true true 3
     PhysicsProps false true false 1.0 0.8 0.5
     ColliderProps 0 0.8
@@ -173,7 +173,7 @@ Object SpringChild3
     Type Sphere
     Params 0.8
     Texture tex_ball
-    Position 0.0 20.0 5.0
+    Position 0.0 50.0 5.0
     RenderProps 1 true true true 3
     PhysicsProps false true false 1.0 0.8 0.5
     ColliderProps 0 0.8
@@ -183,7 +183,7 @@ Object SpringChild4
     Type Sphere
     Params 0.8
     Texture tex_ball
-    Position 0.0 20.0 -5.0
+    Position 0.0 50.0 -5.0
     RenderProps 1 true true true 3
     PhysicsProps false true false 1.0 0.8 0.5
     ColliderProps 0 0.8
@@ -193,7 +193,7 @@ Object SpringChild5
     Type Sphere
     Params 0.8
     Texture tex_ball
-    Position 0.0 15.0 0.0
+    Position 0.0 45.0 0.0
     RenderProps 1 true true true 3
     PhysicsProps false true false 1.0 0.8 0.5
     ColliderProps 0 0.8
@@ -204,7 +204,7 @@ Object OrbitAnchor
     Type Sphere
     Params 1.2
     Texture tex_ramp
-    Position 0.0 25.0 0.0
+    Position 0.0 55.0 0.0
     RenderProps 1 true true true 3
     # Anchor must be static so it doesn't fall, allowing orbit to guide it
     PhysicsProps false false true 

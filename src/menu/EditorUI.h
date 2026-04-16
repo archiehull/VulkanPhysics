@@ -182,7 +182,7 @@ private:
     // Physics settings
     bool m_LinearDampingEnabled = true;
     float m_LinearDampingFactor = 0.98f;
-    bool m_QuadraticDragEnabled = false;
+    bool m_QuadraticDragEnabled = true;
     float m_QuadraticDragCoeff = 0.01f;
     bool m_PhysicsSettingsChanged = false;
 

@@ -24,13 +24,15 @@ struct MovingSphere {
     MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, float invM = 1.0f, float rest = 1.0f);
 };
 
-void ResolveElasticCollision(MovingSphere& a, MovingSphere& b, bool useForce = false, float dt = 0.0f);
+void ResolveElasticCollision(MovingSphere& a, MovingSphere& b, bool useForce = false, float dt = 0.0f, float friction = 0.5f);
 
 void ResolveSpherePlaneCollision(
     MovingSphere& a,
     const Plane& p,
     float planeRestitution,
     float contactFriction = 1.0f);
+
+float ComputeContactFriction(float frictionA, float frictionB, float globalScale = 1.0f);
 
 float GetKineticEnergy(const MovingSphere& body);
 

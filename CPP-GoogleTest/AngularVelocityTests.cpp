@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
+#include <cmath>
 #include "PhysicsHelper.h"
 
 // Helper macro to compare two 3x3 matrices with a tolerance
@@ -92,4 +93,114 @@ TEST(AngularVelocityTests, Rotate_Combo_XY_For_4Sec) {
     );
     // Use slightly higher tolerance due to floating point drift over 4 seconds of integration
     ExpectMat3Near(obj.orientation, expected, 1e-2f);
+}
+
+TEST(AngularVelocityTests, SphereSphere_Glancing_WithFriction_GeneratesSpin) {
+    MovingSphere a({ 0.0f, 0.0f, 0.0f }, 1.0f, { 6.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+    MovingSphere b({ 1.2f, 1.6f, 0.0f }, 1.0f, { 0.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+
+    ASSERT_TRUE(a.sphere.CollideWith(b.sphere));
+    ResolveElasticCollision(a, b, false, 0.0f, 1.0f);
+
+    EXPECT_GT(glm::length(a.angularVelocity), 1e-5f);
+    EXPECT_GT(glm::length(b.angularVelocity), 1e-5f);
+}
+
+TEST(AngularVelocityTests, SphereSphere_Glancing_ZeroFriction_NoSpinGenerated) {
+    MovingSphere a({ 0.0f, 0.0f, 0.0f }, 1.0f, { 6.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+    MovingSphere b({ 1.2f, 1.6f, 0.0f }, 1.0f, { 0.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+
+    ASSERT_TRUE(a.sphere.CollideWith(b.sphere));
+    ResolveElasticCollision(a, b, false, 0.0f, 0.0f);
+
+    EXPECT_NEAR(glm::length(a.angularVelocity), 0.0f, 1e-6f);
+    EXPECT_NEAR(glm::length(b.angularVelocity), 0.0f, 1e-6f);
+}
+
+TEST(AngularVelocityTests, SpherePlane_WithTangentialSpeed_GeneratesSpin) {
+    MovingSphere a({ 0.0f, 0.9f, 0.0f }, 1.0f, { 4.0f, -2.0f, 0.0f }, 1.0f, 1.0f);
+    Plane floor({ 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+
+    ASSERT_TRUE(floor.Intersects(a.sphere));
+
+    const float beforeTangential = std::abs(a.velocity.x);
+    ResolveSpherePlaneCollision(a, floor, 1.0f, 1.0f);
+
+    EXPECT_GT(glm::length(a.angularVelocity), 1e-5f);
+    EXPECT_LT(std::abs(a.velocity.x), beforeTangential);
+}
+
+TEST(AngularVelocityTests, SphereSphere_ForceMode_AccumulatesTorque) {
+    MovingSphere a({ 0.0f, 0.0f, 0.0f }, 1.0f, { 6.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+    MovingSphere b({ 1.2f, 1.6f, 0.0f }, 1.0f, { 0.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+
+    ASSERT_TRUE(a.sphere.CollideWith(b.sphere));
+
+    const glm::vec3 aVelBefore = a.velocity;
+    const glm::vec3 bVelBefore = b.velocity;
+
+    ResolveElasticCollision(a, b, true, 1.0f / 60.0f, 1.0f);
+
+    EXPECT_NEAR(glm::length(a.velocity - aVelBefore), 0.0f, 1e-6f);
+    EXPECT_NEAR(glm::length(b.velocity - bVelBefore), 0.0f, 1e-6f);
+    EXPECT_GT(glm::length(a.torqueAccumulator), 1e-6f);
+    EXPECT_GT(glm::length(b.torqueAccumulator), 1e-6f);
+}
+
+TEST(AngularVelocityTests, ContactFrictionFormula_IsCentralizedInStaticLib) {
+    EXPECT_NEAR(ComputeContactFriction(0.4f, 0.6f, 2.0f), 1.0f, 1e-6f);
+    EXPECT_NEAR(ComputeContactFriction(0.4f, 0.6f, 1.0f), 0.5f, 1e-6f);
+    EXPECT_NEAR(ComputeContactFriction(0.0f, 1.0f, 1.0f), 0.5f, 1e-6f);
+}
+
+TEST(AngularVelocityTests, SpherePlane_BackspinAffectsBounce) {
+    MovingSphere ball({ 0.0f, 1.1f, 0.0f }, 1.0f, { 0.0f, -5.0f, 0.0f }, 1.0f, 1.0f);
+    // Add backspin: angular velocity around Z-axis (assuming Y-up)
+    ball.angularVelocity = glm::vec3(0.0f, 0.0f, 10.0f); // Backspin
+
+    Plane floor({ 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+
+    ASSERT_TRUE(floor.Intersects(ball.sphere));
+
+    const float initialYVel = ball.velocity.y;
+    ResolveSpherePlaneCollision(ball, floor, 1.0f, 1.0f);
+
+    // With backspin, the ball should bounce higher due to friction pushing it up
+    EXPECT_GT(ball.velocity.y, -initialYVel); // Should bounce up more than just reversing
+    EXPECT_NE(ball.angularVelocity.z, 10.0f); // Angular velocity should change due to friction
+}
+
+TEST(AngularVelocityTests, SpherePlane_NoSpin_NoExtraBounce) {
+    MovingSphere ball({ 0.0f, 1.1f, 0.0f }, 1.0f, { 0.0f, -5.0f, 0.0f }, 1.0f, 1.0f);
+    // No spin
+    ball.angularVelocity = glm::vec3(0.0f, 0.0f, 0.0f);
+
+    Plane floor({ 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+
+    ASSERT_TRUE(floor.Intersects(ball.sphere));
+
+    ResolveSpherePlaneCollision(ball, floor, 1.0f, 1.0f);
+
+    // Without spin, should just reverse Y velocity approximately
+    EXPECT_NEAR(ball.velocity.y, 5.0f, 0.1f);
+    EXPECT_NEAR(ball.angularVelocity.z, 0.0f, 1e-6f);
+}
+
+TEST(AngularVelocityTests, SphereSphere_SpinTransferOnCollision) {
+    MovingSphere a({ 0.0f, 0.0f, 0.0f }, 1.0f, { 5.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+    a.angularVelocity = glm::vec3(0.0f, 0.0f, 5.0f); // Spinning
+
+    MovingSphere b({ 2.0f, 0.0f, 0.0f }, 1.0f, { 0.0f, 0.0f, 0.0f }, 1.0f, 1.0f);
+    b.angularVelocity = glm::vec3(0.0f, 0.0f, 0.0f); // Stationary
+
+    ASSERT_TRUE(a.sphere.CollideWith(b.sphere));
+
+    const glm::vec3 aAngBefore = a.angularVelocity;
+    const glm::vec3 bAngBefore = b.angularVelocity;
+
+    ResolveElasticCollision(a, b, false, 0.0f, 1.0f);
+
+    // Spin should transfer
+    EXPECT_NE(a.angularVelocity.z, aAngBefore.z);
+    EXPECT_NE(b.angularVelocity.z, bAngBefore.z);
 }

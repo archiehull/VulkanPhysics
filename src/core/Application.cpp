@@ -148,13 +148,13 @@ void Application::LoadScene(const std::string& scenePath) {
 
     // 3. Load new configuration
     config = ConfigLoader::Load(scenePath);
+    currentScenePath = scenePath;
     editorUI->SetPerformanceSettings(config.vsync, config.maxFps);
 
     if (vulkanSwapChain && vulkanSwapChain->IsVSyncEnabled() != config.vsync) {
         vulkanSwapChain->SetVSyncEnabled(config.vsync);
         RecreateSwapChain();
     }
-
     auto activeBindings = inputManager->LoadFromBindings(config.inputBindings);
     editorUI->SetInputBindings(activeBindings);
 
@@ -187,6 +187,14 @@ void Application::LoadScene(const std::string& scenePath) {
     if (kSceneDebug) {
         std::cout << "Loaded Scene: " << scenePath << std::endl;
     }
+}
+
+void Application::ReloadCurrentScene() {
+    if (currentScenePath.empty()) {
+        return;
+    }
+
+    LoadScene(currentScenePath);
 }
 
 
@@ -670,8 +678,7 @@ void Application::MainLoop() {
 
         // 1. Handle Restart
         if (editorUI->ConsumeRestartRequest()) {
-            scene->ResetEnvironment();
-            scene->ResetSpawnerSpawnedObjects();
+            ReloadCurrentScene();
         }
 
         std::string selectedCam = editorUI->ConsumeCameraSwitchRequest();
@@ -918,8 +925,7 @@ void Application::ProcessInput() {
         scene->ToggleWeather();
     }
     if (inputManager->IsActionJustPressed(InputAction::ResetEnvironment)) {
-        scene->ResetEnvironment();
-        scene->ResetSpawnerSpawnedObjects();
+        ReloadCurrentScene();
     }
 
     if (inputManager->IsActionJustPressed(InputAction::ToggleNoclip)) {

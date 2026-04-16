@@ -19,35 +19,91 @@ MovingSphere::MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, 
 	}
 }
 
-void ResolveElasticCollision(MovingSphere& a, MovingSphere& b, bool useForce, float dt)
+void ResolveElasticCollision(MovingSphere& a, MovingSphere& b, bool useForce, float dt, float friction)
 {
-	glm::vec3 normal = b.sphere.Position() - a.sphere.Position();
-	float distSq = glm::dot(normal, normal);
+	glm::vec3 delta = b.sphere.Position() - a.sphere.Position();
+	float distSq = glm::dot(delta, delta);
 	if (distSq == 0.0f) return;
 
-	glm::vec3 relVel = a.velocity - b.velocity;
-	float velAlongNormal = glm::dot(relVel, normal);
-	if (velAlongNormal < 0.0f) return;
+	// Contact normal from A -> B
+	glm::vec3 n = delta / std::sqrt(distSq);
 
-	double e = static_cast<double>(a.restitution) * static_cast<double>(b.restitution);
-	double invMassSum = static_cast<double>(a.invMass) + static_cast<double>(b.invMass);
-	if (invMassSum <= 0.0) return;
+	// Contact points relative to each center of mass
+	glm::vec3 rA = n * a.sphere.m_radius;
+	glm::vec3 rB = -n * b.sphere.m_radius;
 
-	double j = -((1.0 + e) * static_cast<double>(velAlongNormal));
-	j /= (invMassSum * static_cast<double>(distSq));
+	// Surface point velocity = linear + angular component
+	glm::vec3 vAp = a.velocity + glm::cross(a.angularVelocity, rA);
+	glm::vec3 vBp = b.velocity + glm::cross(b.angularVelocity, rB);
+	glm::vec3 relVel = vAp - vBp;
 
-	glm::vec3 impulse = normal * static_cast<float>(j);
+	float velAlongNormal = glm::dot(relVel, n);
+	if (velAlongNormal <= 0.0f) return;
+
+	const float e = a.restitution * b.restitution;
+	const float invMassSum = a.invMass + b.invMass;
+	if (invMassSum <= 0.0f) return;
+
+	// 1) Normal impulse
+	glm::vec3 rA_cross_n = glm::cross(rA, n);
+	glm::vec3 rB_cross_n = glm::cross(rB, n);
+	float angularTermA = glm::dot(a.inverseInertiaTensor * rA_cross_n, rA_cross_n);
+	float angularTermB = glm::dot(b.inverseInertiaTensor * rB_cross_n, rB_cross_n);
+
+	float j = -(1.0f + e) * velAlongNormal / (invMassSum + angularTermA + angularTermB);
+	glm::vec3 normalImpulse = n * j;
+
+	// 2) Tangential (friction) impulse
+	glm::vec3 tangent = relVel - (n * velAlongNormal);
+	float tangentLen = glm::length(tangent);
+	glm::vec3 frictionImpulse(0.0f);
+
+	if (tangentLen > 1e-6f) {
+		glm::vec3 t = tangent / tangentLen;
+
+		glm::vec3 rA_cross_t = glm::cross(rA, t);
+		glm::vec3 rB_cross_t = glm::cross(rB, t);
+
+		float angularTermA = glm::dot(a.inverseInertiaTensor * rA_cross_t, rA_cross_t);
+		float angularTermB = glm::dot(b.inverseInertiaTensor * rB_cross_t, rB_cross_t);
+
+		float jt = -tangentLen / (invMassSum + angularTermA + angularTermB);
+		const float maxFriction = std::abs(j) * glm::clamp(friction, 0.0f, 1.0f);
+		jt = glm::clamp(jt, -maxFriction, maxFriction);
+
+		frictionImpulse = t * jt;
+	}
+
+	// 3) Apply impulse (linear + angular)
+	glm::vec3 totalImpulse = normalImpulse + frictionImpulse;
 
 	if (useForce && dt > 0.0f) {
-		glm::vec3 force = impulse / dt;
-
-		if (a.invMass > 0.0f) a.forceAccumulator += force;
-		if (b.invMass > 0.0f) b.forceAccumulator -= force;
+		glm::vec3 force = totalImpulse / dt;
+		if (a.invMass > 0.0f) {
+			a.forceAccumulator += force;
+			a.torqueAccumulator += glm::cross(rA, force);
+		}
+		if (b.invMass > 0.0f) {
+			b.forceAccumulator -= force;
+			b.torqueAccumulator -= glm::cross(rB, force);
+		}
 	}
 	else {
-		a.velocity += impulse * a.invMass;
-		b.velocity -= impulse * b.invMass;
+		if (a.invMass > 0.0f) {
+			a.velocity += totalImpulse * a.invMass;
+			a.angularVelocity += a.inverseInertiaTensor * glm::cross(rA, totalImpulse);
+		}
+		if (b.invMass > 0.0f) {
+			b.velocity -= totalImpulse * b.invMass;
+			b.angularVelocity -= b.inverseInertiaTensor * glm::cross(rB, totalImpulse);
+		}
 	}
+}
+
+float ComputeContactFriction(float frictionA, float frictionB, float globalScale)
+{
+	const float objectFriction = (frictionA + frictionB) * 0.5f;
+	return glm::clamp(objectFriction * globalScale, 0.0f, 1.0f);
 }
 
 void ResolveSpherePlaneCollision(
@@ -56,19 +112,52 @@ void ResolveSpherePlaneCollision(
 	float planeRestitution,
 	float contactFriction)
 {
-	const glm::vec3 n = p.GetNormal();
-	const float vn = glm::dot(a.velocity, n);
+	if (a.invMass <= 0.0f) return;
 
+	glm::vec3 n = p.GetNormal();
+	glm::vec3 rA = -n * a.sphere.m_radius;
+
+	// Contact point velocity
+	glm::vec3 vAp = a.velocity + glm::cross(a.angularVelocity, rA);
+	float vn = glm::dot(vAp, n);
 	if (vn >= 0.0f) return;
 
-	const float e = glm::clamp(a.restitution * planeRestitution, 0.0f, 1.0f);
+	float e = glm::clamp(a.restitution * planeRestitution, 0.0f, 1.0f);
 
-	a.velocity -= (1.0f + e) * vn * n;
+	// 1) Normal impulse (accounting for angular inertia)
+	glm::vec3 rCrossN = glm::cross(rA, n);
+	glm::vec3 angularEffect = glm::cross(a.inverseInertiaTensor * rCrossN, rA);
+	float invMassEffect = a.invMass + glm::dot(angularEffect, n);
 
-	const float tangentDamping = glm::clamp(contactFriction, 0.0f, 1.0f);
-	const glm::vec3 vNormal = glm::dot(a.velocity, n) * n;
-	const glm::vec3 vTangent = a.velocity - vNormal;
-	a.velocity = vNormal + (vTangent * tangentDamping);
+	float j = -(1.0f + e) * vn;
+	j /= invMassEffect;
+	glm::vec3 normalImpulse = n * j;
+
+	// Apply normal impulse
+	a.velocity += normalImpulse * a.invMass;
+	a.angularVelocity += a.inverseInertiaTensor * glm::cross(rA, normalImpulse);
+
+	// 2) Tangential friction impulse (recalculate after normal impulse)
+	vAp = a.velocity + glm::cross(a.angularVelocity, rA);
+	glm::vec3 tangent = vAp - (n * glm::dot(vAp, n));
+	float tangentLen = glm::length(tangent);
+	glm::vec3 frictionImpulse(0.0f);
+
+	if (tangentLen > 1e-6f) {
+		glm::vec3 t = tangent / tangentLen;
+		glm::vec3 rA_cross_t = glm::cross(rA, t);
+		float angularTerm = glm::dot(a.inverseInertiaTensor * rA_cross_t, rA_cross_t);
+
+		float jt = -glm::dot(vAp, t) / (a.invMass + angularTerm);
+		const float maxFriction = std::abs(j) * glm::clamp(contactFriction, 0.0f, 1.0f);
+		jt = glm::clamp(jt, -maxFriction, maxFriction);
+
+		frictionImpulse = t * jt;
+	}
+
+	// 3) Apply frictional impulse
+	a.velocity += frictionImpulse * a.invMass;
+	a.angularVelocity += a.inverseInertiaTensor * glm::cross(rA, frictionImpulse);
 }
 
 float GetKineticEnergy(const MovingSphere& body)

@@ -1,7 +1,6 @@
-﻿  EditorUI_DrawWindows.cpp
-  Generating code
-  56 of 11316 functions ( 0.5%) were compiled, the rest were copied from previous compilation.
-    25 functions were new in current compilation
-    103 functions had inline decision re-evaluated but remain unchanged
+﻿  Generating code
+  3 of 11342 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    85 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
-  VulkanPhysics.vcxproj -> C:\Users\a\Desktop\VulkanPhysics\x64\Release\VulkanPhysics.exe
+  VulkanPhysics.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\VulkanPhysics.exe

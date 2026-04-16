@@ -217,6 +217,16 @@ Entity Scene::GetEntityByName(const std::string& name) const {
 void Scene::DeleteEntity(Entity entity) {
     if (entity == MAX_ENTITIES || entity >= m_Registry.GetEntityCount()) return;
 
+    // Remove stale spring links to this entity so recycled entity IDs
+    // do not get accidentally pulled by existing spring anchors.
+    for (Entity e = 0; e < m_Registry.GetEntityCount(); ++e) {
+        if (!m_Registry.HasComponent<SpringComponent>(e)) continue;
+        auto& spring = m_Registry.GetComponent<SpringComponent>(e);
+        spring.connectedEntities.erase(
+            std::remove(spring.connectedEntities.begin(), spring.connectedEntities.end(), entity),
+            spring.connectedEntities.end());
+    }
+
     Entity linkedShadow = MAX_ENTITIES;
     if (m_Registry.HasComponent<RenderComponent>(entity)) {
         auto& render = m_Registry.GetComponent<RenderComponent>(entity);

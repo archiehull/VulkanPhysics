@@ -756,6 +756,20 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 if (ImGui::Button(dirLabel.c_str())) {
                     PhysicsSystem::gravityDirection *= -1.0f;
                 }
+                
+                // ADDED GRAVITY SLIDER HERE
+                float currentGravity = std::abs(PhysicsSystem::gravityDirection);
+                if (ImGui::SliderFloat("Gravity Force", &currentGravity, 0.0f, 50.0f, "%.2f m/s^2")) {
+                    // Preserve the direction (sign) while applying the new magnitude
+                    PhysicsSystem::gravityDirection = (PhysicsSystem::gravityDirection < 0.0f) ? -currentGravity : currentGravity;
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::Text("Contact Materials");
+            ImGui::SliderFloat("Global Friction Scale", &PhysicsSystem::contactFrictionScale, 0.0f, 5.0f, "%.2fx");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Scales grip between colliding objects. Higher values transfer more spin.");
             }
 
             ImGui::Spacing();
