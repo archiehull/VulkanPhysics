@@ -238,6 +238,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 || registry.HasComponent<OrbitComponent>(e)
                 || registry.HasComponent<LayerRegionComponent>(e)
                 || registry.HasComponent<ObjectSpawnerComponent>(e)
+                || registry.HasComponent<PathAnimationComponent>(e)
                 || registry.HasComponent<DustCloudComponent>(e)
                 || registry.HasComponent<DespawnerComponent>(e)
                 || registry.HasComponent<SpawnedFromSpawnerComponent>(e)
@@ -923,6 +924,102 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 }
             }
 
+            // --- Path Animation Component ---
+            if (registry.HasComponent<PathAnimationComponent>(e)) {
+                bool open = ImGui::TreeNodeEx("PathAnimationComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                if (ImGui::Button("Remove##PathAnimation")) registry.RemoveComponent<PathAnimationComponent>(e);
+
+                if (open && registry.HasComponent<PathAnimationComponent>(e)) {
+                    auto& comp = registry.GetComponent<PathAnimationComponent>(e);
+                    bool dirty = false;
+
+                    int playMode = static_cast<int>(comp.playMode);
+                    const char* playModeItems[] = { "Once", "Loop", "Bounce" };
+                    if (ImGui::Combo("Play Mode", &playMode, playModeItems, IM_ARRAYSIZE(playModeItems))) {
+                        comp.playMode = static_cast<PathAnimationPlayMode>(playMode);
+                        dirty = true;
+                    }
+
+                    int timingMode = static_cast<int>(comp.timingMode);
+                    const char* timingModeItems[] = { "Per Segment", "Overall Time" };
+                    if (ImGui::Combo("Timing Mode", &timingMode, timingModeItems, IM_ARRAYSIZE(timingModeItems))) {
+                        comp.timingMode = static_cast<PathAnimationTimingMode>(timingMode);
+                        dirty = true;
+                    }
+
+                    if (comp.timingMode == PathAnimationTimingMode::OverallTime) {
+                        if (ImGui::DragFloat("Overall Duration", &comp.overallDuration, 0.05f, 0.01f, 10000.0f)) {
+                            dirty = true;
+                        }
+                    }
+
+                    ImGui::Checkbox("Is Playing", &comp.isPlaying);
+                    ImGui::Checkbox("Show Path", &comp.showPath);
+                    ImGui::Checkbox("Use Local Space", &comp.useLocalSpace);
+
+                    ImGui::Separator();
+                    for (size_t i = 0; i < comp.segments.size(); ++i) {
+                        auto& seg = comp.segments[i];
+                        std::string nodeLabel = "Segment " + std::to_string(i);
+                        if (ImGui::TreeNode(nodeLabel.c_str())) {
+                            if (ImGui::DragFloat3(("Start##PathSegStart" + std::to_string(i)).c_str(), &seg.startPoint.x, 0.05f)) dirty = true;
+                            if (ImGui::DragFloat3(("End##PathSegEnd" + std::to_string(i)).c_str(), &seg.endPoint.x, 0.05f)) dirty = true;
+
+                            int curveType = static_cast<int>(seg.curveType);
+                            const char* curveItems[] = { "Straight", "Bezier Quadratic" };
+                            if (ImGui::Combo(("Curve Type##PathSegCurve" + std::to_string(i)).c_str(), &curveType, curveItems, IM_ARRAYSIZE(curveItems))) {
+                                seg.curveType = static_cast<PathCurveType>(curveType);
+                                dirty = true;
+                            }
+
+                            if (seg.curveType == PathCurveType::BezierQuadratic) {
+                                if (ImGui::DragFloat3(("Control##PathSegCtrl" + std::to_string(i)).c_str(), &seg.controlPoint.x, 0.05f)) dirty = true;
+                            }
+
+                            if (comp.timingMode == PathAnimationTimingMode::PerSegment) {
+                                if (ImGui::DragFloat(("Duration##PathSegDuration" + std::to_string(i)).c_str(), &seg.duration, 0.05f, 0.001f, 10000.0f)) {
+                                    dirty = true;
+                                }
+                            }
+
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.2f, 0.2f, 1.0f));
+                            if (ImGui::Button(("Remove Segment##PathSegRemove" + std::to_string(i)).c_str())) {
+                                comp.segments.erase(comp.segments.begin() + static_cast<long long>(i));
+                                comp.currentSegmentIndex = std::max(0, std::min(comp.currentSegmentIndex, static_cast<int>(comp.segments.size()) - 1));
+                                comp.segmentTime = 0.0f;
+                                dirty = true;
+                                ImGui::PopStyleColor();
+                                ImGui::TreePop();
+                                break;
+                            }
+                            ImGui::PopStyleColor();
+
+                            ImGui::TreePop();
+                        }
+                    }
+
+                    if (ImGui::Button("Add Segment##PathSegAdd")) {
+                        PathSegment seg;
+                        if (!comp.segments.empty()) {
+                            seg.startPoint = comp.segments.back().endPoint;
+                            seg.endPoint = seg.startPoint + glm::vec3(1.0f, 0.0f, 0.0f);
+                            seg.controlPoint = (seg.startPoint + seg.endPoint) * 0.5f;
+                        }
+                        comp.segments.push_back(seg);
+                        comp.currentSegmentIndex = static_cast<int>(comp.segments.size()) - 1;
+                        comp.segmentTime = 0.0f;
+                        dirty = true;
+                    }
+
+                    if (dirty) {
+                        comp.initialized = false;
+                    }
+
+                    ImGui::TreePop();
+                }
+            }
+
             // --- 12. Environment Component ---
             if (registry.HasComponent<EnvironmentComponent>(e)) {
                 bool open = ImGui::TreeNodeEx("EnvironmentComponent", ImGuiTreeNodeFlags_DefaultOpen);
@@ -1106,6 +1203,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 addMenuItem((ColliderComponent*)nullptr, "ColliderComponent", e);
                 addMenuItem((PhysicsComponent*)nullptr, "PhysicsComponent", e);
                 addMenuItem((SpringComponent*)nullptr, "SpringComponent", e);
+                addMenuItem((PathAnimationComponent*)nullptr, "PathAnimationComponent", e);
                 addMenuItem((LightComponent*)nullptr, "LightComponent", e);
                 addMenuItem((CameraComponent*)nullptr, "CameraComponent", e);
                 addMenuItem((AttachedEmitterComponent*)nullptr, "AttachedEmitterComponent", e);

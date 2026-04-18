@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <thread>
 #include <limits>
+#include <cctype>
 
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
@@ -521,6 +522,59 @@ void Application::SetupScene() {
                 }
                 
                 scene->GetRegistry().AddComponent<SpringComponent>(anchorEnt, spring);
+            }
+        }
+
+        if (objCfg.hasPathAnimation && entity != MAX_ENTITIES) {
+            auto toUpper = [](std::string value) {
+                std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+                return value;
+                };
+
+            auto parsePlayMode = [&](const std::string& mode) {
+                const std::string value = toUpper(mode);
+                if (value == "LOOP") return PathAnimationPlayMode::Loop;
+                if (value == "BOUNCE") return PathAnimationPlayMode::Bounce;
+                return PathAnimationPlayMode::Once;
+                };
+
+            auto parseTimingMode = [&](const std::string& mode) {
+                const std::string value = toUpper(mode);
+                if (value == "OVERALL_TIME") return PathAnimationTimingMode::OverallTime;
+                return PathAnimationTimingMode::PerSegment;
+                };
+
+            auto parseCurveType = [&](const std::string& type) {
+                const std::string value = toUpper(type);
+                if (value == "BEZIER_QUADRATIC") return PathCurveType::BezierQuadratic;
+                return PathCurveType::Straight;
+                };
+
+            PathAnimationComponent pathAnim;
+            pathAnim.playMode = parsePlayMode(objCfg.pathPlayMode);
+            pathAnim.timingMode = parseTimingMode(objCfg.pathTimingMode);
+            pathAnim.overallDuration = objCfg.pathOverallDuration;
+            pathAnim.isPlaying = objCfg.pathIsPlaying;
+            pathAnim.showPath = objCfg.pathShowPath;
+            pathAnim.useLocalSpace = objCfg.pathUseLocalSpace;
+            pathAnim.initialized = false;
+
+            for (const auto& segCfg : objCfg.pathSegments) {
+                PathSegment segment;
+                segment.startPoint = segCfg.startPoint;
+                segment.endPoint = segCfg.endPoint;
+                segment.controlPoint = segCfg.controlPoint;
+                segment.curveType = parseCurveType(segCfg.curveType);
+                segment.duration = segCfg.duration;
+                segment.cachedLength = 0.0f;
+                pathAnim.segments.push_back(segment);
+            }
+
+            if (registry.HasComponent<PathAnimationComponent>(entity)) {
+                registry.GetComponent<PathAnimationComponent>(entity) = pathAnim;
+            }
+            else {
+                registry.AddComponent<PathAnimationComponent>(entity, pathAnim);
             }
         }
 

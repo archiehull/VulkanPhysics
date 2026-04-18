@@ -70,6 +70,33 @@ struct OrbitComponent {
     float currentAngle = 0.0f;
 };
 
+enum class PathAnimationPlayMode { Once, Loop, Bounce };
+enum class PathAnimationTimingMode { PerSegment, OverallTime };
+enum class PathCurveType { Straight, BezierQuadratic };
+
+struct PathSegment {
+    glm::vec3 startPoint = glm::vec3(0.0f);
+    glm::vec3 endPoint = glm::vec3(0.0f);
+    glm::vec3 controlPoint = glm::vec3(0.0f);
+    PathCurveType curveType = PathCurveType::Straight;
+    float duration = 1.0f;
+    float cachedLength = 0.0f;
+};
+
+struct PathAnimationComponent {
+    std::vector<PathSegment> segments;
+    PathAnimationPlayMode playMode = PathAnimationPlayMode::Once;
+    PathAnimationTimingMode timingMode = PathAnimationTimingMode::PerSegment;
+    float overallDuration = 5.0f;
+    bool isPlaying = true;
+    bool showPath = false;
+    int currentSegmentIndex = 0;
+    int direction = 1;
+    float segmentTime = 0.0f;
+    bool initialized = false;
+    bool useLocalSpace = false;
+};
+
 
 // 5. Fire/Thermodynamics State
 struct ThermoComponent {

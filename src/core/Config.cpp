@@ -392,6 +392,66 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 ss >> value;
                 currentObject->isDespawner = (value == "true" || value == "1");
             }
+            else if (key == "PathAnimation") {
+                std::string playMode;
+                std::string timingMode;
+                std::string isPlaying;
+                std::string showPath;
+                std::string useLocalSpace;
+
+                ss >> playMode >> timingMode >> currentObject->pathOverallDuration >> isPlaying >> showPath;
+                if (ss >> useLocalSpace) {
+                    currentObject->pathUseLocalSpace = ParseBoolToken(useLocalSpace);
+                }
+
+                auto toUpper = [](std::string value) {
+                    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+                    return value;
+                    };
+
+                currentObject->hasPathAnimation = true;
+                currentObject->pathPlayMode = toUpper(playMode);
+                currentObject->pathTimingMode = toUpper(timingMode);
+                currentObject->pathIsPlaying = ParseBoolToken(isPlaying);
+                currentObject->pathShowPath = ParseBoolToken(showPath);
+            }
+            else if (key == "PathSegment") {
+                std::vector<std::string> tokens;
+                std::string token;
+                while (ss >> token) tokens.push_back(token);
+
+                if (tokens.size() < 8) {
+                    continue;
+                }
+
+                auto toUpper = [](std::string value) {
+                    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+                    return value;
+                    };
+
+                PathSegmentConfig seg;
+                seg.curveType = toUpper(tokens[0]);
+                seg.startPoint = glm::vec3(std::stof(tokens[1]), std::stof(tokens[2]), std::stof(tokens[3]));
+                seg.endPoint = glm::vec3(std::stof(tokens[4]), std::stof(tokens[5]), std::stof(tokens[6]));
+
+                if (seg.curveType == "BEZIER_QUADRATIC") {
+                    if (tokens.size() >= 11) {
+                        seg.controlPoint = glm::vec3(std::stof(tokens[7]), std::stof(tokens[8]), std::stof(tokens[9]));
+                        seg.duration = std::stof(tokens[10]);
+                    }
+                    else {
+                        seg.controlPoint = (seg.startPoint + seg.endPoint) * 0.5f;
+                        seg.duration = std::stof(tokens[7]);
+                    }
+                }
+                else {
+                    seg.curveType = "STRAIGHT";
+                    seg.duration = std::stof(tokens[7]);
+                }
+
+                currentObject->hasPathAnimation = true;
+                currentObject->pathSegments.push_back(seg);
+            }
         }
         // --- Global Settings ---
         else if (key == "WindowSize") ss >> config.windowWidth >> config.windowHeight;

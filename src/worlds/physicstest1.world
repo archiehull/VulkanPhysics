@@ -127,6 +127,20 @@ Object RightBallSpawner
     SpawnMass 1.0
 EndObject
 
+Object PathMover
+    Type Sphere
+    Params 0.6
+    Texture tex_ball
+    Position 0.0 6.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false false true
+    PathAnimation LOOP OVERALL_TIME 12.0 true true false
+    PathSegment STRAIGHT -8.0 6.0 -6.0 8.0 6.0 -6.0 2.5
+    PathSegment BEZIER_QUADRATIC 8.0 6.0 -6.0 8.0 6.0 6.0 13.0 11.0 0.0 2.5
+    PathSegment STRAIGHT 8.0 6.0 6.0 -8.0 6.0 6.0 2.5
+    PathSegment BEZIER_QUADRATIC -8.0 6.0 6.0 -8.0 6.0 -6.0 -13.0 11.0 0.0 2.5
+EndObject
+
 # --- LIGHTING ---
 
 Object MainSun

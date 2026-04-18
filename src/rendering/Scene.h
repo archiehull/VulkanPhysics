@@ -195,6 +195,9 @@ private:
     void ClearSpringVisuals();
     Entity GetOrCreateSpringVisualEntity(const std::string& key);
     glm::vec4 ComputeSpringVisualColor(float currentLength, float restLength) const;
+    void UpdatePathVisuals();
+    void ClearPathVisuals();
+    Entity GetOrCreatePathVisualEntity(const std::string& key);
 
     Registry m_Registry;
     std::vector<std::unique_ptr<ISystem>> m_Systems;
@@ -231,6 +234,7 @@ private:
     std::vector<std::unique_ptr<ParticleSystem>> particleSystems;
     std::vector<std::shared_ptr<Geometry>> m_DeferredGeometryCleanup;
     std::unordered_map<std::string, Entity> m_SpringVisualEntities;
+    std::unordered_map<std::string, Entity> m_PathVisualEntities;
     std::shared_ptr<Geometry> m_SpringVisualGeometry;
 
     bool m_RegionsOnlyDebugView = false;

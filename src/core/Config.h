@@ -31,6 +31,14 @@ struct AttachedParticleConfig {
     float duration = -1.0f; // -1 for infinite
 };
 
+struct PathSegmentConfig {
+    glm::vec3 startPoint = glm::vec3(0.0f);
+    glm::vec3 endPoint = glm::vec3(0.0f);
+    glm::vec3 controlPoint = glm::vec3(0.0f);
+    std::string curveType = "STRAIGHT";
+    float duration = 1.0f;
+};
+
 struct SeasonConfig {
     float summerBaseTemp = 50.0f;
     float winterBaseTemp = -5.0f;
@@ -137,6 +145,15 @@ struct SceneObjectConfig {
     float spawnMass = 1.0f;
 
     bool isDespawner = false;
+
+    bool hasPathAnimation = false;
+    std::string pathPlayMode = "ONCE";
+    std::string pathTimingMode = "PER_SEGMENT";
+    float pathOverallDuration = 5.0f;
+    bool pathIsPlaying = true;
+    bool pathShowPath = false;
+    bool pathUseLocalSpace = false;
+    std::vector<PathSegmentConfig> pathSegments;
 
     // ---> ADD SPRING CONFIG FIELDS HERE <---
     bool hasSpringConfig = false;

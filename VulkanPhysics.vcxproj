@@ -48,6 +48,7 @@
     <ClCompile Include="src\rendering\ShadowPass.cpp" />
     <ClCompile Include="src\rendering\SkyboxPass.cpp" />
     <ClCompile Include="src\rendering\Texture.cpp" />
+    <ClCompile Include="src\systems\AnimationSystem.cpp" />
     <ClCompile Include="src\systems\CameraSystem.cpp" />
     <ClCompile Include="src\systems\ObjectSpawnerSystem.cpp" />
     <ClCompile Include="src\systems\OrbitSystem.cpp" />
@@ -92,6 +93,7 @@
     <ClInclude Include="src\rendering\ShadowPass.h" />
     <ClInclude Include="src\rendering\SkyboxPass.h" />
     <ClInclude Include="src\rendering\Texture.h" />
+    <ClInclude Include="src\systems\AnimationSystem.h" />
     <ClInclude Include="src\systems\CameraSystem.h" />
     <ClInclude Include="src\systems\ISystem.h" />
     <ClInclude Include="src\systems\ObjectSpawnerSystem.h" />
@@ -102,6 +104,7 @@
     <ClInclude Include="src\systems\ThermodynamicsSystem.h" />
     <ClInclude Include="src\systems\TimeSystem.h" />
     <ClInclude Include="src\systems\WeatherSystem.h" />
+    <ClInclude Include="src\util\AnimationMath.h" />
     <ClInclude Include="src\vulkan\PushConstantObject.h" />
     <ClInclude Include="src\vulkan\UniformBufferObject.h" />
     <ClInclude Include="src\vulkan\Vertex.h" />

@@ -10,6 +10,7 @@
 #include <random>
 #include <cmath>
 #include <unordered_set>
+#include "../util/AnimationMath.h"
 
 namespace {
 float ComputeFlickerPresetValue(int preset, float t, float phase) {
@@ -52,6 +53,7 @@ float ComputeFlickerPresetValue(int preset, float t, float phase) {
 #include "../systems/CameraSystem.h"
 #include "../systems/PhysicsSystem.h"
 #include "../systems/ObjectSpawnerSystem.h"
+#include "../systems/AnimationSystem.h"
 
 Entity Scene::AddLayerRegion(const std::string& name, int layerBit, int volumeType, float radius, const glm::vec3& halfExtents, const glm::vec3& position) {
     Entity entity = m_Registry.CreateEntity();
@@ -389,6 +391,7 @@ void Scene::Initialize() {
     // 3. Register ECS Systems
     m_Systems.push_back(std::make_unique<CameraSystem>());
     m_Systems.push_back(std::make_unique<OrbitSystem>());
+    m_Systems.push_back(std::make_unique<AnimationSystem>());
     m_Systems.push_back(std::make_unique<TimeSystem>());
     m_Systems.push_back(std::make_unique<WeatherSystem>());
     m_Systems.push_back(std::make_unique<ParticleUpdateSystem>());
@@ -1111,6 +1114,141 @@ void Scene::ClearSpringVisuals() {
     m_SpringVisualEntities.clear();
 }
 
+Entity Scene::GetOrCreatePathVisualEntity(const std::string& key) {
+    auto it = m_PathVisualEntities.find(key);
+    if (it != m_PathVisualEntities.end()) {
+        const Entity existing = it->second;
+        if (existing < m_Registry.GetEntityCount() &&
+            m_Registry.HasComponent<TransformComponent>(existing) &&
+            m_Registry.HasComponent<RenderComponent>(existing)) {
+            return existing;
+        }
+    }
+
+    Entity visualEntity = m_Registry.CreateEntity();
+
+    TransformComponent transform;
+    transform.UpdateMatrix();
+    m_Registry.AddComponent<TransformComponent>(visualEntity, transform);
+
+    RenderComponent render;
+    render.geometry = m_SpringVisualGeometry;
+    render.geometryName = "path_visual";
+    render.texturePath = "";
+    render.originalTexturePath = "";
+    render.shadingMode = 1;
+    render.castsShadow = false;
+    render.originalCastsShadow = false;
+    render.receiveShadows = false;
+    render.layerMask = SceneLayers::ALL;
+    render.onlyInRegionMask = 0;
+    render.useDebugOverlay = true;
+    render.debugOverlayColor = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f);
+    m_Registry.AddComponent<RenderComponent>(visualEntity, render);
+
+    m_RenderableEntities.push_back(visualEntity);
+    m_PathVisualEntities[key] = visualEntity;
+    return visualEntity;
+}
+
+void Scene::ClearPathVisuals() {
+    for (const auto& [_, entity] : m_PathVisualEntities) {
+        if (entity < m_Registry.GetEntityCount()) {
+            DeleteEntity(entity);
+        }
+    }
+    m_PathVisualEntities.clear();
+}
+
+void Scene::UpdatePathVisuals() {
+    std::unordered_set<std::string> activeKeys;
+    auto& registry = m_Registry;
+    const Entity entityCount = registry.GetEntityCount();
+    constexpr float kLineThickness = 0.02f;
+    constexpr float kMarkerSize = 0.08f;
+
+    auto updateLineVisual = [&](const std::string& key, const glm::vec3& start, const glm::vec3& end, const glm::vec4& color) {
+        const glm::vec3 delta = end - start;
+        const float distance = glm::length(delta);
+        if (distance <= 0.0001f) return;
+
+        const glm::vec3 direction = delta / distance;
+        const glm::vec3 midpoint = start + (delta * 0.5f);
+        const float yaw = std::atan2(direction.x, direction.z);
+        const float pitch = -std::asin(glm::clamp(direction.y, -1.0f, 1.0f));
+
+        Entity visualEntity = GetOrCreatePathVisualEntity(key);
+        auto& transform = registry.GetComponent<TransformComponent>(visualEntity);
+        transform.position = midpoint;
+        transform.rotation = glm::degrees(glm::vec3(pitch, yaw, 0.0f));
+        transform.scale = glm::vec3(kLineThickness, kLineThickness, distance);
+        transform.UpdateMatrix();
+
+        auto& render = registry.GetComponent<RenderComponent>(visualEntity);
+        render.visible = true;
+        render.useDebugOverlay = true;
+        render.debugOverlayColor = color;
+
+        activeKeys.insert(key);
+        };
+
+    auto updateMarkerVisual = [&](const std::string& key, const glm::vec3& position, const glm::vec4& color) {
+        Entity visualEntity = GetOrCreatePathVisualEntity(key);
+        auto& transform = registry.GetComponent<TransformComponent>(visualEntity);
+        transform.position = position;
+        transform.rotation = glm::vec3(0.0f);
+        transform.scale = glm::vec3(kMarkerSize);
+        transform.UpdateMatrix();
+
+        auto& render = registry.GetComponent<RenderComponent>(visualEntity);
+        render.visible = true;
+        render.useDebugOverlay = true;
+        render.debugOverlayColor = color;
+
+        activeKeys.insert(key);
+        };
+
+    for (Entity e = 0; e < entityCount; ++e) {
+        if (!registry.HasComponent<PathAnimationComponent>(e)) continue;
+
+        const auto& path = registry.GetComponent<PathAnimationComponent>(e);
+        if (!path.showPath || path.segments.empty()) continue;
+
+        for (size_t i = 0; i < path.segments.size(); ++i) {
+            const auto& segment = path.segments[i];
+            const std::string base = "PathVis_" + std::to_string(e) + "_" + std::to_string(i);
+
+            if (segment.curveType == PathCurveType::BezierQuadratic) {
+                constexpr int kSamples = 20;
+                glm::vec3 previous = AnimationMath::QuadraticBezier(segment.startPoint, segment.controlPoint, segment.endPoint, 0.0f);
+                for (int s = 1; s <= kSamples; ++s) {
+                    const float t = static_cast<float>(s) / static_cast<float>(kSamples);
+                    const glm::vec3 current = AnimationMath::QuadraticBezier(segment.startPoint, segment.controlPoint, segment.endPoint, t);
+                    updateLineVisual(base + "_curve_" + std::to_string(s), previous, current, glm::vec4(0.1f, 0.8f, 1.0f, 1.0f));
+                    previous = current;
+                }
+                updateMarkerVisual(base + "_ctrl", segment.controlPoint, glm::vec4(1.0f, 1.0f, 0.1f, 1.0f));
+            }
+            else {
+                updateLineVisual(base + "_line", segment.startPoint, segment.endPoint, glm::vec4(0.1f, 0.8f, 1.0f, 1.0f));
+            }
+
+            updateMarkerVisual(base + "_start", segment.startPoint, glm::vec4(0.1f, 1.0f, 0.1f, 1.0f));
+            updateMarkerVisual(base + "_end", segment.endPoint, glm::vec4(0.1f, 1.0f, 0.1f, 1.0f));
+        }
+    }
+
+    for (auto it = m_PathVisualEntities.begin(); it != m_PathVisualEntities.end(); ) {
+        if (activeKeys.find(it->first) == activeKeys.end()) {
+            DeleteEntity(it->second);
+            it = m_PathVisualEntities.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
 void Scene::UpdateSpringVisuals() {
     std::unordered_set<std::string> activeKeys;
     auto& registry = m_Registry;
@@ -1191,6 +1329,11 @@ void Scene::Update(float deltaTime) {
     if (m_ShowSpringVisuals) {
         UpdateSpringVisuals();
     }
+    else if (!m_SpringVisualEntities.empty()) {
+        ClearSpringVisuals();
+    }
+
+    UpdatePathVisuals();
 }
 
 std::vector<Light> Scene::GetLights() const {
@@ -1247,6 +1390,7 @@ void Scene::Clear() {
     m_LightEntities.clear();
     particleSystems.clear();
     m_SpringVisualEntities.clear();
+    m_PathVisualEntities.clear();
 
     FlushDeferredGeometryCleanup();
 

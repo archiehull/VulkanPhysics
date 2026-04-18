@@ -186,6 +186,9 @@
     <ClCompile Include="src\systems\ObjectSpawnerSystem.cpp">
       <Filter>Source Files\src\systems</Filter>
     </ClCompile>
+    <ClCompile Include="src\systems\AnimationSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Window.h">
@@ -324,6 +327,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\systems\ObjectSpawnerSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\util\AnimationMath.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\AnimationSystem.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
