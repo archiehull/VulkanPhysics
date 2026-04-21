@@ -225,7 +225,20 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
             ImGui::Spacing();
         }
 
+        auto isDebugVisualEntity = [&](Entity e) -> bool {
+            if (!registry.HasComponent<RenderComponent>(e)) {
+                return false;
+            }
+
+            const auto& render = registry.GetComponent<RenderComponent>(e);
+            return render.geometryName == "spring_visual" || render.geometryName == "path_visual";
+            };
+
         auto hasVisibleEntityData = [&](Entity e) -> bool {
+            if (isDebugVisualEntity(e)) {
+                return false;
+            }
+
             return registry.HasComponent<NameComponent>(e)
                 || registry.HasComponent<TransformComponent>(e)
                 || registry.HasComponent<RenderComponent>(e)
@@ -246,7 +259,8 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
             };
 
         if (it->selectedEntity != MAX_ENTITIES &&
-            (it->selectedEntity >= count || !hasVisibleEntityData(it->selectedEntity))) {
+            (it->selectedEntity >= count ||
+                (!hasVisibleEntityData(it->selectedEntity) && !isDebugVisualEntity(it->selectedEntity)))) {
             it->selectedEntity = MAX_ENTITIES;
         }
 
@@ -254,7 +268,21 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
         if (it->showList) {
             ImGui::BeginChild("EntityListPane", ImVec2(250, 0), true);
 
+            int springVisualCount = 0;
+            int pathVisualCount = 0;
+
             for (Entity e = 0; e < count; ++e) {
+                if (isDebugVisualEntity(e)) {
+                    const auto& render = registry.GetComponent<RenderComponent>(e);
+                    if (render.geometryName == "spring_visual") {
+                        ++springVisualCount;
+                    }
+                    else if (render.geometryName == "path_visual") {
+                        ++pathVisualCount;
+                    }
+                    continue;
+                }
+
                 if (!hasVisibleEntityData(e)) {
                     continue;
                 }
@@ -269,6 +297,16 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     it->selectedEntity = e;
                 }
             }
+
+            if (springVisualCount > 0 || pathVisualCount > 0) {
+                ImGui::Separator();
+                if (ImGui::TreeNode("Visualization Helpers")) {
+                    ImGui::BulletText("Spring visuals: %d", springVisualCount);
+                    ImGui::BulletText("Path visuals: %d", pathVisualCount);
+                    ImGui::TreePop();
+                }
+            }
+
             ImGui::EndChild();
             ImGui::SameLine();
         }
@@ -957,12 +995,68 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     ImGui::Checkbox("Is Playing", &comp.isPlaying);
                     ImGui::Checkbox("Show Path", &comp.showPath);
                     ImGui::Checkbox("Use Local Space", &comp.useLocalSpace);
+                    ImGui::Checkbox("Rotate Along Path", &comp.rotateAlongPath);
+                    ImGui::Checkbox("Reverse Path", &comp.reversePath);
+                    if (ImGui::DragFloat("Playback Speed", &comp.playbackSpeed, 0.05f, 0.0f, 10.0f, "%.2fx")) {
+                        comp.playbackSpeed = std::max(0.0f, comp.playbackSpeed);
+                    }
+                    ImGui::Checkbox("Apply Animation Velocity", &comp.applyAnimationVelocity);
+                    if (comp.applyAnimationVelocity) {
+                        ImGui::DragFloat3("Animation Velocity", &comp.animationVelocity.x, 0.05f);
+                    }
+                    ImGui::Checkbox("Collide With Fixed Objects", &comp.collideWithFixedObjects);
+                    if (ImGui::ColorEdit4("Path Color", &comp.pathColor.x, ImGuiColorEditFlags_AlphaPreview)) {
+                        dirty = true;
+                    }
+
+                    if (ImGui::Checkbox("Auto Connect Last to First", &comp.autoConnectLoop)) {
+                        dirty = true;
+                    }
+
+                    auto syncAutoConnectSegment = [&]() {
+                        if (!comp.autoConnectLoop || comp.segments.size() < 2) {
+                            if (comp.hasAutoConnectSegment && !comp.segments.empty()) {
+                                comp.segments.pop_back();
+                                dirty = true;
+                            }
+                            comp.hasAutoConnectSegment = false;
+                            return;
+                        }
+
+                        if (!comp.hasAutoConnectSegment) {
+                            PathSegment loopSegment;
+                            loopSegment.curveType = PathCurveType::Straight;
+                            comp.segments.push_back(loopSegment);
+                            comp.hasAutoConnectSegment = true;
+                            dirty = true;
+                        }
+
+                        if (comp.segments.size() < 2) {
+                            return;
+                        }
+
+                        const size_t loopIndex = comp.segments.size() - 1;
+                        const size_t lastEditableIndex = loopIndex - 1;
+                        auto& loopSegment = comp.segments[loopIndex];
+                        loopSegment.startPoint = comp.segments[lastEditableIndex].endPoint;
+                        loopSegment.endPoint = comp.segments.front().startPoint;
+                        loopSegment.controlPoint = (loopSegment.startPoint + loopSegment.endPoint) * 0.5f;
+                        loopSegment.curveType = PathCurveType::Straight;
+                        loopSegment.duration = std::max(loopSegment.duration, 0.001f);
+                    };
+
+                    syncAutoConnectSegment();
 
                     ImGui::Separator();
                     for (size_t i = 0; i < comp.segments.size(); ++i) {
                         auto& seg = comp.segments[i];
-                        std::string nodeLabel = "Segment " + std::to_string(i);
+                        const bool isAutoLoopSegment = comp.autoConnectLoop && comp.hasAutoConnectSegment && (i == comp.segments.size() - 1);
+                        std::string nodeLabel = isAutoLoopSegment ? ("Segment " + std::to_string(i) + " (Auto Loop Link)") : ("Segment " + std::to_string(i));
                         if (ImGui::TreeNode(nodeLabel.c_str())) {
+                            if (isAutoLoopSegment) {
+                                ImGui::BeginDisabled();
+                            }
+
                             if (ImGui::DragFloat3(("Start##PathSegStart" + std::to_string(i)).c_str(), &seg.startPoint.x, 0.05f)) dirty = true;
                             if (ImGui::DragFloat3(("End##PathSegEnd" + std::to_string(i)).c_str(), &seg.endPoint.x, 0.05f)) dirty = true;
 
@@ -983,8 +1077,12 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                                 }
                             }
 
+                            if (isAutoLoopSegment) {
+                                ImGui::EndDisabled();
+                            }
+
                             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.2f, 0.2f, 1.0f));
-                            if (ImGui::Button(("Remove Segment##PathSegRemove" + std::to_string(i)).c_str())) {
+                            if (!isAutoLoopSegment && ImGui::Button(("Remove Segment##PathSegRemove" + std::to_string(i)).c_str())) {
                                 comp.segments.erase(comp.segments.begin() + static_cast<long long>(i));
                                 comp.currentSegmentIndex = std::max(0, std::min(comp.currentSegmentIndex, static_cast<int>(comp.segments.size()) - 1));
                                 comp.segmentTime = 0.0f;
@@ -1002,15 +1100,26 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     if (ImGui::Button("Add Segment##PathSegAdd")) {
                         PathSegment seg;
                         if (!comp.segments.empty()) {
-                            seg.startPoint = comp.segments.back().endPoint;
+                            size_t sourceIndex = comp.segments.size() - 1;
+                            if (comp.autoConnectLoop && comp.hasAutoConnectSegment && sourceIndex > 0) {
+                                sourceIndex -= 1;
+                            }
+
+                            seg.startPoint = comp.segments[sourceIndex].endPoint;
                             seg.endPoint = seg.startPoint + glm::vec3(1.0f, 0.0f, 0.0f);
                             seg.controlPoint = (seg.startPoint + seg.endPoint) * 0.5f;
                         }
-                        comp.segments.push_back(seg);
-                        comp.currentSegmentIndex = static_cast<int>(comp.segments.size()) - 1;
+
+                        const bool insertBeforeAuto = comp.autoConnectLoop && comp.hasAutoConnectSegment && !comp.segments.empty();
+                        const size_t insertIndex = insertBeforeAuto ? (comp.segments.size() - 1) : comp.segments.size();
+                        comp.segments.insert(comp.segments.begin() + static_cast<long long>(insertIndex), seg);
+
+                        comp.currentSegmentIndex = static_cast<int>(insertIndex);
                         comp.segmentTime = 0.0f;
                         dirty = true;
                     }
+
+                    syncAutoConnectSegment();
 
                     if (dirty) {
                         comp.initialized = false;

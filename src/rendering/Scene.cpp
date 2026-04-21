@@ -1224,13 +1224,13 @@ void Scene::UpdatePathVisuals() {
                 for (int s = 1; s <= kSamples; ++s) {
                     const float t = static_cast<float>(s) / static_cast<float>(kSamples);
                     const glm::vec3 current = AnimationMath::QuadraticBezier(segment.startPoint, segment.controlPoint, segment.endPoint, t);
-                    updateLineVisual(base + "_curve_" + std::to_string(s), previous, current, glm::vec4(0.1f, 0.8f, 1.0f, 1.0f));
+                    updateLineVisual(base + "_curve_" + std::to_string(s), previous, current, path.pathColor);
                     previous = current;
                 }
                 updateMarkerVisual(base + "_ctrl", segment.controlPoint, glm::vec4(1.0f, 1.0f, 0.1f, 1.0f));
             }
             else {
-                updateLineVisual(base + "_line", segment.startPoint, segment.endPoint, glm::vec4(0.1f, 0.8f, 1.0f, 1.0f));
+                updateLineVisual(base + "_line", segment.startPoint, segment.endPoint, path.pathColor);
             }
 
             updateMarkerVisual(base + "_start", segment.startPoint, glm::vec4(0.1f, 1.0f, 0.1f, 1.0f));

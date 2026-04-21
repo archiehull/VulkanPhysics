@@ -187,7 +187,7 @@
       <Filter>Source Files\src\systems</Filter>
     </ClCompile>
     <ClCompile Include="src\systems\AnimationSystem.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\src\systems</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -323,17 +323,14 @@
     <ClInclude Include="src\menu\EditorUI.h">
       <Filter>Source Files\src\menu</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\EditorUI.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\systems\ObjectSpawnerSystem.h">
       <Filter>Source Files\src\systems</Filter>
     </ClInclude>
-    <ClInclude Include="src\util\AnimationMath.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\systems\AnimationSystem.h">
-      <Filter>Header Files</Filter>
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\util\AnimationMath.h">
+      <Filter>Source Files\src\systems</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

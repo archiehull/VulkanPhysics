@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "../rendering/ParticleLibrary.h"
 #include "../systems/PhysicsSystem.h"
+#include "../systems/AnimationSystem.h"
 #include "../systems/CameraSystem.h"
 #include <cmath>
 #include <cstring>
@@ -800,13 +801,133 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             if (ImGui::Checkbox("Visualize Springs", &m_ShowSpringVisuals)) {
                 m_SpringVisualizationChanged = true;
             }
+
+            Registry& simRegistry = scene.GetRegistry();
+            const Entity simEntityCount = simRegistry.GetEntityCount();
+            bool hasPathAnimations = false;
+            bool allPathsShown = true;
+            for (Entity e = 0; e < simEntityCount; ++e) {
+                if (!simRegistry.HasComponent<PathAnimationComponent>(e)) {
+                    continue;
+                }
+
+                hasPathAnimations = true;
+                if (!simRegistry.GetComponent<PathAnimationComponent>(e).showPath) {
+                    allPathsShown = false;
+                }
+            }
+
+            bool showAllPaths = allPathsShown;
+            if (!hasPathAnimations) {
+                ImGui::BeginDisabled();
+            }
+            if (ImGui::Checkbox("Visualize Animation Paths", &showAllPaths)) {
+                for (Entity e = 0; e < simEntityCount; ++e) {
+                    if (simRegistry.HasComponent<PathAnimationComponent>(e)) {
+                        simRegistry.GetComponent<PathAnimationComponent>(e).showPath = showAllPaths;
+                    }
+                }
+            }
+            if (!hasPathAnimations) {
+                ImGui::EndDisabled();
+            }
+        }
+
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Animations")) {
+        Registry& registry = scene.GetRegistry();
+        const Entity entityCount = registry.GetEntityCount();
+
+        int animationCount = 0;
+        for (Entity e = 0; e < entityCount; ++e) {
+            if (registry.HasComponent<PathAnimationComponent>(e)) {
+                ++animationCount;
+            }
+        }
+
+        if (animationCount == 0) {
+            ImGui::TextDisabled("No path animations found.");
+        }
+        else {
+            ImGui::Text("Animations: %d", animationCount);
+
+            if (ImGui::Button("Play All", ImVec2(-1, 0))) {
+                for (Entity e = 0; e < entityCount; ++e) {
+                    if (registry.HasComponent<PathAnimationComponent>(e)) {
+                        registry.GetComponent<PathAnimationComponent>(e).isPlaying = true;
+                    }
+                }
+            }
+
+            if (ImGui::Button("Pause All", ImVec2(-1, 0))) {
+                for (Entity e = 0; e < entityCount; ++e) {
+                    if (registry.HasComponent<PathAnimationComponent>(e)) {
+                        registry.GetComponent<PathAnimationComponent>(e).isPlaying = false;
+                    }
+                }
+            }
+
+            if (ImGui::Button("Rewind All", ImVec2(-1, 0))) {
+                for (Entity e = 0; e < entityCount; ++e) {
+                    if (registry.HasComponent<PathAnimationComponent>(e)) {
+                        auto& path = registry.GetComponent<PathAnimationComponent>(e);
+                        path.reversePath = true;
+                        path.isPlaying = true;
+                    }
+                }
+            }
+
+            if (ImGui::Button("Play Forward All", ImVec2(-1, 0))) {
+                for (Entity e = 0; e < entityCount; ++e) {
+                    if (registry.HasComponent<PathAnimationComponent>(e)) {
+                        auto& path = registry.GetComponent<PathAnimationComponent>(e);
+                        path.reversePath = false;
+                        path.isPlaying = true;
+                    }
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::Text("Global Animation Speed");
+            ImGui::SliderFloat("##GlobalAnimSpeed", &AnimationSystem::globalPlaybackSpeed, 0.0f, 5.0f, "%.2fx");
+
+            ImGui::Separator();
+            ImGui::Text("Replay / Lookahead");
+            ImGui::SliderFloat("Lookahead Seconds", &m_AnimationLookaheadSeconds, 0.5f, 120.0f, "%.1fs");
+
+            if (ImGui::Button("Generate Lookahead", ImVec2(-1, 0))) {
+                AnimationSystem::GenerateLookahead(scene, m_AnimationLookaheadSeconds);
+                m_AnimationScrubTime = 0.0f;
+            }
+
+            if (!AnimationSystem::HasLookahead()) {
+                ImGui::BeginDisabled();
+            }
+
+            ImGui::Checkbox("Enable Replay Scrub", &m_AnimationReplayScrubEnabled);
+            ImGui::Checkbox("View Recorded Camera", &m_ViewRecordedCameraInReplay);
+
+            const float replayDuration = std::max(AnimationSystem::GetLookaheadDuration(), 0.001f);
+            ImGui::SliderFloat("Replay Time", &m_AnimationScrubTime, 0.0f, replayDuration, "%.2fs");
+
+            if (m_AnimationReplayScrubEnabled) {
+                AnimationSystem::ScrubLookahead(scene, m_AnimationScrubTime, m_ViewRecordedCameraInReplay);
+            }
+            else {
+                AnimationSystem::HideReplayCameraModel(scene);
+            }
+
+            if (!AnimationSystem::HasLookahead()) {
+                ImGui::EndDisabled();
+            }
         }
 
         ImGui::EndMenu();
     }
 
     if (ImGui::BeginMenu("Environment")) {
-
         Registry& sceneRegistry = scene.GetRegistry();
         Entity envEntity = scene.GetEnvironmentEntity();
         const bool hasEnvironment =
@@ -1009,11 +1130,46 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
         Registry& registry = scene.GetRegistry();
         const auto& entities = scene.GetRenderableEntities();
 
+        std::vector<Entity> springVisualEntities;
+        std::vector<Entity> pathVisualEntities;
+
+        auto isVisualHelper = [&](Entity entity) {
+            if (!registry.HasComponent<RenderComponent>(entity)) {
+                return false;
+            }
+
+            const auto& rc = registry.GetComponent<RenderComponent>(entity);
+            if (rc.geometryName == "spring_visual") {
+                springVisualEntities.push_back(entity);
+                return true;
+            }
+            if (rc.geometryName == "path_visual") {
+                pathVisualEntities.push_back(entity);
+                return true;
+            }
+
+            return false;
+        };
+
+        auto selectEntityInProperties = [&](Entity target) {
+            if (m_PropertyWindows.empty()) {
+                m_PropertyWindows.push_back({ m_NextPropertyWindowId++, target, true, true, false });
+                return;
+            }
+
+            m_PropertyWindows.front().selectedEntity = target;
+            m_PropertyWindows.front().isOpen = true;
+        };
+
         if (entities.empty()) {
             ImGui::MenuItem("No objects in scene", nullptr, false, false);
         }
         else {
             for (Entity e : entities) {
+                if (isVisualHelper(e)) {
+                    continue;
+                }
+
                 std::string entityName = "Entity " + std::to_string(e);
                 if (registry.HasComponent<NameComponent>(e)) {
                     entityName = registry.GetComponent<NameComponent>(e).name;
@@ -1081,6 +1237,7 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
                     if (!canViewObject) ImGui::BeginDisabled();
                     if (ImGui::Button("View Object", ImVec2(-1, 0)) && canViewObject) {
                         m_ViewRequested = e;
+                        selectEntityInProperties(e);
                     }
                     if (!canViewObject) {
                         ImGui::EndDisabled();
@@ -1442,6 +1599,42 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
                 }
             }
         }
+
+        if (!springVisualEntities.empty() || !pathVisualEntities.empty()) {
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Visualization Helpers")) {
+                auto drawVisualList = [&](const char* title, const std::vector<Entity>& visualEntities) {
+                    if (ImGui::BeginMenu(title)) {
+                        for (Entity helperEntity : visualEntities) {
+                            std::string helperName = "Entity " + std::to_string(helperEntity);
+                            if (registry.HasComponent<NameComponent>(helperEntity)) {
+                                helperName = registry.GetComponent<NameComponent>(helperEntity).name;
+                            }
+
+                            std::string helperMenuLabel = helperName + "###VisualHelper_" + std::to_string(helperEntity);
+                            if (ImGui::BeginMenu(helperMenuLabel.c_str())) {
+                                if (ImGui::Button("View Object", ImVec2(-1, 0))) {
+                                    m_ViewRequested = helperEntity;
+                                    selectEntityInProperties(helperEntity);
+                                }
+
+                                if (ImGui::Button("Open in Properties", ImVec2(-1, 0))) {
+                                    selectEntityInProperties(helperEntity);
+                                }
+
+                                ImGui::EndMenu();
+                            }
+                        }
+                        ImGui::EndMenu();
+                    }
+                };
+
+                drawVisualList("Spring Visuals", springVisualEntities);
+                drawVisualList("Path Visuals", pathVisualEntities);
+                ImGui::EndMenu();
+            }
+        }
+
         ImGui::EndMenu();
     }
 }

@@ -88,13 +88,22 @@ struct PathAnimationComponent {
     PathAnimationPlayMode playMode = PathAnimationPlayMode::Once;
     PathAnimationTimingMode timingMode = PathAnimationTimingMode::PerSegment;
     float overallDuration = 5.0f;
+    float playbackSpeed = 1.0f;
     bool isPlaying = true;
     bool showPath = false;
+    glm::vec4 pathColor = glm::vec4(0.6f, 0.2f, 0.8f, 1.0f);
+    bool autoConnectLoop = false;
+    bool hasAutoConnectSegment = false;
+    bool reversePath = false;
+    bool applyAnimationVelocity = false;
+    glm::vec3 animationVelocity = glm::vec3(0.0f);
+    bool collideWithFixedObjects = false;
     int currentSegmentIndex = 0;
     int direction = 1;
     float segmentTime = 0.0f;
     bool initialized = false;
     bool useLocalSpace = false;
+    bool rotateAlongPath = false;
 };
 
 
