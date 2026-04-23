@@ -65,6 +65,9 @@ public:
     float GetTimeScale() const { return m_TimeScale; }
     void SetTimeScale(float scale) { m_TimeScale = scale; }
     float GetUIScale() const { return m_UIScale; }
+    void ApplyReplayLookahead(Scene& scene);
+    bool IsReplayActive() const { return m_AnimationReplayScrubEnabled; }
+    void ToggleReplayPlayback();
 
     bool ConsumeStepRequest() { bool req = m_StepRequested; m_StepRequested = false; return req; }
     bool ConsumeRestartRequest() { bool req = m_RestartRequested; m_RestartRequested = false; return req; }
@@ -191,6 +194,7 @@ private:
 
     float m_AnimationLookaheadSeconds = 5.0f;
     bool m_AnimationReplayScrubEnabled = false;
+    bool m_AnimationReplayPlaying = false;
     float m_AnimationScrubTime = 0.0f;
     bool m_ViewRecordedCameraInReplay = false;
 };

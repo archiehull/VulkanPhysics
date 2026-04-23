@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "../rendering/ParticleLibrary.h"
 #include "../systems/CameraSystem.h"
+#include "../systems/AnimationSystem.h"
 #include <algorithm>
 #include <random>
 
@@ -49,6 +50,99 @@ if (m_ShowControlsWindow) {
         }
     }
     ImGui::End();
+}
+
+if (AnimationSystem::IsRealtimeRecording() && m_IsPaused) {
+    AnimationSystem::StopRealtimeRecording();
+    m_AnimationReplayScrubEnabled = AnimationSystem::HasLookahead();
+    m_AnimationReplayPlaying = false;
+    m_AnimationScrubTime = AnimationSystem::GetLookaheadDuration();
+}
+
+// --- REPLAY TIMELINE BOTTOM BAR ---
+if (m_AnimationReplayScrubEnabled && AnimationSystem::HasLookahead()) {
+    ImGuiIO& io = ImGui::GetIO();
+    float barHeight = 55.0f * m_UIScale;
+    ImVec2 windowPos = ImVec2(0.0f, io.DisplaySize.y - barHeight);
+    ImVec2 windowSize = ImVec2(io.DisplaySize.x, barHeight);
+
+    ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.15f, 0.95f));
+
+    if (ImGui::Begin("ReplayBottomBar", nullptr, flags)) {
+        const float replayDuration = std::max(AnimationSystem::GetLookaheadDuration(), 0.001f);
+
+        if (m_AnimationReplayPlaying) {
+            m_AnimationScrubTime += io.DeltaTime;
+            if (m_AnimationScrubTime >= replayDuration) {
+                m_AnimationScrubTime = replayDuration;
+                m_AnimationReplayPlaying = false;
+            }
+        }
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "[ REPLAY MODE ]");
+        ImGui::SameLine();
+
+        if (m_AnimationReplayPlaying) {
+            if (ImGui::Button("Pause", ImVec2(80.0f * m_UIScale, 0))) {
+                m_AnimationReplayPlaying = false;
+            }
+        }
+        else {
+            if (ImGui::Button("Play", ImVec2(80.0f * m_UIScale, 0))) {
+                if (m_AnimationScrubTime >= replayDuration) {
+                    m_AnimationScrubTime = 0.0f;
+                }
+                m_AnimationReplayPlaying = true;
+            }
+        }
+
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(io.DisplaySize.x - (485.0f * m_UIScale));
+        ImGui::SliderFloat("##ScrubBar", &m_AnimationScrubTime, 0.0f, replayDuration, "Time: %.2f s");
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine();
+
+        if (m_ViewRecordedCameraInReplay) {
+            if (ImGui::Button("Enable Freeroam", ImVec2(130.0f * m_UIScale, 0))) {
+                m_ViewRecordedCameraInReplay = false;
+            }
+        }
+        else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+            if (ImGui::Button("Snap to Camera", ImVec2(130.0f * m_UIScale, 0))) {
+                m_ViewRecordedCameraInReplay = true;
+            }
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::SameLine();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+        if (ImGui::Button("Exit Replay", ImVec2(100.0f * m_UIScale, 0))) {
+            m_AnimationReplayScrubEnabled = false;
+            m_AnimationReplayPlaying = false;
+            AnimationSystem::HideReplayCameraModel(scene);
+        }
+        ImGui::PopStyleColor();
+    }
+    ImGui::End();
+
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+}
+else if (!m_AnimationReplayScrubEnabled) {
+    AnimationSystem::HideReplayCameraModel(scene);
 }
 
 }

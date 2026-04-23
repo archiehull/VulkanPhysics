@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include "../systems/AnimationSystem.h"
 
 void EditorUI::Initialize(const std::string& configPath, const std::string& defaultSceneName) {
     m_ConfigRoot = configPath;
@@ -115,4 +116,32 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
     DrawPostMainMenuSection(scene, entityToDelete);
 
     return sceneToLoad;
+}
+
+void EditorUI::ApplyReplayLookahead(Scene& scene) {
+    if (m_AnimationReplayScrubEnabled && AnimationSystem::HasLookahead()) {
+        AnimationSystem::ScrubLookahead(scene, m_AnimationScrubTime, m_ViewRecordedCameraInReplay);
+    }
+    else if (!m_AnimationReplayScrubEnabled) {
+        AnimationSystem::HideReplayCameraModel(scene);
+    }
+}
+
+void EditorUI::ToggleReplayPlayback() {
+    if (!m_AnimationReplayScrubEnabled || !AnimationSystem::HasLookahead()) {
+        return;
+    }
+
+    if (m_AnimationReplayPlaying) {
+        m_AnimationReplayPlaying = false;
+        return;
+    }
+
+    const float replayDuration = std::max(AnimationSystem::GetLookaheadDuration(), 0.001f);
+    if (m_AnimationScrubTime >= replayDuration) {
+        m_AnimationScrubTime = 0.0f;
+    }
+
+    m_AnimationReplayPlaying = true;
+    m_IsPaused = true;
 }

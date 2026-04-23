@@ -892,36 +892,45 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             ImGui::Spacing();
             ImGui::Text("Global Animation Speed");
             ImGui::SliderFloat("##GlobalAnimSpeed", &AnimationSystem::globalPlaybackSpeed, 0.0f, 5.0f, "%.2fx");
+        }
 
-            ImGui::Separator();
-            ImGui::Text("Replay / Lookahead");
-            ImGui::SliderFloat("Lookahead Seconds", &m_AnimationLookaheadSeconds, 0.5f, 120.0f, "%.1fs");
+        ImGui::Separator();
+        ImGui::Text("Replay / Lookahead");
 
-            if (ImGui::Button("Generate Lookahead", ImVec2(-1, 0))) {
-                AnimationSystem::GenerateLookahead(scene, m_AnimationLookaheadSeconds);
+        if (AnimationSystem::IsRealtimeRecording()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "Recording... Pause simulation to stop");
+            ImGui::BeginDisabled();
+            ImGui::Button("Record", ImVec2(-1, 0));
+            ImGui::EndDisabled();
+        }
+        else {
+            if (ImGui::Button("Record", ImVec2(-1, 0))) {
+                AnimationSystem::StartRealtimeRecording(scene);
+                m_AnimationReplayScrubEnabled = false;
+                m_AnimationReplayPlaying = false;
                 m_AnimationScrubTime = 0.0f;
+                m_ViewRecordedCameraInReplay = true;
+                m_IsPaused = false;
             }
+        }
 
-            if (!AnimationSystem::HasLookahead()) {
-                ImGui::BeginDisabled();
-            }
+        ImGui::SliderFloat("Lookahead Seconds", &m_AnimationLookaheadSeconds, 0.5f, 120.0f, "%.1fs");
 
-            ImGui::Checkbox("Enable Replay Scrub", &m_AnimationReplayScrubEnabled);
-            ImGui::Checkbox("View Recorded Camera", &m_ViewRecordedCameraInReplay);
+        if (AnimationSystem::IsRealtimeRecording()) {
+            ImGui::BeginDisabled();
+        }
 
-            const float replayDuration = std::max(AnimationSystem::GetLookaheadDuration(), 0.001f);
-            ImGui::SliderFloat("Replay Time", &m_AnimationScrubTime, 0.0f, replayDuration, "%.2fs");
+        if (ImGui::Button("Generate Lookahead", ImVec2(-1, 0))) {
+            AnimationSystem::GenerateLookahead(scene, m_AnimationLookaheadSeconds);
+            m_AnimationScrubTime = 0.0f;
+            m_IsPaused = true;
+            m_AnimationReplayScrubEnabled = true;
+            m_AnimationReplayPlaying = false;
+            m_ViewRecordedCameraInReplay = true;
+        }
 
-            if (m_AnimationReplayScrubEnabled) {
-                AnimationSystem::ScrubLookahead(scene, m_AnimationScrubTime, m_ViewRecordedCameraInReplay);
-            }
-            else {
-                AnimationSystem::HideReplayCameraModel(scene);
-            }
-
-            if (!AnimationSystem::HasLookahead()) {
-                ImGui::EndDisabled();
-            }
+        if (AnimationSystem::IsRealtimeRecording()) {
+            ImGui::EndDisabled();
         }
 
         ImGui::EndMenu();

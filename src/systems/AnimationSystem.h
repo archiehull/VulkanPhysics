@@ -3,6 +3,8 @@
 #include "ISystem.h"
 #include "../core/Components.h"
 #include "../rendering/Scene.h"
+#include "OrbitSystem.h"
+#include "PhysicsSystem.h"
 #include "../util/AnimationMath.h"
 #include <algorithm>
 #include <cmath>
@@ -13,7 +15,35 @@ class AnimationSystem : public ISystem {
 public:
     inline static float globalPlaybackSpeed = 1.0f;
 
+    static void StartRealtimeRecording(Scene& scene) {
+        lookaheadSamples.clear();
+        lookaheadDurationSeconds = 0.0f;
+        realtimeRecordingElapsedSeconds = 0.0f;
+        isRealtimeRecording = true;
+        lookaheadSamples.push_back(CaptureSceneSample(scene, 0.0f));
+    }
+
+    static void StopRealtimeRecording() {
+        isRealtimeRecording = false;
+    }
+
+    static bool IsRealtimeRecording() {
+        return isRealtimeRecording;
+    }
+
+    static void RecordRealtimeFrame(Scene& scene, float deltaTime) {
+        if (!isRealtimeRecording) {
+            return;
+        }
+
+        realtimeRecordingElapsedSeconds += std::max(0.0f, deltaTime);
+        lookaheadDurationSeconds = realtimeRecordingElapsedSeconds;
+        lookaheadSamples.push_back(CaptureSceneSample(scene, realtimeRecordingElapsedSeconds));
+    }
+
     static void GenerateLookahead(Scene& scene, float durationSeconds, float stepSeconds = (1.0f / 30.0f)) {
+        isRealtimeRecording = false;
+        realtimeRecordingElapsedSeconds = 0.0f;
         lookaheadSamples.clear();
 
         const float safeDuration = std::max(0.0f, durationSeconds);
@@ -23,96 +53,87 @@ public:
         auto& registry = scene.GetRegistry();
         const Entity entityCount = registry.GetEntityCount();
 
-        struct SimState {
+        struct InitialState {
             Entity entity = MAX_ENTITIES;
+            bool hasTransform = false;
+            TransformComponent transform;
+            bool hasPhysics = false;
+            PhysicsComponent physics;
+            bool hasPathAnimation = false;
             PathAnimationComponent path;
-            glm::vec3 velocityOffset = glm::vec3(0.0f);
+            bool hasOrbit = false;
+            OrbitComponent orbit;
         };
 
-        std::vector<SimState> states;
-        states.reserve(entityCount);
-
-        Entity activeCameraEntity = MAX_ENTITIES;
-        glm::vec3 activeCameraRotation = glm::vec3(0.0f);
+        std::vector<InitialState> initialStates;
+        initialStates.reserve(entityCount);
 
         for (Entity e = 0; e < entityCount; ++e) {
-            if (registry.HasComponent<CameraComponent>(e)) {
-                if (registry.GetComponent<CameraComponent>(e).isActive) {
-                    activeCameraEntity = e;
-                    if (registry.HasComponent<TransformComponent>(e)) {
-                        activeCameraRotation = registry.GetComponent<TransformComponent>(e).rotation;
-                    }
-                    break;
-                }
-            }
-        }
-
-        for (Entity e = 0; e < entityCount; ++e) {
-            if (!registry.HasComponent<PathAnimationComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
-                continue;
-            }
-
-            SimState state;
+            InitialState state;
             state.entity = e;
-            state.path = registry.GetComponent<PathAnimationComponent>(e);
-            if (!state.path.initialized) {
-                InitializePathAnimation(state.path);
+
+            if (registry.HasComponent<TransformComponent>(e)) {
+                state.hasTransform = true;
+                state.transform = registry.GetComponent<TransformComponent>(e);
             }
-            states.push_back(state);
+
+            if (registry.HasComponent<PhysicsComponent>(e)) {
+                state.hasPhysics = true;
+                state.physics = registry.GetComponent<PhysicsComponent>(e);
+            }
+
+            if (registry.HasComponent<PathAnimationComponent>(e)) {
+                state.hasPathAnimation = true;
+                state.path = registry.GetComponent<PathAnimationComponent>(e);
+            }
+
+            if (registry.HasComponent<OrbitComponent>(e)) {
+                state.hasOrbit = true;
+                state.orbit = registry.GetComponent<OrbitComponent>(e);
+            }
+
+            initialStates.push_back(state);
         }
 
         const int sampleCount = static_cast<int>(std::ceil(safeDuration / safeStep)) + 1;
         lookaheadSamples.reserve(static_cast<size_t>(std::max(sampleCount, 1)));
 
-        for (int i = 0; i < sampleCount; ++i) {
-            LookaheadSample sample;
-            sample.timeSeconds = std::min(static_cast<float>(i) * safeStep, safeDuration);
+        lookaheadSamples.push_back(CaptureSceneSample(scene, 0.0f));
 
-            for (auto& state : states) {
-                if (state.path.segments.empty()) {
-                    continue;
-                }
+        OrbitSystem orbitSystem;
+        AnimationSystem animationSystem;
+        PhysicsSystem physicsSystem;
 
-                state.path.currentSegmentIndex = std::clamp(state.path.currentSegmentIndex, 0, static_cast<int>(state.path.segments.size()) - 1);
-                if (state.path.playMode != PathAnimationPlayMode::Bounce) {
-                    state.path.direction = state.path.reversePath ? -1 : 1;
-                }
+        for (int i = 1; i < sampleCount; ++i) {
+            orbitSystem.Update(scene, safeStep);
+            animationSystem.Update(scene, safeStep);
+            physicsSystem.Update(scene, safeStep);
 
-                const PathSegment& segment = state.path.segments[state.path.currentSegmentIndex];
-                const float duration = std::max(segment.duration, kMinDuration);
-                const float localTime = glm::clamp(state.path.segmentTime, 0.0f, duration);
-                const float normalized = localTime / duration;
-                const float t = (state.path.direction >= 0) ? normalized : (1.0f - normalized);
+            const float t = std::min(static_cast<float>(i) * safeStep, safeDuration);
+            lookaheadSamples.push_back(CaptureSceneSample(scene, t));
+        }
 
-                glm::vec3 position = EvaluateSegmentPosition(segment, t);
-                if (state.path.applyAnimationVelocity) {
-                    position += state.velocityOffset;
-                }
-
-                sample.entityPositions.push_back({ state.entity, position });
-
-                if (state.path.isPlaying) {
-                    const float speed = std::max(0.0f, globalPlaybackSpeed) * std::max(0.0f, state.path.playbackSpeed);
-                    AdvancePath(state.path, safeStep * speed);
-                    if (state.path.applyAnimationVelocity) {
-                        state.velocityOffset += state.path.animationVelocity * safeStep;
-                    }
-                }
+        for (const auto& state : initialStates) {
+            const Entity e = state.entity;
+            if (e >= registry.GetEntityCount()) {
+                continue;
             }
 
-            if (activeCameraEntity != MAX_ENTITIES && registry.HasComponent<TransformComponent>(activeCameraEntity)) {
-                sample.hasRecordedCamera = true;
-                sample.cameraRotation = activeCameraRotation;
-                sample.cameraPosition = registry.GetComponent<TransformComponent>(activeCameraEntity).position;
-                for (const auto& [entity, position] : sample.entityPositions) {
-                    if (entity == activeCameraEntity) {
-                        sample.cameraPosition = position;
-                        break;
-                    }
-                }
+            if (state.hasTransform && registry.HasComponent<TransformComponent>(e)) {
+                registry.GetComponent<TransformComponent>(e) = state.transform;
             }
 
-            lookaheadSamples.push_back(sample);
+            if (state.hasPhysics && registry.HasComponent<PhysicsComponent>(e)) {
+                registry.GetComponent<PhysicsComponent>(e) = state.physics;
+            }
+
+            if (state.hasPathAnimation && registry.HasComponent<PathAnimationComponent>(e)) {
+                registry.GetComponent<PathAnimationComponent>(e) = state.path;
+            }
+
+            if (state.hasOrbit && registry.HasComponent<OrbitComponent>(e)) {
+                registry.GetComponent<OrbitComponent>(e) = state.orbit;
+            }
         }
     }
 
@@ -142,11 +163,34 @@ public:
 
         auto& registry = scene.GetRegistry();
         const auto& sample = lookaheadSamples[bestIndex];
-        for (const auto& [entity, position] : sample.entityPositions) {
+
+        Entity activeCameraEntity = MAX_ENTITIES;
+        const Entity entityCount = registry.GetEntityCount();
+        for (Entity e = 0; e < entityCount; ++e) {
+            if (registry.HasComponent<CameraComponent>(e) && registry.GetComponent<CameraComponent>(e).isActive) {
+                activeCameraEntity = e;
+                break;
+            }
+        }
+
+        for (const auto& transformSample : sample.entityTransforms) {
+            const Entity entity = transformSample.entity;
+            if (!viewRecordedCamera && entity == activeCameraEntity) {
+                continue;
+            }
             if (registry.HasComponent<TransformComponent>(entity)) {
                 auto& transform = registry.GetComponent<TransformComponent>(entity);
-                transform.position = position;
-                transform.UpdateMatrix();
+                transform = transformSample.transform;
+            }
+        }
+
+        for (const auto& physicsSample : sample.entityPhysics) {
+            const Entity entity = physicsSample.entity;
+            if (registry.HasComponent<PhysicsComponent>(entity)) {
+                auto& physics = registry.GetComponent<PhysicsComponent>(entity);
+                physics.velocity = physicsSample.velocity;
+                physics.angularVelocity = physicsSample.angularVelocity;
+                physics.orientation = physicsSample.orientation;
             }
         }
 
@@ -157,15 +201,6 @@ public:
                 registry.GetComponent<RenderComponent>(cameraModelEntity).visible = false;
             }
             return;
-        }
-
-        Entity activeCameraEntity = MAX_ENTITIES;
-        const Entity entityCount = registry.GetEntityCount();
-        for (Entity e = 0; e < entityCount; ++e) {
-            if (registry.HasComponent<CameraComponent>(e) && registry.GetComponent<CameraComponent>(e).isActive) {
-                activeCameraEntity = e;
-                break;
-            }
         }
 
         if (viewRecordedCamera) {
@@ -295,9 +330,22 @@ public:
     }
 
 private:
+    struct EntityTransformSample {
+        Entity entity = MAX_ENTITIES;
+        TransformComponent transform;
+    };
+
+    struct EntityPhysicsSample {
+        Entity entity = MAX_ENTITIES;
+        glm::vec3 velocity = glm::vec3(0.0f);
+        glm::vec3 angularVelocity = glm::vec3(0.0f);
+        glm::mat3 orientation = glm::mat3(1.0f);
+    };
+
     struct LookaheadSample {
         float timeSeconds = 0.0f;
-        std::vector<std::pair<Entity, glm::vec3>> entityPositions;
+        std::vector<EntityTransformSample> entityTransforms;
+        std::vector<EntityPhysicsSample> entityPhysics;
         glm::vec3 cameraPosition = glm::vec3(0.0f);
         glm::vec3 cameraRotation = glm::vec3(0.0f);
         bool hasRecordedCamera = false;
@@ -305,6 +353,8 @@ private:
 
     inline static std::vector<LookaheadSample> lookaheadSamples;
     inline static float lookaheadDurationSeconds = 0.0f;
+    inline static bool isRealtimeRecording = false;
+    inline static float realtimeRecordingElapsedSeconds = 0.0f;
     static constexpr const char* kReplayCameraModelName = "__ReplayCameraModel";
 
     static constexpr float kMinDuration = 0.0001f;
@@ -325,6 +375,44 @@ private:
             return (2.0f * (1.0f - clampedT) * a) + (2.0f * clampedT * b);
         }
         return segment.endPoint - segment.startPoint;
+    }
+
+    static LookaheadSample CaptureSceneSample(Scene& scene, float timeSeconds) {
+        LookaheadSample sample;
+        sample.timeSeconds = std::max(0.0f, timeSeconds);
+
+        auto& registry = scene.GetRegistry();
+        const Entity entityCount = registry.GetEntityCount();
+        sample.entityTransforms.reserve(entityCount);
+        sample.entityPhysics.reserve(entityCount);
+
+        Entity activeCameraEntity = MAX_ENTITIES;
+
+        for (Entity e = 0; e < entityCount; ++e) {
+            if (registry.HasComponent<TransformComponent>(e)) {
+                const auto& transform = registry.GetComponent<TransformComponent>(e);
+                sample.entityTransforms.push_back({ e, transform });
+            }
+
+            if (registry.HasComponent<PhysicsComponent>(e)) {
+                const auto& physics = registry.GetComponent<PhysicsComponent>(e);
+                sample.entityPhysics.push_back({ e, physics.velocity, physics.angularVelocity, physics.orientation });
+            }
+
+            if (activeCameraEntity == MAX_ENTITIES && registry.HasComponent<CameraComponent>(e) &&
+                registry.GetComponent<CameraComponent>(e).isActive) {
+                activeCameraEntity = e;
+            }
+        }
+
+        if (activeCameraEntity != MAX_ENTITIES && registry.HasComponent<TransformComponent>(activeCameraEntity)) {
+            const auto& cameraTransform = registry.GetComponent<TransformComponent>(activeCameraEntity);
+            sample.hasRecordedCamera = true;
+            sample.cameraPosition = cameraTransform.position;
+            sample.cameraRotation = cameraTransform.rotation;
+        }
+
+        return sample;
     }
 
     static void ResolveAnimatedCollisions(Registry& registry, Entity movingEntity, glm::vec3& movingPos, glm::vec3 movingVelocity) {

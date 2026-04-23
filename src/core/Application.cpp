@@ -16,6 +16,7 @@
 #include "../geometry/SJGLoader.h"
 #include "../systems/CameraSystem.h"
 #include "../systems/PhysicsSystem.h"
+#include "../systems/AnimationSystem.h"
 
 namespace {
     constexpr bool kSceneDebug = false;
@@ -835,6 +836,8 @@ void Application::MainLoop() {
 
         // 4. Update the scene with the calculated delta
         scene->Update(stepDelta);
+        AnimationSystem::RecordRealtimeFrame(*scene, stepDelta);
+        editorUI->ApplyReplayLookahead(*scene);
         const auto updateEnd = std::chrono::high_resolution_clock::now();
 
         Entity activeCamEntity = cameraController->GetActiveCameraEntity();
@@ -923,7 +926,12 @@ void Application::ProcessInput() {
     }
 
     if (inputManager->IsActionJustPressed(InputAction::PauseToggle)) {
-        editorUI->SetPaused(!editorUI->IsPaused());
+        if (editorUI->IsReplayActive()) {
+            editorUI->ToggleReplayPlayback();
+        }
+        else {
+            editorUI->SetPaused(!editorUI->IsPaused());
+        }
     }
 
     auto handleCameraBind = [&](InputAction action, const char* bindName) {
