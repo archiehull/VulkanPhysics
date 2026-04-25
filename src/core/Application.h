@@ -20,6 +20,7 @@ struct EntitySnapshot {
     glm::vec3 position;
     glm::vec3 rotation;
     glm::vec3 scale;
+    glm::mat4 matrix;
     bool visible;
     float lightIntensity;
 
@@ -27,6 +28,7 @@ struct EntitySnapshot {
     bool hasPhysics = false;
     glm::vec3 velocity;
     glm::vec3 angularVelocity;
+    glm::mat3 orientation;
     bool isStatic;
     glm::vec3 forceAccumulator;
     glm::vec3 torqueAccumulator;

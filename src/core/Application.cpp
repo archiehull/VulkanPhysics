@@ -811,6 +811,7 @@ void Application::GenerateLookahead(float timeframe) {
                 eSnap.position = t.position;
                 eSnap.rotation = t.rotation;
                 eSnap.scale = t.scale;
+                eSnap.matrix = t.matrix;
                 eSnap.visible = registry.GetComponent<RenderComponent>(e).visible;
                 if (registry.HasComponent<LightComponent>(e)) {
                     eSnap.lightIntensity = registry.GetComponent<LightComponent>(e).intensity;
@@ -823,6 +824,7 @@ void Application::GenerateLookahead(float timeframe) {
                     auto& phys = registry.GetComponent<PhysicsComponent>(e);
                     eSnap.velocity = phys.velocity;
                     eSnap.angularVelocity = phys.angularVelocity;
+                    eSnap.orientation = phys.orientation;
                     eSnap.isStatic = phys.isStatic;
                     eSnap.forceAccumulator = phys.forceAccumulator;
                     eSnap.torqueAccumulator = phys.torqueAccumulator;
@@ -1060,8 +1062,8 @@ void Application::MainLoop() {
                             t.position = it->second.position;
                             t.rotation = it->second.rotation;
                             t.scale = it->second.scale;
-                            t.UpdateMatrix();
-                            registry.GetComponent<RenderComponent>(e).visible = it->second.visible;
+                            t.matrix = it->second.matrix;
+
                             if (registry.HasComponent<LightComponent>(e)) {
                                 registry.GetComponent<LightComponent>(e).intensity = it->second.lightIntensity;
                             }
@@ -1069,10 +1071,13 @@ void Application::MainLoop() {
                                 auto& phys = registry.GetComponent<PhysicsComponent>(e);
                                 phys.velocity = it->second.velocity;
                                 phys.angularVelocity = it->second.angularVelocity;
+                                phys.orientation = it->second.orientation;
                                 phys.isStatic = it->second.isStatic;
                                 phys.forceAccumulator = it->second.forceAccumulator;
                                 phys.torqueAccumulator = it->second.torqueAccumulator;
                             }
+                            
+                            registry.GetComponent<RenderComponent>(e).visible = it->second.visible;
                             if (it->second.hasCollider && registry.HasComponent<ColliderComponent>(e)) {
                                 registry.GetComponent<ColliderComponent>(e).hasCollision = it->second.hasCollision;
                             }
