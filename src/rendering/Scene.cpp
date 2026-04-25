@@ -1381,14 +1381,10 @@ void Scene::Clear() {
         }
     }
 
-    // Collect all existing entity IDs first, then destroy them to avoid issues with sparse entity IDs
-    std::vector<Entity> entitiesToDestroy;
+    // Safely destroy all entities. Registry::DestroyEntity now guards against double-free via isAlive check
     const Entity entityCount = m_Registry.GetEntityCount();
     for (Entity i = 0; i < entityCount; ++i) {
-        entitiesToDestroy.push_back(i);
-    }
-    for (Entity e : entitiesToDestroy) {
-        m_Registry.DestroyEntity(e);
+        m_Registry.DestroyEntity(i);
     }
 
     m_EntityMap.clear();

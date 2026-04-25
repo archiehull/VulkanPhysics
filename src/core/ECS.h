@@ -95,6 +95,7 @@ class Registry {
 private:
     Entity nextEntityId = 0;
     std::queue<Entity> availableEntities;
+    std::vector<bool> isAlive;  // Track which entities are currently alive to prevent double-free
     std::unordered_map<std::type_index, std::shared_ptr<IComponentArray>> componentArrays;
 
     template<typename T>
@@ -120,15 +121,29 @@ public:
         if (!availableEntities.empty()) {
             Entity id = availableEntities.front();
             availableEntities.pop();
+            if (id >= isAlive.size()) {
+                isAlive.resize(id + 1, false);
+            }
+            isAlive[id] = true;
             return id;
         }
         if (nextEntityId >= MAX_ENTITIES) {
             throw std::runtime_error("Too many entities.");
         }
-        return nextEntityId++;
+        Entity id = nextEntityId++;
+        if (id >= isAlive.size()) {
+            isAlive.resize(id + 1, false);
+        }
+        isAlive[id] = true;
+        return id;
     }
 
     void DestroyEntity(Entity entity) {
+        // Prevent double-free: if entity is already dead, ignore
+        if (entity >= isAlive.size() || !isAlive[entity]) {
+            return;
+        }
+        isAlive[entity] = false;
         for (auto const& pair : componentArrays) {
             pair.second->EntityDestroyed(entity);
         }
