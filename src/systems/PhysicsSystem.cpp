@@ -25,6 +25,16 @@ float PhysicsSystem::linearDampingFactor = 0.98f;
 bool PhysicsSystem::applyQuadraticDrag = true;
 float PhysicsSystem::quadraticDragCoefficient = 0.01f;
 
+void PhysicsSystem::SetLinearDamping(bool enabled, float factor) {
+    applyLinearDamping = enabled;
+    linearDampingFactor = glm::clamp(factor, 0.0f, 1.0f);
+}
+
+void PhysicsSystem::SetQuadraticDrag(bool enabled, float coefficient) {
+    applyQuadraticDrag = enabled;
+    quadraticDragCoefficient = glm::clamp(coefficient, 0.0f, 10.0f);
+}
+
 namespace {
     inline void ApplySleepThreshold(PhysicsComponent& phys, const Plane& plane) {
         if (phys.isStatic) return;

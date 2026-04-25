@@ -231,7 +231,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
             }
 
             const auto& render = registry.GetComponent<RenderComponent>(e);
-            return render.geometryName == "spring_visual" || render.geometryName == "path_visual";
+            return render.geometryName == "spring_visual" || render.geometryName == "path_visual" || render.geometryName == "spawner_visual";
             };
 
         auto hasVisibleEntityData = [&](Entity e) -> bool {
@@ -270,6 +270,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
             int springVisualCount = 0;
             int pathVisualCount = 0;
+            int spawnerVisualCount = 0;
 
             for (Entity e = 0; e < count; ++e) {
                 if (isDebugVisualEntity(e)) {
@@ -279,6 +280,9 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     }
                     else if (render.geometryName == "path_visual") {
                         ++pathVisualCount;
+                    }
+                    else if (render.geometryName == "spawner_visual") {
+                        ++spawnerVisualCount;
                     }
                     continue;
                 }
@@ -298,11 +302,12 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 }
             }
 
-            if (springVisualCount > 0 || pathVisualCount > 0) {
+            if (springVisualCount > 0 || pathVisualCount > 0 || spawnerVisualCount > 0) {
                 ImGui::Separator();
                 if (ImGui::TreeNode("Visualization Helpers")) {
                     ImGui::BulletText("Spring visuals: %d", springVisualCount);
                     ImGui::BulletText("Path visuals: %d", pathVisualCount);
+                    ImGui::BulletText("Spawner visuals: %d", spawnerVisualCount);
                     ImGui::TreePop();
                 }
             }
@@ -972,6 +977,36 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     auto& comp = registry.GetComponent<PathAnimationComponent>(e);
                     bool dirty = false;
 
+                    auto syncPathTopology = [&]() {
+                        const size_t targetSegmentCount = comp.connectEndToStart && comp.waypoints.size() > 1
+                            ? comp.waypoints.size()
+                            : (comp.waypoints.size() > 0 ? comp.waypoints.size() - 1 : 0);
+
+                        bool changed = false;
+                        while (comp.segments.size() < targetSegmentCount) {
+                            PathCurveSegment segment;
+                            const size_t segmentIndex = comp.segments.size();
+                            const size_t startIndex = segmentIndex;
+                            const size_t endIndex = (comp.connectEndToStart && segmentIndex + 1 == comp.waypoints.size()) ? 0 : segmentIndex + 1;
+
+                            if (startIndex < comp.waypoints.size() && endIndex < comp.waypoints.size()) {
+                                const glm::vec3 start = comp.waypoints[startIndex].position;
+                                const glm::vec3 end = comp.waypoints[endIndex].position;
+                                segment.controlPoint = (start + end) * 0.5f;
+                            }
+
+                            comp.segments.push_back(segment);
+                            changed = true;
+                        }
+
+                        if (comp.segments.size() > targetSegmentCount) {
+                            comp.segments.resize(targetSegmentCount);
+                            changed = true;
+                        }
+
+                        return changed;
+                    };
+
                     int playMode = static_cast<int>(comp.playMode);
                     const char* playModeItems[] = { "Once", "Loop", "Bounce" };
                     if (ImGui::Combo("Play Mode", &playMode, playModeItems, IM_ARRAYSIZE(playModeItems))) {
@@ -979,113 +1014,130 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         dirty = true;
                     }
 
+                    int easing = static_cast<int>(comp.easing);
+                    const char* easingItems[] = { "Linear", "Smoothstep" };
+                    if (ImGui::Combo("Easing", &easing, easingItems, IM_ARRAYSIZE(easingItems))) {
+                        comp.easing = static_cast<PathAnimationEasing>(easing);
+                        dirty = true;
+                    }
+
                     int timingMode = static_cast<int>(comp.timingMode);
-                    const char* timingModeItems[] = { "Per Segment", "Overall Time" };
-                    if (ImGui::Combo("Timing Mode", &timingMode, timingModeItems, IM_ARRAYSIZE(timingModeItems))) {
+                    const char* timingItems[] = { "Absolute Times", "Per Segment", "Overall Time" };
+                    if (ImGui::Combo("Timing Mode", &timingMode, timingItems, IM_ARRAYSIZE(timingItems))) {
                         comp.timingMode = static_cast<PathAnimationTimingMode>(timingMode);
                         dirty = true;
                     }
 
-                    if (comp.timingMode == PathAnimationTimingMode::OverallTime) {
-                        if (ImGui::DragFloat("Overall Duration", &comp.overallDuration, 0.05f, 0.01f, 10000.0f)) {
-                            dirty = true;
-                        }
+                    if (ImGui::DragFloat("Total Duration", &comp.totalDuration, 0.05f, 0.0f, 10000.0f)) {
+                        comp.totalDuration = std::max(0.0f, comp.totalDuration);
+                        dirty = true;
                     }
 
-                    ImGui::Checkbox("Is Playing", &comp.isPlaying);
+                    if (comp.isPlaying) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.80f, 0.20f, 0.20f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.90f, 0.28f, 0.28f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.65f, 0.14f, 0.14f, 1.0f));
+                        if (ImGui::Button("Stop##PathAnimationPlayToggle")) {
+                            comp.isPlaying = false;
+                        }
+                        ImGui::PopStyleColor(3);
+                    }
+                    else {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.70f, 0.25f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.80f, 0.33f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.14f, 0.56f, 0.20f, 1.0f));
+                        if (ImGui::Button("Play##PathAnimationPlayToggle")) {
+                            comp.isPlaying = true;
+                        }
+                        ImGui::PopStyleColor(3);
+                    }
+
+                    ImGui::SameLine();
+                    if (ImGui::Button("Restart##PathAnimationRestart")) {
+                        comp.currentTime = 0.0f;
+                        comp.isPlaying = false;
+                    }
+
                     ImGui::Checkbox("Show Path", &comp.showPath);
                     ImGui::Checkbox("Use Local Space", &comp.useLocalSpace);
-                    ImGui::Checkbox("Rotate Along Path", &comp.rotateAlongPath);
-                    ImGui::Checkbox("Reverse Path", &comp.reversePath);
+                    if (ImGui::Checkbox("Connect End to Start", &comp.connectEndToStart)) {
+                        dirty = true;
+                    }
+                    if (ImGui::Checkbox("Reverse Path", &comp.reversePath)) {
+                        dirty = true;
+                    }
+                    if (ImGui::Checkbox("Rotate Along Path", &comp.rotateAlongPath)) {
+                        dirty = true;
+                    }
+                    if (comp.rotateAlongPath) {
+                        if (ImGui::DragFloat3("Rotation Offset", &comp.rotationOffset.x, 0.1f)) {
+                            dirty = true;
+                        }
+                        ImGui::TextDisabled("Waypoint orientation is hidden while rotate-along-path is enabled.");
+                    }
                     if (ImGui::DragFloat("Playback Speed", &comp.playbackSpeed, 0.05f, 0.0f, 10.0f, "%.2fx")) {
                         comp.playbackSpeed = std::max(0.0f, comp.playbackSpeed);
                     }
-                    ImGui::Checkbox("Apply Animation Velocity", &comp.applyAnimationVelocity);
-                    if (comp.applyAnimationVelocity) {
-                        ImGui::DragFloat3("Animation Velocity", &comp.animationVelocity.x, 0.05f);
-                    }
-                    ImGui::Checkbox("Collide With Fixed Objects", &comp.collideWithFixedObjects);
+                    ImGui::TextDisabled("Runtime Velocity: %.2f %.2f %.2f", comp.animationVelocity.x, comp.animationVelocity.y, comp.animationVelocity.z);
                     if (ImGui::ColorEdit4("Path Color", &comp.pathColor.x, ImGuiColorEditFlags_AlphaPreview)) {
                         dirty = true;
                     }
 
-                    if (ImGui::Checkbox("Auto Connect Last to First", &comp.autoConnectLoop)) {
+                    if (syncPathTopology()) {
                         dirty = true;
                     }
 
-                    auto syncAutoConnectSegment = [&]() {
-                        if (!comp.autoConnectLoop || comp.segments.size() < 2) {
-                            if (comp.hasAutoConnectSegment && !comp.segments.empty()) {
-                                comp.segments.pop_back();
-                                dirty = true;
-                            }
-                            comp.hasAutoConnectSegment = false;
-                            return;
-                        }
-
-                        if (!comp.hasAutoConnectSegment) {
-                            PathSegment loopSegment;
-                            loopSegment.curveType = PathCurveType::Straight;
-                            comp.segments.push_back(loopSegment);
-                            comp.hasAutoConnectSegment = true;
-                            dirty = true;
-                        }
-
-                        if (comp.segments.size() < 2) {
-                            return;
-                        }
-
-                        const size_t loopIndex = comp.segments.size() - 1;
-                        const size_t lastEditableIndex = loopIndex - 1;
-                        auto& loopSegment = comp.segments[loopIndex];
-                        loopSegment.startPoint = comp.segments[lastEditableIndex].endPoint;
-                        loopSegment.endPoint = comp.segments.front().startPoint;
-                        loopSegment.controlPoint = (loopSegment.startPoint + loopSegment.endPoint) * 0.5f;
-                        loopSegment.curveType = PathCurveType::Straight;
-                        loopSegment.duration = std::max(loopSegment.duration, 0.001f);
-                    };
-
-                    syncAutoConnectSegment();
-
                     ImGui::Separator();
-                    for (size_t i = 0; i < comp.segments.size(); ++i) {
-                        auto& seg = comp.segments[i];
-                        const bool isAutoLoopSegment = comp.autoConnectLoop && comp.hasAutoConnectSegment && (i == comp.segments.size() - 1);
-                        std::string nodeLabel = isAutoLoopSegment ? ("Segment " + std::to_string(i) + " (Auto Loop Link)") : ("Segment " + std::to_string(i));
+                    for (size_t i = 0; i < comp.waypoints.size(); ++i) {
+                        auto& waypoint = comp.waypoints[i];
+                        const bool isLoopSegment = comp.connectEndToStart && comp.waypoints.size() > 1 && i == comp.waypoints.size() - 1;
+                        const bool hasOutgoingSegment = i < comp.segments.size() && (i + 1 < comp.waypoints.size() || isLoopSegment);
+                        const size_t endIndex = isLoopSegment ? 0 : (i + 1);
+
+                        std::string nodeLabel = hasOutgoingSegment
+                            ? ("Waypoint " + std::to_string(i) + " (-> " + std::to_string(endIndex) + ")")
+                            : ("Waypoint " + std::to_string(i));
+
                         if (ImGui::TreeNode(nodeLabel.c_str())) {
-                            if (isAutoLoopSegment) {
-                                ImGui::BeginDisabled();
+                            if (ImGui::DragFloat3(("Position##PathWaypointPos" + std::to_string(i)).c_str(), &waypoint.position.x, 0.05f)) dirty = true;
+                            if (!comp.rotateAlongPath) {
+                                if (ImGui::DragFloat3(("Orientation##PathWaypointRot" + std::to_string(i)).c_str(), &waypoint.orientation.x, 0.1f)) dirty = true;
                             }
-
-                            if (ImGui::DragFloat3(("Start##PathSegStart" + std::to_string(i)).c_str(), &seg.startPoint.x, 0.05f)) dirty = true;
-                            if (ImGui::DragFloat3(("End##PathSegEnd" + std::to_string(i)).c_str(), &seg.endPoint.x, 0.05f)) dirty = true;
-
-                            int curveType = static_cast<int>(seg.curveType);
-                            const char* curveItems[] = { "Straight", "Bezier Quadratic" };
-                            if (ImGui::Combo(("Curve Type##PathSegCurve" + std::to_string(i)).c_str(), &curveType, curveItems, IM_ARRAYSIZE(curveItems))) {
-                                seg.curveType = static_cast<PathCurveType>(curveType);
+                            if (comp.timingMode == PathAnimationTimingMode::Absolute &&
+                                ImGui::DragFloat(("Time From Start##PathWaypointTime" + std::to_string(i)).c_str(), &waypoint.timeFromStart, 0.05f, 0.0f, 10000.0f)) {
+                                waypoint.timeFromStart = std::max(0.0f, waypoint.timeFromStart);
                                 dirty = true;
                             }
 
-                            if (seg.curveType == PathCurveType::BezierQuadratic) {
-                                if (ImGui::DragFloat3(("Control##PathSegCtrl" + std::to_string(i)).c_str(), &seg.controlPoint.x, 0.05f)) dirty = true;
-                            }
+                            if (hasOutgoingSegment) {
+                                auto& segment = comp.segments[i];
+                                ImGui::Separator();
+                                ImGui::TextDisabled("Outgoing Segment");
 
-                            if (comp.timingMode == PathAnimationTimingMode::PerSegment) {
-                                if (ImGui::DragFloat(("Duration##PathSegDuration" + std::to_string(i)).c_str(), &seg.duration, 0.05f, 0.001f, 10000.0f)) {
+                                int curveType = static_cast<int>(segment.curveType);
+                                const char* curveItems[] = { "Straight", "Bezier Quadratic" };
+                                if (ImGui::Combo(("Curve Type##PathSegmentCurve" + std::to_string(i)).c_str(), &curveType, curveItems, IM_ARRAYSIZE(curveItems))) {
+                                    segment.curveType = static_cast<PathCurveType>(curveType);
                                     dirty = true;
+                                }
+
+                                if (segment.curveType == PathCurveType::BezierQuadratic) {
+                                    if (ImGui::DragFloat3(("Control##PathSegmentCtrl" + std::to_string(i)).c_str(), &segment.controlPoint.x, 0.05f)) {
+                                        dirty = true;
+                                    }
+                                }
+
+                                if (comp.timingMode == PathAnimationTimingMode::PerSegment) {
+                                    if (ImGui::DragFloat(("Duration##PathSegmentDuration" + std::to_string(i)).c_str(), &segment.duration, 0.05f, 0.001f, 10000.0f)) {
+                                        segment.duration = std::max(0.001f, segment.duration);
+                                        dirty = true;
+                                    }
                                 }
                             }
 
-                            if (isAutoLoopSegment) {
-                                ImGui::EndDisabled();
-                            }
-
                             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.2f, 0.2f, 1.0f));
-                            if (!isAutoLoopSegment && ImGui::Button(("Remove Segment##PathSegRemove" + std::to_string(i)).c_str())) {
-                                comp.segments.erase(comp.segments.begin() + static_cast<long long>(i));
-                                comp.currentSegmentIndex = std::max(0, std::min(comp.currentSegmentIndex, static_cast<int>(comp.segments.size()) - 1));
-                                comp.segmentTime = 0.0f;
+                            if (ImGui::Button(("Remove Waypoint##PathWaypointRemove" + std::to_string(i)).c_str())) {
+                                comp.waypoints.erase(comp.waypoints.begin() + static_cast<long long>(i));
                                 dirty = true;
                                 ImGui::PopStyleColor();
                                 ImGui::TreePop();
@@ -1097,32 +1149,29 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         }
                     }
 
-                    if (ImGui::Button("Add Segment##PathSegAdd")) {
-                        PathSegment seg;
-                        if (!comp.segments.empty()) {
-                            size_t sourceIndex = comp.segments.size() - 1;
-                            if (comp.autoConnectLoop && comp.hasAutoConnectSegment && sourceIndex > 0) {
-                                sourceIndex -= 1;
-                            }
-
-                            seg.startPoint = comp.segments[sourceIndex].endPoint;
-                            seg.endPoint = seg.startPoint + glm::vec3(1.0f, 0.0f, 0.0f);
-                            seg.controlPoint = (seg.startPoint + seg.endPoint) * 0.5f;
+                    if (ImGui::Button("Add Waypoint##PathWaypointAdd")) {
+                        PathWaypoint waypoint;
+                        PathCurveSegment segment;
+                        if (!comp.waypoints.empty()) {
+                            const auto& last = comp.waypoints.back();
+                            waypoint.position = last.position + glm::vec3(1.0f, 0.0f, 0.0f);
+                            waypoint.orientation = comp.rotateAlongPath ? glm::vec3(0.0f) : last.orientation;
+                            waypoint.timeFromStart = last.timeFromStart + 1.0f;
+                            segment.controlPoint = (last.position + waypoint.position) * 0.5f;
+                            comp.segments.push_back(segment);
                         }
-
-                        const bool insertBeforeAuto = comp.autoConnectLoop && comp.hasAutoConnectSegment && !comp.segments.empty();
-                        const size_t insertIndex = insertBeforeAuto ? (comp.segments.size() - 1) : comp.segments.size();
-                        comp.segments.insert(comp.segments.begin() + static_cast<long long>(insertIndex), seg);
-
-                        comp.currentSegmentIndex = static_cast<int>(insertIndex);
-                        comp.segmentTime = 0.0f;
+                        comp.waypoints.push_back(waypoint);
                         dirty = true;
                     }
 
-                    syncAutoConnectSegment();
+                    if (syncPathTopology()) {
+                        dirty = true;
+                    }
 
                     if (dirty) {
                         comp.initialized = false;
+                        comp.hasLastEvaluatedPosition = false;
+                        comp.hasLocalOrigin = false;
                     }
 
                     ImGui::TreePop();

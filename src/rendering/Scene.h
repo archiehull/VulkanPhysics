@@ -188,6 +188,8 @@ public:
 
     void SetSpringVisualizationEnabled(bool enabled);
     bool GetSpringVisualizationEnabled() const { return m_ShowSpringVisuals; }
+    void SetSpawnerVisualizationEnabled(bool enabled);
+    bool GetSpawnerVisualizationEnabled() const { return m_ShowSpawnerVisuals; }
 
 private:
     void FlushDeferredGeometryCleanup();
@@ -198,6 +200,9 @@ private:
     void UpdatePathVisuals();
     void ClearPathVisuals();
     Entity GetOrCreatePathVisualEntity(const std::string& key);
+    void UpdateSpawnerVisuals();
+    void ClearSpawnerVisuals();
+    Entity GetOrCreateSpawnerVisualEntity(const std::string& key);
 
     Registry m_Registry;
     std::vector<std::unique_ptr<ISystem>> m_Systems;
@@ -235,9 +240,11 @@ private:
     std::vector<std::shared_ptr<Geometry>> m_DeferredGeometryCleanup;
     std::unordered_map<std::string, Entity> m_SpringVisualEntities;
     std::unordered_map<std::string, Entity> m_PathVisualEntities;
+    std::unordered_map<std::string, Entity> m_SpawnerVisualEntities;
     std::shared_ptr<Geometry> m_SpringVisualGeometry;
 
     bool m_RegionsOnlyDebugView = false;
     bool m_ShowSpringVisuals = false;
+    bool m_ShowSpawnerVisuals = false;
     float m_ElapsedTime = 0.0f;
 };

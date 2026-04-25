@@ -7,6 +7,7 @@
 // Define string-to-key mappings
 std::unordered_map<std::string, int> InputManager::StringToKeyMap = {
     {"W", GLFW_KEY_W}, {"A", GLFW_KEY_A}, {"S", GLFW_KEY_S}, {"D", GLFW_KEY_D},
+    {"B", GLFW_KEY_B},
     {"Q", GLFW_KEY_Q}, {"E", GLFW_KEY_E}, {"R", GLFW_KEY_R}, {"T", GLFW_KEY_T},
     {"Y", GLFW_KEY_Y}, {"U", GLFW_KEY_U}, {"I", GLFW_KEY_I}, {"O", GLFW_KEY_O},
     {"P", GLFW_KEY_P}, {"M", GLFW_KEY_M}, {"N", GLFW_KEY_N},
@@ -41,8 +42,11 @@ std::unordered_map<std::string, InputAction> InputManager::StringToActionMap = {
     {"Camera7", InputAction::Camera7},
     {"Camera8", InputAction::Camera8},
     {"IgniteTarget", InputAction::IgniteTarget},
+    {"FireSpawnerGroupA", InputAction::FireSpawnerGroupA},
+    {"FireSpawnerGroupB", InputAction::FireSpawnerGroupB},
     {"ResetEnvironment", InputAction::ResetEnvironment},
     {"TimeSpeedUp", InputAction::TimeSpeedUp},
+    {"TimeResetModifier", InputAction::TimeResetModifier},
     {"ToggleShading", InputAction::ToggleShading},
     {"ToggleShadows", InputAction::ToggleShadows},
     {"NextSeason", InputAction::NextSeason},
@@ -91,12 +95,15 @@ std::unordered_map<std::string, std::string> InputManager::GetDefaultBindings() 
         {"IgniteTarget", "F4"},
         {"ResetEnvironment", "R"},
         {"TimeSpeedUp", "T"},
+        {"TimeResetModifier", "LEFT_CONTROL,RIGHT_CONTROL"},
         {"ToggleShading", "Y"},
         {"ToggleShadows", "U"},
         {"NextSeason", "I"},
         {"ToggleWeather", "O"},
         {"SpawnDustCloud", "P"},
-        {"ToggleNoclip", "N"},
+        {"FireSpawnerGroupA", "B"},
+        {"FireSpawnerGroupB", "N"},
+        {"ToggleNoclip", "M"},
         {"PauseToggle", "SPACE"},
         {"Exit", "ESCAPE"}
     };

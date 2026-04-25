@@ -94,7 +94,9 @@ EndObject
 Object LeftBallSpawner
     Type Spawner
     Position -12.0 14.0 0.0
-    SpawnerEnabled true
+    SpawnerEnabled false
+    TriggerOnStartup true
+    SpawnerGroup B
     SpawnInterval 2.0
     SpawnerMaxSpawns 5
     SpawnGeometry Sphere
@@ -112,7 +114,9 @@ EndObject
 Object RightBallSpawner
     Type Spawner
     Position 12.0 14.0 0.0
-    SpawnerEnabled true
+    SpawnerEnabled false
+    TriggerOnStartup true
+    SpawnerGroup B
     SpawnInterval 2.0
     SpawnerMaxSpawns 5
     SpawnGeometry Sphere
@@ -125,6 +129,26 @@ Object RightBallSpawner
     RandomSpawnAngularVelocity false
     SpawnAngularVelocityRandomRange 0.0 0.0 0.0
     SpawnMass 1.0
+EndObject
+
+Object TestBallSpawner
+    Type Spawner
+    Position 0.0 30.0 0.0
+    SpawnerEnabled false
+    TriggerOnStartup false
+    SpawnerGroup A
+    SpawnInterval 0.2
+    SpawnerMaxSpawns 1
+    SpawnGeometry Sphere
+    SpawnTexture textures/default.png
+    SpawnScale 1.4142 1.4142 1.4142
+    SpawnVelocity 0.0 5.0 0.0
+    SpawnAngularVelocity 0.0 0.0 0.0
+    RandomSpawnVelocity true
+    SpawnVelocityRandomRange 15.0 10.0 15.0
+    RandomSpawnAngularVelocity false
+    SpawnAngularVelocityRandomRange 0.0 0.0 0.0
+    SpawnMass 2.0
 EndObject
 
 Object PathMover

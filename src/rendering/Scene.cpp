@@ -206,6 +206,8 @@ void Scene::ResetSpawnerSpawnedObjects() {
             spawner.isRunning = spawner.alwaysOn;
         }
     }
+
+    ObjectSpawnerSystem::TriggerStartupSpawners(*this);
 }
 
 Entity Scene::GetEntityByName(const std::string& name) const {
@@ -1059,6 +1061,13 @@ void Scene::SetSpringVisualizationEnabled(bool enabled) {
     }
 }
 
+void Scene::SetSpawnerVisualizationEnabled(bool enabled) {
+    m_ShowSpawnerVisuals = enabled;
+    if (!m_ShowSpawnerVisuals) {
+        ClearSpawnerVisuals();
+    }
+}
+
 glm::vec4 Scene::ComputeSpringVisualColor(float currentLength, float restLength) const {
     const float safeRest = std::max(restLength, 0.001f);
     const float stretch = std::abs(currentLength - safeRest) / safeRest;
@@ -1160,6 +1169,52 @@ void Scene::ClearPathVisuals() {
     m_PathVisualEntities.clear();
 }
 
+Entity Scene::GetOrCreateSpawnerVisualEntity(const std::string& key) {
+    auto it = m_SpawnerVisualEntities.find(key);
+    if (it != m_SpawnerVisualEntities.end()) {
+        const Entity existing = it->second;
+        if (existing < m_Registry.GetEntityCount() &&
+            m_Registry.HasComponent<TransformComponent>(existing) &&
+            m_Registry.HasComponent<RenderComponent>(existing)) {
+            return existing;
+        }
+    }
+
+    Entity visualEntity = m_Registry.CreateEntity();
+
+    TransformComponent transform;
+    transform.UpdateMatrix();
+    m_Registry.AddComponent<TransformComponent>(visualEntity, transform);
+
+    RenderComponent render;
+    render.geometry = m_SpringVisualGeometry;
+    render.geometryName = "spawner_visual";
+    render.texturePath = "";
+    render.originalTexturePath = "";
+    render.shadingMode = 1;
+    render.castsShadow = false;
+    render.originalCastsShadow = false;
+    render.receiveShadows = false;
+    render.layerMask = SceneLayers::ALL;
+    render.onlyInRegionMask = 0;
+    render.useDebugOverlay = true;
+    render.debugOverlayColor = glm::vec4(1.0f, 0.7f, 0.1f, 1.0f);
+    m_Registry.AddComponent<RenderComponent>(visualEntity, render);
+
+    m_RenderableEntities.push_back(visualEntity);
+    m_SpawnerVisualEntities[key] = visualEntity;
+    return visualEntity;
+}
+
+void Scene::ClearSpawnerVisuals() {
+    for (const auto& [_, entity] : m_SpawnerVisualEntities) {
+        if (entity < m_Registry.GetEntityCount()) {
+            DeleteEntity(entity);
+        }
+    }
+    m_SpawnerVisualEntities.clear();
+}
+
 void Scene::UpdatePathVisuals() {
     std::unordered_set<std::string> activeKeys;
     auto& registry = m_Registry;
@@ -1212,29 +1267,46 @@ void Scene::UpdatePathVisuals() {
         if (!registry.HasComponent<PathAnimationComponent>(e)) continue;
 
         const auto& path = registry.GetComponent<PathAnimationComponent>(e);
-        if (!path.showPath || path.segments.empty()) continue;
+        if (!path.showPath || path.waypoints.empty()) continue;
 
-        for (size_t i = 0; i < path.segments.size(); ++i) {
+        glm::vec3 offset = glm::vec3(0.0f);
+        if (path.useLocalSpace && registry.HasComponent<TransformComponent>(e)) {
+            const auto& tr = registry.GetComponent<TransformComponent>(e);
+            offset = path.hasLocalOrigin ? path.localOriginPosition : tr.position;
+        }
+
+        for (size_t i = 0; i < path.waypoints.size(); ++i) {
+            const auto& waypoint = path.waypoints[i];
+            const std::string base = "PathVis_" + std::to_string(e) + "_" + std::to_string(i);
+            updateMarkerVisual(base + "_waypoint", waypoint.position + offset, glm::vec4(0.1f, 1.0f, 0.1f, 1.0f));
+        }
+
+        const size_t segmentCount = std::min(
+            path.segments.size(),
+            (path.connectEndToStart && path.waypoints.size() > 1) ? path.waypoints.size() : (path.waypoints.size() > 0 ? path.waypoints.size() - 1 : size_t(0)));
+
+        for (size_t i = 0; i < segmentCount; ++i) {
             const auto& segment = path.segments[i];
+            const size_t startIndex = i;
+            const size_t endIndex = (path.connectEndToStart && i + 1 == path.waypoints.size()) ? 0 : (i + 1);
+            const auto& startWaypoint = path.waypoints[startIndex];
+            const auto& endWaypoint = path.waypoints[endIndex];
             const std::string base = "PathVis_" + std::to_string(e) + "_" + std::to_string(i);
 
             if (segment.curveType == PathCurveType::BezierQuadratic) {
                 constexpr int kSamples = 20;
-                glm::vec3 previous = AnimationMath::QuadraticBezier(segment.startPoint, segment.controlPoint, segment.endPoint, 0.0f);
+                glm::vec3 previousPoint = AnimationMath::QuadraticBezier(startWaypoint.position, segment.controlPoint, endWaypoint.position, 0.0f) + offset;
                 for (int s = 1; s <= kSamples; ++s) {
                     const float t = static_cast<float>(s) / static_cast<float>(kSamples);
-                    const glm::vec3 current = AnimationMath::QuadraticBezier(segment.startPoint, segment.controlPoint, segment.endPoint, t);
-                    updateLineVisual(base + "_curve_" + std::to_string(s), previous, current, path.pathColor);
-                    previous = current;
+                    const glm::vec3 currentPoint = AnimationMath::QuadraticBezier(startWaypoint.position, segment.controlPoint, endWaypoint.position, t) + offset;
+                    updateLineVisual(base + "_curve_" + std::to_string(s), previousPoint, currentPoint, path.pathColor);
+                    previousPoint = currentPoint;
                 }
-                updateMarkerVisual(base + "_ctrl", segment.controlPoint, glm::vec4(1.0f, 1.0f, 0.1f, 1.0f));
+                updateMarkerVisual(base + "_ctrl", segment.controlPoint + offset, glm::vec4(1.0f, 1.0f, 0.1f, 1.0f));
             }
             else {
-                updateLineVisual(base + "_line", segment.startPoint, segment.endPoint, path.pathColor);
+                updateLineVisual(base + "_line", startWaypoint.position + offset, endWaypoint.position + offset, path.pathColor);
             }
-
-            updateMarkerVisual(base + "_start", segment.startPoint, glm::vec4(0.1f, 1.0f, 0.1f, 1.0f));
-            updateMarkerVisual(base + "_end", segment.endPoint, glm::vec4(0.1f, 1.0f, 0.1f, 1.0f));
         }
     }
 
@@ -1320,6 +1392,112 @@ void Scene::UpdateSpringVisuals() {
     }
 }
 
+void Scene::UpdateSpawnerVisuals() {
+    std::unordered_set<std::string> activeKeys;
+    auto& registry = m_Registry;
+    const Entity entityCount = registry.GetEntityCount();
+    constexpr float kStemThickness = 0.035f;
+    constexpr float kStemHeight = 1.2f;
+    constexpr float kCrossArm = 0.45f;
+    constexpr float kArrowLength = 0.65f;
+
+    auto updateVisual = [&](const std::string& key,
+        const glm::vec3& position,
+        const glm::vec3& rotation,
+        const glm::vec3& scale,
+        const glm::vec4& color) {
+            Entity visualEntity = GetOrCreateSpawnerVisualEntity(key);
+            auto& transform = registry.GetComponent<TransformComponent>(visualEntity);
+            transform.position = position;
+            transform.rotation = rotation;
+            transform.scale = scale;
+            transform.UpdateMatrix();
+
+            auto& render = registry.GetComponent<RenderComponent>(visualEntity);
+            render.visible = true;
+            render.useDebugOverlay = true;
+            render.debugOverlayColor = color;
+
+            activeKeys.insert(key);
+        };
+
+    for (Entity e = 0; e < entityCount; ++e) {
+        if (!registry.HasComponent<ObjectSpawnerComponent>(e) ||
+            !registry.HasComponent<TransformComponent>(e)) {
+            continue;
+        }
+
+        const auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+        const auto& transform = registry.GetComponent<TransformComponent>(e);
+        const glm::vec3 basePos = transform.position;
+
+        std::string group = spawner.group;
+        if (group.empty()) {
+            group = "A";
+        }
+
+        glm::vec4 color(1.0f, 0.7f, 0.1f, 1.0f);
+        if (group == "A") color = glm::vec4(0.2f, 0.9f, 1.0f, 1.0f);
+        else if (group == "B") color = glm::vec4(1.0f, 0.45f, 0.2f, 1.0f);
+        else if (group == "C") color = glm::vec4(0.5f, 1.0f, 0.3f, 1.0f);
+        else if (group == "D") color = glm::vec4(1.0f, 0.3f, 0.9f, 1.0f);
+
+        if (spawner.triggerOnStartup) {
+            color = glm::vec4(
+                glm::min(color.r + 0.15f, 1.0f),
+                glm::min(color.g + 0.15f, 1.0f),
+                glm::min(color.b + 0.15f, 1.0f),
+                1.0f);
+        }
+
+        const std::string baseKey = "SpawnerVis_" + std::to_string(e);
+
+        updateVisual(baseKey + "_stem",
+            basePos + glm::vec3(0.0f, kStemHeight * 0.5f, 0.0f),
+            glm::vec3(0.0f),
+            glm::vec3(kStemThickness, kStemHeight, kStemThickness),
+            color);
+
+        updateVisual(baseKey + "_cross_x",
+            basePos + glm::vec3(0.0f, kStemHeight, 0.0f),
+            glm::vec3(0.0f, 90.0f, 0.0f),
+            glm::vec3(kStemThickness * 0.8f, kStemThickness * 0.8f, kCrossArm),
+            color);
+
+        updateVisual(baseKey + "_cross_z",
+            basePos + glm::vec3(0.0f, kStemHeight, 0.0f),
+            glm::vec3(90.0f, 0.0f, 0.0f),
+            glm::vec3(kStemThickness * 0.8f, kStemThickness * 0.8f, kCrossArm),
+            color);
+
+        const glm::vec3 velocity = spawner.spawnVelocity;
+        const float velocityLength = glm::length(velocity);
+        if (velocityLength > 0.001f) {
+            const glm::vec3 dir = velocity / velocityLength;
+            const float yaw = std::atan2(dir.x, dir.z);
+            const float pitch = -std::asin(glm::clamp(dir.y, -1.0f, 1.0f));
+            const glm::vec3 arrowRot = glm::degrees(glm::vec3(pitch, yaw, 0.0f));
+            const float arrowScale = std::max(kArrowLength, std::min(velocityLength * 0.08f, 2.0f));
+
+            updateVisual(baseKey + "_arrow",
+                basePos + glm::vec3(0.0f, kStemHeight, 0.0f) + dir * (arrowScale * 0.5f),
+                arrowRot,
+                glm::vec3(kStemThickness * 0.9f, kStemThickness * 0.9f, arrowScale),
+                glm::vec4(color.r, color.g, color.b, 0.9f));
+        }
+    }
+
+    for (auto it = m_SpawnerVisualEntities.begin(); it != m_SpawnerVisualEntities.end(); ) {
+        if (activeKeys.find(it->first) == activeKeys.end()) {
+            DeleteEntity(it->second);
+            it = m_SpawnerVisualEntities.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
 void Scene::Update(float deltaTime) {
     m_ElapsedTime += std::max(0.0f, deltaTime);
     for (auto& sys : m_Systems) {
@@ -1331,6 +1509,13 @@ void Scene::Update(float deltaTime) {
     }
     else if (!m_SpringVisualEntities.empty()) {
         ClearSpringVisuals();
+    }
+
+    if (m_ShowSpawnerVisuals) {
+        UpdateSpawnerVisuals();
+    }
+    else if (!m_SpawnerVisualEntities.empty()) {
+        ClearSpawnerVisuals();
     }
 
     UpdatePathVisuals();
@@ -1393,6 +1578,7 @@ void Scene::Clear() {
     particleSystems.clear();
     m_SpringVisualEntities.clear();
     m_PathVisualEntities.clear();
+    m_SpawnerVisualEntities.clear();
 
     FlushDeferredGeometryCleanup();
 

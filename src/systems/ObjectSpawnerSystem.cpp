@@ -2,8 +2,32 @@
 #include "../rendering/Scene.h"
 #include "../core/Components.h"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <random>
+
+namespace {
+    std::string NormalizeSpawnerGroup(const std::string& group) {
+        if (group.empty()) return "A";
+        char g = static_cast<char>(std::toupper(static_cast<unsigned char>(group[0])));
+        if (g < 'A' || g > 'D') {
+            g = 'A';
+        }
+        return std::string(1, g);
+    }
+
+    bool IsValidSpawner(Scene& scene, Entity entity) {
+        auto& registry = scene.GetRegistry();
+        return registry.HasComponent<ObjectSpawnerComponent>(entity) &&
+            registry.HasComponent<TransformComponent>(entity);
+    }
+}
+
+void ObjectSpawnerSystem::ResetSpawnerRun(ObjectSpawnerComponent& spawner) {
+    spawner.spawnTimer = 0.0f;
+    spawner.runElapsedSeconds = 0.0f;
+    spawner.spawnedThisRun = 0;
+}
 
 void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
     if (deltaTime <= 0.0f) return;
@@ -66,7 +90,78 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
 }
 
 void ObjectSpawnerSystem::FireOnce(Scene& scene, Entity spawnerEntity) {
+    if (!IsValidSpawner(scene, spawnerEntity)) {
+        return;
+    }
+
     SpawnObjectFromSpawner(scene, spawnerEntity);
+}
+
+void ObjectSpawnerSystem::FireGroup(Scene& scene, const std::string& group) {
+    auto& registry = scene.GetRegistry();
+    const Entity count = registry.GetEntityCount();
+    const std::string normalizedGroup = NormalizeSpawnerGroup(group);
+
+    for (Entity e = 0; e < count; ++e) {
+        if (!registry.HasComponent<ObjectSpawnerComponent>(e) ||
+            !registry.HasComponent<TransformComponent>(e)) {
+            continue;
+        }
+
+        auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+        if (NormalizeSpawnerGroup(spawner.group) != normalizedGroup) {
+            continue;
+        }
+
+        SpawnObjectFromSpawner(scene, e);
+    }
+}
+
+void ObjectSpawnerSystem::StartSpawner(Scene& scene, Entity spawnerEntity) {
+    if (!IsValidSpawner(scene, spawnerEntity)) {
+        return;
+    }
+
+    auto& spawner = scene.GetRegistry().GetComponent<ObjectSpawnerComponent>(spawnerEntity);
+    ResetSpawnerRun(spawner);
+    spawner.isRunning = true;
+}
+
+void ObjectSpawnerSystem::StartGroup(Scene& scene, const std::string& group) {
+    auto& registry = scene.GetRegistry();
+    const Entity count = registry.GetEntityCount();
+    const std::string normalizedGroup = NormalizeSpawnerGroup(group);
+
+    for (Entity e = 0; e < count; ++e) {
+        if (!IsValidSpawner(scene, e)) {
+            continue;
+        }
+
+        auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+        if (NormalizeSpawnerGroup(spawner.group) != normalizedGroup) {
+            continue;
+        }
+
+        StartSpawner(scene, e);
+    }
+}
+
+void ObjectSpawnerSystem::TriggerStartupSpawners(Scene& scene) {
+    auto& registry = scene.GetRegistry();
+    const Entity count = registry.GetEntityCount();
+
+    for (Entity e = 0; e < count; ++e) {
+        if (!IsValidSpawner(scene, e)) {
+            continue;
+        }
+
+        auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+        if (!spawner.triggerOnStartup) {
+            continue;
+        }
+
+        StartSpawner(scene, e);
+    }
 }
 
 void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEntity) {

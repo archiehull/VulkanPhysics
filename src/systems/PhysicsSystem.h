@@ -35,15 +35,8 @@ public:
     static float quadraticDragCoefficient; // ~0.0f..1.0f depending scale
 
     // Setters for runtime adjustment
-    static void SetLinearDamping(bool enabled, float factor) {
-        applyLinearDamping = enabled;
-        linearDampingFactor = glm::clamp(factor, 0.0f, 1.0f);
-    }
-
-    static void SetQuadraticDrag(bool enabled, float coefficient) {
-        applyQuadraticDrag = enabled;
-        quadraticDragCoefficient = glm::clamp(coefficient, 0.0f, 10.0f); // arbitrary upper limit
-    }
+    static void SetLinearDamping(bool enabled, float factor);
+    static void SetQuadraticDrag(bool enabled, float coefficient);
 
     void Update(Scene& scene, float deltaTime) override;
 

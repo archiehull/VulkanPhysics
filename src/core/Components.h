@@ -71,39 +71,48 @@ struct OrbitComponent {
 };
 
 enum class PathAnimationPlayMode { Once, Loop, Bounce };
-enum class PathAnimationTimingMode { PerSegment, OverallTime };
+enum class PathAnimationTimingMode { Absolute, PerSegment, OverallTime };
+enum class PathAnimationEasing { Linear, Smoothstep };
 enum class PathCurveType { Straight, BezierQuadratic };
 
-struct PathSegment {
-    glm::vec3 startPoint = glm::vec3(0.0f);
-    glm::vec3 endPoint = glm::vec3(0.0f);
-    glm::vec3 controlPoint = glm::vec3(0.0f);
+struct PathWaypoint {
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 orientation = glm::vec3(0.0f);
+    float timeFromStart = 0.0f;
+};
+
+struct PathCurveSegment {
     PathCurveType curveType = PathCurveType::Straight;
+    glm::vec3 controlPoint = glm::vec3(0.0f);
     float duration = 1.0f;
-    float cachedLength = 0.0f;
 };
 
 struct PathAnimationComponent {
-    std::vector<PathSegment> segments;
+    std::vector<PathWaypoint> waypoints;
+    std::vector<PathCurveSegment> segments;
     PathAnimationPlayMode playMode = PathAnimationPlayMode::Once;
-    PathAnimationTimingMode timingMode = PathAnimationTimingMode::PerSegment;
-    float overallDuration = 5.0f;
+    PathAnimationTimingMode timingMode = PathAnimationTimingMode::Absolute;
+    PathAnimationEasing easing = PathAnimationEasing::Linear;
+    float totalDuration = 5.0f;
     float playbackSpeed = 1.0f;
     bool isPlaying = true;
     bool showPath = false;
     glm::vec4 pathColor = glm::vec4(0.6f, 0.2f, 0.8f, 1.0f);
-    bool autoConnectLoop = false;
-    bool hasAutoConnectSegment = false;
     bool reversePath = false;
-    bool applyAnimationVelocity = false;
+    bool connectEndToStart = true;
     glm::vec3 animationVelocity = glm::vec3(0.0f);
-    bool collideWithFixedObjects = false;
-    int currentSegmentIndex = 0;
-    int direction = 1;
-    float segmentTime = 0.0f;
     bool initialized = false;
     bool useLocalSpace = false;
     bool rotateAlongPath = false;
+    glm::vec3 rotationOffset = glm::vec3(0.0f);
+    float currentTime = 0.0f;
+    int playbackDirection = 1;
+    bool lastReversePath = false;
+    glm::vec3 lastEvaluatedPosition = glm::vec3(0.0f);
+    bool hasLastEvaluatedPosition = false;
+    glm::vec3 localOriginPosition = glm::vec3(0.0f);
+    glm::vec3 localOriginRotation = glm::vec3(0.0f);
+    bool hasLocalOrigin = false;
 };
 
 
@@ -281,6 +290,8 @@ struct DustCloudComponent {
 struct ObjectSpawnerComponent {
     bool alwaysOn = true;
     bool isRunning = true;
+    bool triggerOnStartup = false;
+    std::string group = "A";
 
     float spawnInterval = 1.0f;
     float spawnTimer = 0.0f;

@@ -15,6 +15,7 @@
 #include "../geometry/OBJLoader.h"
 #include "../geometry/SJGLoader.h"
 #include "../systems/CameraSystem.h"
+#include "../systems/ObjectSpawnerSystem.h"
 #include "../systems/PhysicsSystem.h"
 
 namespace {
@@ -162,6 +163,7 @@ void Application::LoadScene(const std::string& scenePath) {
     // 4. Re-setup scene objects
     try {
         SetupScene();
+        ObjectSpawnerSystem::TriggerStartupSpawners(*scene);
     }
     catch (const std::exception& e) {
         std::cerr << "[LoadScene] SetupScene failed for '" << scenePath << "' with error: " << e.what() << std::endl;
@@ -322,6 +324,8 @@ void Application::SetupScene() {
             ObjectSpawnerComponent spawner;
             spawner.alwaysOn = objCfg.spawnerEnabled;
             spawner.isRunning = objCfg.spawnerEnabled;
+            spawner.triggerOnStartup = objCfg.spawnerTriggerOnStartup;
+            spawner.group = objCfg.spawnerGroup;
             spawner.spawnInterval = objCfg.spawnInterval;
             spawner.runDurationSeconds = objCfg.spawnerRunDurationSeconds;
             spawner.maxSpawnsPerRun = objCfg.spawnerMaxSpawnsPerRun;
@@ -544,14 +548,21 @@ void Application::SetupScene() {
                 return PathAnimationPlayMode::Once;
                 };
 
-            auto parseTimingMode = [&](const std::string& mode) {
+            auto parseEasing = [&](const std::string& mode) {
                 const std::string value = toUpper(mode);
-                if (value == "OVERALL_TIME") return PathAnimationTimingMode::OverallTime;
-                return PathAnimationTimingMode::PerSegment;
+                if (value == "SMOOTHSTEP" || value == "SMOOTH") return PathAnimationEasing::Smoothstep;
+                return PathAnimationEasing::Linear;
                 };
 
-            auto parseCurveType = [&](const std::string& type) {
-                const std::string value = toUpper(type);
+            auto parseTimingMode = [&](const std::string& mode) {
+                const std::string value = toUpper(mode);
+                if (value == "PER_SEGMENT") return PathAnimationTimingMode::PerSegment;
+                if (value == "OVERALL_TIME") return PathAnimationTimingMode::OverallTime;
+                return PathAnimationTimingMode::Absolute;
+                };
+
+            auto parseCurveType = [&](const std::string& mode) {
+                const std::string value = toUpper(mode);
                 if (value == "BEZIER_QUADRATIC") return PathCurveType::BezierQuadratic;
                 return PathCurveType::Straight;
                 };
@@ -559,21 +570,131 @@ void Application::SetupScene() {
             PathAnimationComponent pathAnim;
             pathAnim.playMode = parsePlayMode(objCfg.pathPlayMode);
             pathAnim.timingMode = parseTimingMode(objCfg.pathTimingMode);
-            pathAnim.overallDuration = objCfg.pathOverallDuration;
+            pathAnim.easing = parseEasing(objCfg.pathEasing);
+            pathAnim.totalDuration = objCfg.pathTotalDuration;
             pathAnim.isPlaying = objCfg.pathIsPlaying;
             pathAnim.showPath = objCfg.pathShowPath;
             pathAnim.useLocalSpace = objCfg.pathUseLocalSpace;
+            pathAnim.connectEndToStart = objCfg.pathConnectEndToStart;
+            pathAnim.reversePath = (toUpper(objCfg.pathPlayMode) == "REVERSE");
             pathAnim.initialized = false;
+            pathAnim.currentTime = 0.0f;
+            pathAnim.playbackDirection = 1;
+            pathAnim.lastReversePath = pathAnim.reversePath;
+            pathAnim.hasLastEvaluatedPosition = false;
 
-            for (const auto& segCfg : objCfg.pathSegments) {
-                PathSegment segment;
-                segment.startPoint = segCfg.startPoint;
-                segment.endPoint = segCfg.endPoint;
-                segment.controlPoint = segCfg.controlPoint;
-                segment.curveType = parseCurveType(segCfg.curveType);
-                segment.duration = segCfg.duration;
-                segment.cachedLength = 0.0f;
-                pathAnim.segments.push_back(segment);
+            auto syncPathSegments = [](PathAnimationComponent& path) {
+                const size_t targetSegmentCount = (path.connectEndToStart && path.waypoints.size() > 1)
+                    ? path.waypoints.size()
+                    : (path.waypoints.size() > 0 ? path.waypoints.size() - 1 : 0);
+
+                while (path.segments.size() < targetSegmentCount) {
+                    PathCurveSegment segment;
+                    const size_t segmentIndex = path.segments.size();
+                    const size_t startIndex = segmentIndex;
+                    const size_t endIndex = (path.connectEndToStart && segmentIndex + 1 == path.waypoints.size()) ? 0 : segmentIndex + 1;
+                    if (startIndex < path.waypoints.size() && endIndex < path.waypoints.size()) {
+                        const glm::vec3 start = path.waypoints[startIndex].position;
+                        const glm::vec3 end = path.waypoints[endIndex].position;
+                        segment.controlPoint = (start + end) * 0.5f;
+                    }
+                    path.segments.push_back(segment);
+                }
+
+                if (path.segments.size() > targetSegmentCount) {
+                    path.segments.resize(targetSegmentCount);
+                }
+            };
+
+            if (!objCfg.pathWaypoints.empty()) {
+                for (const auto& waypointCfg : objCfg.pathWaypoints) {
+                    PathWaypoint waypoint;
+                    waypoint.position = waypointCfg.position;
+                    waypoint.orientation = waypointCfg.orientation;
+                    waypoint.timeFromStart = std::max(0.0f, waypointCfg.timeFromStart);
+                    pathAnim.waypoints.push_back(waypoint);
+                }
+
+                for (const auto& segCfg : objCfg.pathSegments) {
+                    PathCurveSegment segment;
+                    segment.curveType = parseCurveType(segCfg.curveType);
+                    segment.controlPoint = segCfg.controlPoint;
+                    segment.duration = std::max(0.001f, segCfg.duration);
+                    pathAnim.segments.push_back(segment);
+                }
+
+                if (!pathAnim.waypoints.empty()) {
+                    while (pathAnim.segments.size() + 1 < pathAnim.waypoints.size()) {
+                        PathCurveSegment segment;
+                        const size_t segmentIndex = pathAnim.segments.size();
+                        const glm::vec3 start = pathAnim.waypoints[segmentIndex].position;
+                        const glm::vec3 end = pathAnim.waypoints[segmentIndex + 1].position;
+                        segment.controlPoint = (start + end) * 0.5f;
+                        pathAnim.segments.push_back(segment);
+                    }
+                    if (pathAnim.segments.size() >= pathAnim.waypoints.size()) {
+                        pathAnim.segments.resize(pathAnim.waypoints.size() - 1);
+                    }
+                }
+
+                syncPathSegments(pathAnim);
+            }
+            else if (!objCfg.legacyPathSegments.empty()) {
+                float accumulatedTime = 0.0f;
+                bool useOverallLegacyTime = (toUpper(objCfg.pathTimingMode) == "OVERALL_TIME");
+                float totalLength = 0.0f;
+
+                if (useOverallLegacyTime) {
+                    for (const auto& segCfg : objCfg.legacyPathSegments) {
+                        totalLength += glm::length(segCfg.endPoint - segCfg.startPoint);
+                    }
+                }
+
+                for (size_t i = 0; i < objCfg.legacyPathSegments.size(); ++i) {
+                    const auto& segCfg = objCfg.legacyPathSegments[i];
+                    if (i == 0) {
+                        PathWaypoint first;
+                        first.position = segCfg.startPoint;
+                        first.orientation = objCfg.rotation;
+                        first.timeFromStart = 0.0f;
+                        pathAnim.waypoints.push_back(first);
+                    }
+
+                    float segmentDuration = std::max(0.001f, segCfg.duration);
+                    if (useOverallLegacyTime) {
+                        const float segmentLength = glm::length(segCfg.endPoint - segCfg.startPoint);
+                        if (totalLength > 0.0001f) {
+                            segmentDuration = std::max(0.001f, objCfg.pathTotalDuration * (segmentLength / totalLength));
+                        }
+                        else {
+                            segmentDuration = std::max(0.001f, objCfg.pathTotalDuration / static_cast<float>(std::max<size_t>(1, objCfg.legacyPathSegments.size())));
+                        }
+                    }
+
+                    accumulatedTime += segmentDuration;
+
+                    PathWaypoint waypoint;
+                    waypoint.position = segCfg.endPoint;
+                    waypoint.orientation = objCfg.rotation;
+                    waypoint.timeFromStart = accumulatedTime;
+                    pathAnim.waypoints.push_back(waypoint);
+
+                    PathCurveSegment curveSegment;
+                    curveSegment.curveType = parseCurveType(segCfg.curveType);
+                    curveSegment.controlPoint = segCfg.controlPoint;
+                    curveSegment.duration = segmentDuration;
+                    pathAnim.segments.push_back(curveSegment);
+                }
+
+                if (objCfg.pathTotalDuration <= 0.0f) {
+                    pathAnim.totalDuration = accumulatedTime;
+                }
+
+                syncPathSegments(pathAnim);
+            }
+
+            if (pathAnim.waypoints.size() == 1) {
+                pathAnim.totalDuration = std::max(pathAnim.totalDuration, pathAnim.waypoints.front().timeFromStart);
             }
 
             if (registry.HasComponent<PathAnimationComponent>(entity)) {
@@ -582,6 +703,14 @@ void Application::SetupScene() {
             else {
                 registry.AddComponent<PathAnimationComponent>(entity, pathAnim);
             }
+
+            if (!registry.HasComponent<PhysicsComponent>(entity)) {
+                registry.AddComponent<PhysicsComponent>(entity, PhysicsComponent{});
+            }
+            auto& pathPhysics = registry.GetComponent<PhysicsComponent>(entity);
+            pathPhysics.isStatic = true;
+            pathPhysics.SetMass(0.0f);
+            pathPhysics.velocity = glm::vec3(0.0f);
         }
 
         if (kSceneDebug) {
@@ -732,6 +861,11 @@ void Application::MainLoop() {
         bool showSpringVisuals = false;
         if (editorUI->ConsumeSpringVisualizationRequest(showSpringVisuals)) {
             scene->SetSpringVisualizationEnabled(showSpringVisuals);
+        }
+
+        bool showSpawnerVisuals = false;
+        if (editorUI->ConsumeSpawnerVisualizationRequest(showSpawnerVisuals)) {
+            scene->SetSpawnerVisualizationEnabled(showSpawnerVisuals);
         }
 
         ImGui::Render();
@@ -993,15 +1127,31 @@ void Application::ProcessInput() {
         std::cout << "Noclip toggled via Hotkey\n";
     }
 
+    const bool sprintHeld = inputManager->IsActionHeld(InputAction::Sprint);
+
+    if (inputManager->IsActionJustPressed(InputAction::FireSpawnerGroupA)) {
+        if (sprintHeld) {
+            ObjectSpawnerSystem::StartGroup(*scene, "A");
+        }
+        else {
+            ObjectSpawnerSystem::FireGroup(*scene, "A");
+        }
+    }
+    if (inputManager->IsActionJustPressed(InputAction::FireSpawnerGroupB)) {
+        if (sprintHeld) {
+            ObjectSpawnerSystem::StartGroup(*scene, "B");
+        }
+        else {
+            ObjectSpawnerSystem::FireGroup(*scene, "B");
+        }
+    }
+
     // --- Time Speed (Holding T logic) ---
     if (inputManager->IsActionHeld(InputAction::TimeSpeedUp)) {
         const float scaleChangeRate = 2.0f;
 
-        // Grab modifiers directly from GLFW since they act as modifiers here
-        const bool shiftPressed = glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-            glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
-        const bool ctrlPressed = glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
-            glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
+        const bool shiftPressed = sprintHeld;
+        const bool ctrlPressed = inputManager->IsActionHeld(InputAction::TimeResetModifier);
 
         if (ctrlPressed) {
             timeScale = 1.0f;
@@ -1015,38 +1165,12 @@ void Application::ProcessInput() {
         }
     }
 
-    // --- Physics Testing ---
-    static float shootCooldown = 0.0f;
-    if (shootCooldown > 0.0f) shootCooldown -= deltaTime;
-
-    if (glfwGetKey(window->GetGLFWWindow(), GLFW_KEY_B) == GLFW_PRESS && shootCooldown <= 0.0f) {
-        // Randomize spawn position slightly (between -1.0 and 1.0)
-        float posX = ((rand() % 100) / 100.0f) * 2.0f - 1.0f;
-        float posZ = ((rand() % 100) / 100.0f) * 2.0f - 1.0f;
-
-        // Randomize initial velocity in all 3 directions!
-        // X and Z velocity between -15.0 and 15.0 (shoots left/right/forward/back)
-        float velX = ((rand() % 100) / 100.0f) * 30.0f - 15.0f;
-        float velZ = ((rand() % 100) / 100.0f) * 30.0f - 15.0f;
-
-        // Y velocity between -5.0 and 15.0 (sometimes drops, sometimes shoots upwards!)
-        float velY = ((rand() % 100) / 100.0f) * 20.0f - 5.0f;
-
-        // Spawn the ball with the randomized vectors
-        scene->SpawnPhysicsBall(glm::vec3(posX, 30.0f, posZ), glm::vec3(velX, velY, velZ));
-
-        shootCooldown = 0.2f; // Prevent spamming 60 balls a second
-    }
 }
 
 void Application::KeyCallback(GLFWwindow* glfwWindow, int key, int scancode, int action, int mods) {
     auto* const app = static_cast<Application*>(glfwGetWindowUserPointer(glfwWindow));
 
     app->inputManager->HandleKeyEvent(key, action);
-
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-        glfwSetWindowShouldClose(glfwWindow, true);
-    }
 }
 
 void Application::FramebufferResizeCallback(GLFWwindow* glfwWindow, int width, int height) {

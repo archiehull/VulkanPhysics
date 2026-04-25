@@ -125,6 +125,16 @@ public:
         return true;
     }
 
+    bool ConsumeSpawnerVisualizationRequest(bool& enabled) {
+        if (!m_SpawnerVisualizationChanged) {
+            return false;
+        }
+
+        m_SpawnerVisualizationChanged = false;
+        enabled = m_ShowSpawnerVisuals;
+        return true;
+    }
+
 private:
     void DrawMainMenuSection(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget, std::string& sceneToLoad, Entity& entityToDelete);
     void DrawLoadSceneMenu(std::string& sceneToLoad);
@@ -188,5 +198,7 @@ private:
 
     bool m_ShowSpringVisuals = false;
     bool m_SpringVisualizationChanged = false;
+    bool m_ShowSpawnerVisuals = false;
+    bool m_SpawnerVisualizationChanged = false;
 
 };

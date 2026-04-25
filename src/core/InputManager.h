@@ -30,8 +30,11 @@ enum class InputAction {
 
     IgniteTarget,
     SpawnDustCloud,
+    FireSpawnerGroupA,
+    FireSpawnerGroupB,
 
     TimeSpeedUp,
+    TimeResetModifier,
     ToggleShading,
     ToggleShadows,
     NextSeason,

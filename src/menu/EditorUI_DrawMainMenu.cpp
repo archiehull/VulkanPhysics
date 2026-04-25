@@ -5,6 +5,7 @@
 #include "../systems/AnimationSystem.h"
 #include "../systems/CameraSystem.h"
 #include "../systems/ObjectSpawnerSystem.h"
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <algorithm>
@@ -593,6 +594,18 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 const ImVec4 fireBtnHover = ImVec4(0.88f, 0.22f, 0.22f, 1.0f);
                 const ImVec4 fireBtnActive = ImVec4(0.62f, 0.10f, 0.10f, 1.0f);
 
+                const char* groupOptions[] = { "A", "B", "C", "D" };
+                char groupChar = spawner.group.empty()
+                    ? 'A'
+                    : static_cast<char>(std::toupper(static_cast<unsigned char>(spawner.group[0])));
+                if (groupChar < 'A' || groupChar > 'D') {
+                    groupChar = 'A';
+                }
+                int groupIndex = groupChar - 'A';
+                if (ImGui::Combo("Group", &groupIndex, groupOptions, IM_ARRAYSIZE(groupOptions))) {
+                    spawner.group = groupOptions[groupIndex];
+                }
+
                 const bool alwaysOnChanged = ImGui::Checkbox("Always On", &spawner.alwaysOn);
                 ImGui::SameLine();
                 ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - fireButtonWidth);
@@ -840,6 +853,10 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             ImGui::Spacing();
             if (ImGui::Checkbox("Visualize Springs", &m_ShowSpringVisuals)) {
                 m_SpringVisualizationChanged = true;
+            }
+
+            if (ImGui::Checkbox("Visualize Spawners", &m_ShowSpawnerVisuals)) {
+                m_SpawnerVisualizationChanged = true;
             }
 
             Registry& simRegistry = scene.GetRegistry();
@@ -1142,6 +1159,7 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
 
         std::vector<Entity> springVisualEntities;
         std::vector<Entity> pathVisualEntities;
+        std::vector<Entity> spawnerVisualEntities;
 
         auto isVisualHelper = [&](Entity entity) {
             if (!registry.HasComponent<RenderComponent>(entity)) {
@@ -1155,6 +1173,10 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
             }
             if (rc.geometryName == "path_visual") {
                 pathVisualEntities.push_back(entity);
+                return true;
+            }
+            if (rc.geometryName == "spawner_visual") {
+                spawnerVisualEntities.push_back(entity);
                 return true;
             }
 
@@ -1610,7 +1632,7 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
             }
         }
 
-        if (!springVisualEntities.empty() || !pathVisualEntities.empty()) {
+        if (!springVisualEntities.empty() || !pathVisualEntities.empty() || !spawnerVisualEntities.empty()) {
             ImGui::Separator();
             if (ImGui::BeginMenu("Visualization Helpers")) {
                 auto drawVisualList = [&](const char* title, const std::vector<Entity>& visualEntities) {
@@ -1641,6 +1663,7 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
 
                 drawVisualList("Spring Visuals", springVisualEntities);
                 drawVisualList("Path Visuals", pathVisualEntities);
+                drawVisualList("Spawner Visuals", spawnerVisualEntities);
                 ImGui::EndMenu();
             }
         }

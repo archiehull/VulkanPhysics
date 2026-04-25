@@ -31,11 +31,23 @@ struct AttachedParticleConfig {
     float duration = -1.0f; // -1 for infinite
 };
 
-struct PathSegmentConfig {
+struct PathWaypointConfig {
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 orientation = glm::vec3(0.0f);
+    float timeFromStart = 0.0f;
+};
+
+struct LegacyPathSegmentConfig {
     glm::vec3 startPoint = glm::vec3(0.0f);
     glm::vec3 endPoint = glm::vec3(0.0f);
     glm::vec3 controlPoint = glm::vec3(0.0f);
     std::string curveType = "STRAIGHT";
+    float duration = 1.0f;
+};
+
+struct PathSegmentConfig {
+    std::string curveType = "STRAIGHT";
+    glm::vec3 controlPoint = glm::vec3(0.0f);
     float duration = 1.0f;
 };
 
@@ -125,6 +137,8 @@ struct SceneObjectConfig {
     float speed = 15.0f;
 
     bool spawnerEnabled = true;
+    bool spawnerTriggerOnStartup = false;
+    std::string spawnerGroup = "A";
     float spawnInterval = 1.0f;
     float spawnerRunDurationSeconds = -1.0f;
     int spawnerMaxSpawnsPerRun = -1;
@@ -148,12 +162,16 @@ struct SceneObjectConfig {
 
     bool hasPathAnimation = false;
     std::string pathPlayMode = "ONCE";
-    std::string pathTimingMode = "PER_SEGMENT";
-    float pathOverallDuration = 5.0f;
+    std::string pathEasing = "LINEAR";
+    std::string pathTimingMode = "ABSOLUTE";
+    float pathTotalDuration = 5.0f;
     bool pathIsPlaying = true;
     bool pathShowPath = false;
     bool pathUseLocalSpace = false;
+    bool pathConnectEndToStart = true;
+    std::vector<PathWaypointConfig> pathWaypoints;
     std::vector<PathSegmentConfig> pathSegments;
+    std::vector<LegacyPathSegmentConfig> legacyPathSegments;
 
     // ---> ADD SPRING CONFIG FIELDS HERE <---
     bool hasSpringConfig = false;

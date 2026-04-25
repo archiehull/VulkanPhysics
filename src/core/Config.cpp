@@ -359,6 +359,23 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 ss >> value;
                 currentObject->spawnerEnabled = (value == "true" || value == "1");
             }
+            else if (key == "TriggerOnStartup") {
+                std::string value;
+                ss >> value;
+                currentObject->spawnerTriggerOnStartup = (value == "true" || value == "1");
+            }
+            else if (key == "SpawnerGroup") {
+                std::string value;
+                ss >> value;
+
+                if (!value.empty()) {
+                    char groupChar = static_cast<char>(std::toupper(static_cast<unsigned char>(value[0])));
+                    if (groupChar < 'A' || groupChar > 'D') {
+                        groupChar = 'A';
+                    }
+                    currentObject->spawnerGroup = std::string(1, groupChar);
+                }
+            }
             else if (key == "SpawnInterval") ss >> currentObject->spawnInterval;
             else if (key == "SpawnerRunDuration") ss >> currentObject->spawnerRunDurationSeconds;
             else if (key == "SpawnerMaxSpawns") ss >> currentObject->spawnerMaxSpawnsPerRun;
@@ -393,15 +410,12 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 currentObject->isDespawner = (value == "true" || value == "1");
             }
             else if (key == "PathAnimation") {
-                std::string playMode;
-                std::string timingMode;
-                std::string isPlaying;
-                std::string showPath;
-                std::string useLocalSpace;
+                std::vector<std::string> tokens;
+                std::string token;
+                while (ss >> token) tokens.push_back(token);
 
-                ss >> playMode >> timingMode >> currentObject->pathOverallDuration >> isPlaying >> showPath;
-                if (ss >> useLocalSpace) {
-                    currentObject->pathUseLocalSpace = ParseBoolToken(useLocalSpace);
+                if (tokens.size() < 4) {
+                    continue;
                 }
 
                 auto toUpper = [](std::string value) {
@@ -410,10 +424,77 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                     };
 
                 currentObject->hasPathAnimation = true;
-                currentObject->pathPlayMode = toUpper(playMode);
-                currentObject->pathTimingMode = toUpper(timingMode);
-                currentObject->pathIsPlaying = ParseBoolToken(isPlaying);
-                currentObject->pathShowPath = ParseBoolToken(showPath);
+                currentObject->pathPlayMode = toUpper(tokens[0]);
+
+                const std::string second = toUpper(tokens[1]);
+                if (second == "PER_SEGMENT" || second == "OVERALL_TIME") {
+                    currentObject->pathTimingMode = second;
+                    if (tokens.size() >= 5) {
+                        currentObject->pathTotalDuration = std::stof(tokens[2]);
+                        size_t boolStartIndex = 3;
+                        const std::string maybeEasing = toUpper(tokens[3]);
+                        if (maybeEasing == "LINEAR" || maybeEasing == "SMOOTHSTEP" || maybeEasing == "SMOOTH") {
+                            currentObject->pathEasing = maybeEasing;
+                            boolStartIndex = 4;
+                        }
+                        else {
+                            currentObject->pathEasing = "LINEAR";
+                        }
+
+                        if (tokens.size() > boolStartIndex + 1) {
+                            currentObject->pathIsPlaying = ParseBoolToken(tokens[boolStartIndex]);
+                            currentObject->pathShowPath = ParseBoolToken(tokens[boolStartIndex + 1]);
+                        }
+                        if (tokens.size() > boolStartIndex + 2) {
+                            currentObject->pathUseLocalSpace = ParseBoolToken(tokens[boolStartIndex + 2]);
+                        }
+                        if (tokens.size() > boolStartIndex + 3) {
+                            currentObject->pathConnectEndToStart = ParseBoolToken(tokens[boolStartIndex + 3]);
+                        }
+                    }
+                }
+                else {
+                    currentObject->pathTimingMode = "WAYPOINTS";
+                    currentObject->pathTotalDuration = std::stof(tokens[1]);
+                    currentObject->pathEasing = toUpper(tokens[2]);
+                    currentObject->pathIsPlaying = ParseBoolToken(tokens[3]);
+                    if (tokens.size() >= 5) {
+                        currentObject->pathShowPath = ParseBoolToken(tokens[4]);
+                    }
+                    if (tokens.size() >= 6) {
+                        currentObject->pathUseLocalSpace = ParseBoolToken(tokens[5]);
+                    }
+                    if (tokens.size() >= 7) {
+                        currentObject->pathConnectEndToStart = ParseBoolToken(tokens[6]);
+                    }
+                }
+
+                if (currentObject->pathTimingMode == "WAYPOINTS") {
+                    currentObject->pathTimingMode = "ABSOLUTE";
+                }
+            }
+            else if (key == "PathWaypoint") {
+                PathWaypointConfig waypoint;
+                ss >> waypoint.position.x >> waypoint.position.y >> waypoint.position.z
+                    >> waypoint.orientation.x >> waypoint.orientation.y >> waypoint.orientation.z
+                    >> waypoint.timeFromStart;
+
+                currentObject->hasPathAnimation = true;
+                currentObject->pathWaypoints.push_back(waypoint);
+            }
+            else if (key == "PathSegmentDef") {
+                PathSegmentConfig seg;
+                std::string curveType;
+                ss >> curveType >> seg.duration;
+                seg.curveType = curveType;
+                std::string upperCurveType = curveType;
+                std::transform(upperCurveType.begin(), upperCurveType.end(), upperCurveType.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+                if (upperCurveType == "BEZIER_QUADRATIC") {
+                    ss >> seg.controlPoint.x >> seg.controlPoint.y >> seg.controlPoint.z;
+                }
+
+                currentObject->hasPathAnimation = true;
+                currentObject->pathSegments.push_back(seg);
             }
             else if (key == "PathSegment") {
                 std::vector<std::string> tokens;
@@ -429,7 +510,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                     return value;
                     };
 
-                PathSegmentConfig seg;
+                LegacyPathSegmentConfig seg;
                 seg.curveType = toUpper(tokens[0]);
                 seg.startPoint = glm::vec3(std::stof(tokens[1]), std::stof(tokens[2]), std::stof(tokens[3]));
                 seg.endPoint = glm::vec3(std::stof(tokens[4]), std::stof(tokens[5]), std::stof(tokens[6]));
@@ -450,7 +531,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 }
 
                 currentObject->hasPathAnimation = true;
-                currentObject->pathSegments.push_back(seg);
+                currentObject->legacyPathSegments.push_back(seg);
             }
         }
         // --- Global Settings ---
