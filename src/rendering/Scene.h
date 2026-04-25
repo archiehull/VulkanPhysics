@@ -136,6 +136,7 @@ public:
     std::string sootTexturePath = "textures/soot.jpg";
 
     void SetObjectTransform(const std::string& name, const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale);
+    void RegisterRenderableEntity(Entity entity);
     void SetObjectVisible(const std::string& name, bool visible);
     void SetOrbitSpeed(const std::string& name, float speedRadPerSec);
 

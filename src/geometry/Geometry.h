@@ -21,6 +21,7 @@ public:
     Geometry& operator=(Geometry&&) noexcept = default;
 
     void CreateBuffers();
+    void UpdateVertexBuffer();
     void Bind(VkCommandBuffer commandBuffer) const;
     void Draw(VkCommandBuffer commandBuffer) const;
     void Cleanup();

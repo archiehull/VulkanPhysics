@@ -205,6 +205,7 @@ struct PhysicsComponent {
 
 struct SpringComponent {
     std::vector<Entity> connectedEntities; // Multiple entities can be attached to this spring hub
+    std::vector<float> restingLengths;     // Optional: specific resting length for each connection
     glm::vec3 fixedAnchorPoint = glm::vec3(0.0f); // Used if not attached to entities
 
     float restingLength = 1.0f; // Lr: The length at which the spring is at rest
@@ -215,12 +216,22 @@ struct SpringComponent {
     bool isAttachedToEntity = true;
 };
 
+struct ClothComponent {
+    int width = 0;
+    int height = 0;
+    float spacing = 1.0f;
+    std::vector<Entity> particles; // 1D array of entities in the grid
+    std::shared_ptr<Geometry> dynamicGeometry = nullptr;
+};
+
 struct ColliderComponent {
     bool hasCollision = true;
     int type = 0; // 0 = Sphere, 1 = Plane
     float radius = 2.0f; // Used if type == 0
     glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f); // Used if type == 1
     float height = 5.0f;
+    uint32_t collisionLayer = 1; // Default layer
+    uint32_t collisionMask = 0xFFFFFFFF; // Collide with all layers by default
 };
 
 // 7. Light

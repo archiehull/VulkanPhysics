@@ -4,6 +4,7 @@
 #include "../systems/CameraSystem.h"
 #include <algorithm>
 #include <random>
+#include <unordered_set>
 
 void EditorUI::DrawPostMainMenuSection(Scene& scene, Entity entityToDelete) {
 if (entityToDelete != MAX_ENTITIES) {
@@ -272,6 +273,14 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
             int pathVisualCount = 0;
             int spawnerVisualCount = 0;
 
+            std::unordered_set<Entity> clothParticles;
+            for (Entity e = 0; e < count; ++e) {
+                if (registry.HasComponent<ClothComponent>(e)) {
+                    const auto& comp = registry.GetComponent<ClothComponent>(e);
+                    clothParticles.insert(comp.particles.begin(), comp.particles.end());
+                }
+            }
+
             for (Entity e = 0; e < count; ++e) {
                 if (isDebugVisualEntity(e)) {
                     const auto& render = registry.GetComponent<RenderComponent>(e);
@@ -290,15 +299,41 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 if (!hasVisibleEntityData(e)) {
                     continue;
                 }
+                
+                if (clothParticles.count(e) > 0) {
+                    continue; // Skip rendering particles here, they will be rendered under the cloth entity
+                }
 
                 std::string entityName = "Entity " + std::to_string(e);
                 if (registry.HasComponent<NameComponent>(e)) {
                     entityName = registry.GetComponent<NameComponent>(e).name + " (ID: " + std::to_string(e) + ")";
                 }
 
-                bool isSelected = (it->selectedEntity == e);
-                if (ImGui::Selectable(entityName.c_str(), isSelected)) {
-                    it->selectedEntity = e;
+                if (registry.HasComponent<ClothComponent>(e)) {
+                    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
+                    if (it->selectedEntity == e) flags |= ImGuiTreeNodeFlags_Selected;
+                    
+                    bool expanded = ImGui::TreeNodeEx((void*)(intptr_t)e, flags, "%s", entityName.c_str());
+                    if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+                        it->selectedEntity = e;
+                    }
+
+                    if (expanded) {
+                        const auto& comp = registry.GetComponent<ClothComponent>(e);
+                        for(Entity p : comp.particles) {
+                            std::string pName = "  Particle " + std::to_string(p);
+                            bool pSelected = (it->selectedEntity == p);
+                            if (ImGui::Selectable(pName.c_str(), pSelected)) {
+                                it->selectedEntity = p;
+                            }
+                        }
+                        ImGui::TreePop();
+                    }
+                } else {
+                    bool isSelected = (it->selectedEntity == e);
+                    if (ImGui::Selectable(entityName.c_str(), isSelected)) {
+                        it->selectedEntity = e;
+                    }
                 }
             }
 
@@ -812,7 +847,65 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
             }
 
-            // --- 9. Collider Component ---
+            // --- 9. Cloth Component ---
+            if (registry.HasComponent<ClothComponent>(e)) {
+                bool open = ImGui::TreeNodeEx("ClothComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                if (ImGui::Button("Remove##Cloth")) registry.RemoveComponent<ClothComponent>(e);
+
+                if (open && registry.HasComponent<ClothComponent>(e)) {
+                    auto& comp = registry.GetComponent<ClothComponent>(e);
+
+                    ImGui::Text("Grid Size: %d x %d", comp.width, comp.height);
+                    ImGui::Text("Spacing: %.2f", comp.spacing);
+                    ImGui::Text("Particles: %zu", comp.particles.size());
+
+                    float currentMass = 0.5f;
+                    float currentStiffness = 50.0f;
+                    float currentDamping = 1.5f;
+
+                    for (Entity p : comp.particles) {
+                        if (registry.HasComponent<PhysicsComponent>(p)) {
+                            auto& pc = registry.GetComponent<PhysicsComponent>(p);
+                            if (!pc.isStatic) {
+                                currentMass = pc.mass;
+                            }
+                        }
+                        if (registry.HasComponent<SpringComponent>(p)) {
+                            auto& sc = registry.GetComponent<SpringComponent>(p);
+                            currentStiffness = sc.stiffness;
+                            currentDamping = sc.damping;
+                            break;
+                        }
+                    }
+
+                    bool updatePhysics = false;
+                    bool updateSprings = false;
+
+                    if (ImGui::DragFloat("Particle Mass", &currentMass, 0.05f, 0.01f, 100.0f)) updatePhysics = true;
+                    if (ImGui::DragFloat("Spring Stiffness", &currentStiffness, 1.0f, 0.0f, 1000.0f)) updateSprings = true;
+                    if (ImGui::DragFloat("Spring Damping", &currentDamping, 0.1f, 0.0f, 100.0f)) updateSprings = true;
+
+                    if (updatePhysics || updateSprings) {
+                        for (Entity p : comp.particles) {
+                            if (updatePhysics && registry.HasComponent<PhysicsComponent>(p)) {
+                                auto& pc = registry.GetComponent<PhysicsComponent>(p);
+                                if (!pc.isStatic) {
+                                    pc.SetMass(currentMass);
+                                }
+                            }
+                            if (updateSprings && registry.HasComponent<SpringComponent>(p)) {
+                                auto& sc = registry.GetComponent<SpringComponent>(p);
+                                sc.stiffness = currentStiffness;
+                                sc.damping = currentDamping;
+                            }
+                        }
+                    }
+                    ImGui::TreePop();
+                }
+            }
+
+            // --- 10. Collider Component ---
             if (registry.HasComponent<ColliderComponent>(e)) {
                 bool open = ImGui::TreeNodeEx("ColliderComponent", ImGuiTreeNodeFlags_DefaultOpen);
                 ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);

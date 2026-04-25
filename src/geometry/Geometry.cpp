@@ -37,6 +37,14 @@ void Geometry::CreateBuffers() {
     }
 }
 
+void Geometry::UpdateVertexBuffer() {
+    if (!vertexBuffer) {
+        throw std::runtime_error("Vertex buffer not created yet!");
+    }
+    const VkDeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();
+    vertexBuffer->CopyData(vertices.data(), vertexBufferSize);
+}
+
 void Geometry::Bind(VkCommandBuffer commandBuffer) const {
     const VkBuffer vb = vertexBuffer->GetBuffer();
     const VkDeviceSize offset = 0;

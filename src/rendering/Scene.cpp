@@ -55,6 +55,7 @@ float ComputeFlickerPresetValue(int preset, float t, float phase) {
 #include "../systems/PhysicsSystem.h"
 #include "../systems/ObjectSpawnerSystem.h"
 #include "../systems/AnimationSystem.h"
+#include "../systems/ClothSystem.h"
 
 Entity Scene::AddLayerRegion(const std::string& name, int layerBit, int volumeType, float radius, const glm::vec3& halfExtents, const glm::vec3& position) {
     Entity entity = m_Registry.CreateEntity();
@@ -135,6 +136,12 @@ void Scene::CreateEnvironment(const std::string& name) {
     m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { name });
     m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
     m_EntityMap[name] = m_EnvironmentEntity;
+}
+
+void Scene::RegisterRenderableEntity(Entity entity) {
+    if (std::find(m_RenderableEntities.begin(), m_RenderableEntities.end(), entity) == m_RenderableEntities.end()) {
+        m_RenderableEntities.push_back(entity);
+    }
 }
 
 void Scene::SetObjectPhysics(const std::string& name, bool isStatic, float mass) {
@@ -420,6 +427,7 @@ void Scene::Initialize() {
     m_Systems.push_back(std::make_unique<SimpleShadowSystem>());
     m_Systems.push_back(std::make_unique<ThermodynamicsSystem>());
     m_Systems.push_back(std::make_unique<PhysicsSystem>());
+    m_Systems.push_back(std::make_unique<ClothSystem>());
     m_Systems.push_back(std::make_unique<ObjectSpawnerSystem>());
 }
 

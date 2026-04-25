@@ -27,6 +27,7 @@
     <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_tables.cpp" />
     <ClCompile Include="Additional Libraries\imgui-1.89.9\imgui_widgets.cpp" />
     <ClCompile Include="src\core\Application.cpp" />
+    <ClCompile Include="src\core\ClothFactory.cpp" />
     <ClCompile Include="src\core\Config.cpp" />
     <ClCompile Include="src\core\InputManager.cpp" />
     <ClCompile Include="src\core\Window.cpp" />
@@ -50,6 +51,7 @@
     <ClCompile Include="src\rendering\Texture.cpp" />
     <ClCompile Include="src\systems\AnimationSystem.cpp" />
     <ClCompile Include="src\systems\CameraSystem.cpp" />
+    <ClCompile Include="src\systems\ClothSystem.cpp" />
     <ClCompile Include="src\systems\ObjectSpawnerSystem.cpp" />
     <ClCompile Include="src\systems\OrbitSystem.cpp" />
     <ClCompile Include="src\systems\ParticleUpdateSystem.cpp" />
@@ -71,6 +73,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Application.h" />
+    <ClInclude Include="src\core\ClothFactory.h" />
     <ClInclude Include="src\core\Components.h" />
     <ClInclude Include="src\core\Config.h" />
     <ClInclude Include="src\core\CoreTypes.h" />
@@ -94,6 +97,7 @@
     <ClInclude Include="src\rendering\Texture.h" />
     <ClInclude Include="src\systems\AnimationSystem.h" />
     <ClInclude Include="src\systems\CameraSystem.h" />
+    <ClInclude Include="src\systems\ClothSystem.h" />
     <ClInclude Include="src\systems\ISystem.h" />
     <ClInclude Include="src\systems\ObjectSpawnerSystem.h" />
     <ClInclude Include="src\systems\OrbitSystem.h" />

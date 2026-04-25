@@ -15,8 +15,11 @@
 #include "../geometry/OBJLoader.h"
 #include "../geometry/SJGLoader.h"
 #include "../systems/CameraSystem.h"
-#include "../systems/ObjectSpawnerSystem.h"
+#include "InputManager.h"
+#include "Config.h"
+#include "ClothFactory.h"
 #include "../systems/PhysicsSystem.h"
+#include "../systems/ObjectSpawnerSystem.h"
 
 namespace {
     constexpr bool kSceneDebug = false;
@@ -126,7 +129,7 @@ void Application::InitVulkan() {
 
     // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/worlds/", "physicstest1");
+    editorUI->Initialize("src/worlds/", "cloth_test");
     editorUI->SetPerformanceSettings(config.vsync, config.maxFps);
 
     for (const auto& cam : config.customCameras) {
@@ -759,6 +762,9 @@ void Application::SetupScene() {
     if (!config.proceduralPlants.empty()) {
         scene->GenerateProceduralObjects(config.proceduralObjectCount, terrainRadius - 20.0f, terrainY, heightScale, noiseFreq);
     }
+    
+    // Spawn Cloth Demo
+    ClothFactory::CreateClothGrid(*scene, vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), glm::vec3(0.0f, 30.0f, 0.0f), 15, 15, 1.0f, 0.5f, 15.0f, 0.5f);
 
     // scene->PrintDebugInfo();
 }

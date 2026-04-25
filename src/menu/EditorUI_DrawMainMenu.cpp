@@ -742,6 +742,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         ImGui::EndMenu();
     }
 
+
     if (ImGui::BeginMenu("Simulation")) {
         std::string pauseLabel = m_IsPaused ? "Start Simulation  [Space]" : "Pause Simulation  [Space]";
         if (ImGui::Selectable(pauseLabel.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
@@ -1172,6 +1173,97 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
         };
 
         Registry& registry = scene.GetRegistry();
+
+        ImGui::TextDisabled("Cloth Systems");
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Cloth Grids")) {
+            bool hasCloth = false;
+
+            for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
+                if (!registry.HasComponent<ClothComponent>(e)) continue;
+                hasCloth = true;
+
+                auto& comp = registry.GetComponent<ClothComponent>(e);
+                std::string clothName = registry.HasComponent<NameComponent>(e) ?
+                    registry.GetComponent<NameComponent>(e).name : "Cloth " + std::to_string(e);
+
+                std::string menuLabel = clothName + "###ClothMenu_" + std::to_string(e);
+
+                if (ImGui::BeginMenu(menuLabel.c_str())) {
+                    ImGui::PushID(static_cast<int>(e));
+
+                    ImGui::TextDisabled("Grid Details");
+                    ImGui::Separator();
+                    ImGui::Text("Grid Size: %d x %d", comp.width, comp.height);
+                    ImGui::Text("Spacing: %.2f", comp.spacing);
+                    ImGui::Text("Particles: %zu", comp.particles.size());
+
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("Physical Properties");
+                    ImGui::Separator();
+
+                    float currentMass = 0.5f;
+                    float currentStiffness = 50.0f;
+                    float currentDamping = 1.5f;
+
+                    for (Entity p : comp.particles) {
+                        if (registry.HasComponent<PhysicsComponent>(p)) {
+                            auto& pc = registry.GetComponent<PhysicsComponent>(p);
+                            if (!pc.isStatic) {
+                                currentMass = pc.mass;
+                            }
+                        }
+                        if (registry.HasComponent<SpringComponent>(p)) {
+                            auto& sc = registry.GetComponent<SpringComponent>(p);
+                            currentStiffness = sc.stiffness;
+                            currentDamping = sc.damping;
+                            break;
+                        }
+                    }
+
+                    bool updatePhysics = false;
+                    bool updateSprings = false;
+
+                    if (ImGui::DragFloat("Particle Mass", &currentMass, 0.05f, 0.01f, 100.0f)) updatePhysics = true;
+                    if (ImGui::DragFloat("Spring Stiffness", &currentStiffness, 1.0f, 0.0f, 1000.0f)) updateSprings = true;
+                    if (ImGui::DragFloat("Spring Damping", &currentDamping, 0.1f, 0.0f, 100.0f)) updateSprings = true;
+
+                    if (updatePhysics || updateSprings) {
+                        for (Entity p : comp.particles) {
+                            if (updatePhysics && registry.HasComponent<PhysicsComponent>(p)) {
+                                auto& pc = registry.GetComponent<PhysicsComponent>(p);
+                                if (!pc.isStatic) {
+                                    pc.SetMass(currentMass);
+                                }
+                            }
+                            if (updateSprings && registry.HasComponent<SpringComponent>(p)) {
+                                auto& sc = registry.GetComponent<SpringComponent>(p);
+                                sc.stiffness = currentStiffness;
+                                sc.damping = currentDamping;
+                            }
+                        }
+                    }
+
+                    ImGui::Separator();
+                    if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
+                        m_PropertyWindows.push_back({ m_NextPropertyWindowId++, e, false, true, true });
+                    }
+
+                    ImGui::PopID();
+                    ImGui::EndMenu();
+                }
+            }
+
+            if (!hasCloth) {
+                ImGui::MenuItem("No cloth grids in scene", nullptr, false, false);
+            }
+
+            ImGui::EndMenu();
+        }
+        
+        ImGui::Spacing();
+        ImGui::TextDisabled("Entities");
+        ImGui::Separator();
         const auto& entities = scene.GetRenderableEntities();
 
         std::vector<Entity> springVisualEntities;

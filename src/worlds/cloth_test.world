@@ -1,0 +1,105 @@
+[Settings]
+WindowSize 800 600
+TimeParams 60.0 3
+SeasonTemps 20.0 5.0 10.0
+WeatherIntervals 300.0 600.0
+WeatherDuration 0.0 0.0
+FireSuppression 15.0
+SunHeatBonus 0.0
+ProceduralObjectCount 0
+
+[Scene]
+Camera Default FreeRoam Camera2 7.5 22.5 40.0 0.0 0.0
+
+ProceduralTexture tex_checker_floor
+    Type Checker
+    Color1 0.2 0.2 0.2 1.0
+    Color2 0.8 0.8 0.8 1.0
+    Size 512
+    CellSize 64
+EndTexture
+
+ProceduralTexture tex_ball
+    Type Gradient
+    Color1 1.0 0.2 0.2 1.0
+    Color2 1.0 0.8 0.0 1.0
+    Size 512
+    Vertical true
+EndTexture
+
+# --- STATIC ENVIRONMENT ---
+
+Object FloorPlane
+    Type Grid
+    Params 10 10 1.0
+    Texture tex_checker_floor
+    Position 7.5 0.0 0.0
+    Rotation 0.0 0.0 0.0 
+    Scale 5.0 5.0 5.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true true
+    ColliderProps 1 0.0 1.0 0.0 25.0 25.0
+    Despawner true
+EndObject
+
+# --- DYNAMIC BALLS ---
+
+Object LeftBallSpawner
+    Type Spawner
+    Position 7.5 22.5 -25.0
+    SpawnerEnabled true
+    TriggerOnStartup true
+    SpawnerGroup B
+    SpawnInterval 1.0
+    SpawnerMaxSpawns 50
+    SpawnGeometry Sphere
+    SpawnTexture tex_ball
+    SpawnScale 1.2 1.2 1.2
+    SpawnVelocity 0.0 5.0 25.0
+    SpawnAngularVelocity 0.0 0.0 6.0
+    RandomSpawnVelocity false
+    SpawnVelocityRandomRange 0.0 0.0 0.0
+    RandomSpawnAngularVelocity false
+    SpawnAngularVelocityRandomRange 0.0 0.0 0.0
+    SpawnMass 5.0
+EndObject
+
+Object RightBallSpawner
+    Type Spawner
+    Position 7.5 22.5 25.0
+    SpawnerEnabled true
+    TriggerOnStartup true
+    SpawnerGroup B
+    SpawnInterval 1.0
+    SpawnerMaxSpawns 50
+    SpawnGeometry Sphere
+    SpawnTexture tex_ball
+    SpawnScale 1.2 1.2 1.2
+    SpawnVelocity 0.0 5.0 -25.0
+    SpawnAngularVelocity 0.0 6.0 0.0
+    RandomSpawnVelocity false
+    SpawnVelocityRandomRange 0.0 0.0 0.0
+    RandomSpawnAngularVelocity false
+    SpawnAngularVelocityRandomRange 0.0 0.0 0.0
+    SpawnMass 5.0
+EndObject
+
+# --- LIGHTING ---
+
+Object MainSun
+    Type Sphere
+    Params 0.5
+    Position 7.5 50.0 40.0
+    Light true 1.0 0.98 0.95 1.4 0
+    RenderProps 1 false false false 3
+    PhysicsProps false false true
+EndObject
+
+Object FillLight
+    Type Sphere
+    Params 0.35
+    Position 7.5 18.0 12.0
+    Light true 0.55 0.65 1.0 0.9 2
+    RenderProps 1 false false false 3
+    PhysicsProps false false true
+EndObject

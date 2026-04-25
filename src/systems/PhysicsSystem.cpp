@@ -120,7 +120,8 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
                 continue;
             }
 
-            for (Entity target : spring.connectedEntities) {
+            for (size_t j = 0; j < spring.connectedEntities.size(); ++j) {
+                Entity target = spring.connectedEntities[j];
                 if (target == MAX_ENTITIES || target >= entityCount) continue;
                 if (!transformArray->HasData(target)) continue;
 
@@ -135,7 +136,8 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
                 if (distance <= 0.0001f) continue;
                 glm::vec3 direction = deltaPos / distance;
 
-                float displacement = distance - spring.restingLength;
+                float currentRestingLength = (spring.restingLengths.size() > j) ? spring.restingLengths[j] : spring.restingLength;
+                float displacement = distance - currentRestingLength;
                 float springForceMagnitude = spring.stiffness * displacement;
 
                 glm::vec3 relativeVelocity = velB - velA;
@@ -309,6 +311,12 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
             auto& t2 = transformArray->GetData(j);
             auto& c2 = colliderArray->GetData(j);
             auto& p2 = physicsArray->GetData(j);
+
+            // Collision Filtering
+            if ((c1.collisionLayer & c2.collisionMask) == 0 || 
+                (c2.collisionLayer & c1.collisionMask) == 0) {
+                continue;
+            }
 
             // Sphere vs Sphere
             if (c1.type == 0 && c2.type == 0) { // Sphere vs Sphere
