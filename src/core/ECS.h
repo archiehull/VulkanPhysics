@@ -98,6 +98,9 @@ private:
     std::vector<bool> isAlive;  // Track which entities are currently alive to prevent double-free
     std::unordered_map<std::type_index, std::shared_ptr<IComponentArray>> componentArrays;
 
+
+
+public:
     template<typename T>
     std::shared_ptr<ComponentArray<T>> GetComponentArray() {
         auto type = std::type_index(typeid(T));
@@ -116,7 +119,6 @@ private:
         return std::static_pointer_cast<const ComponentArray<T>>(it->second);
     }
 
-public:
     Entity CreateEntity() {
         if (!availableEntities.empty()) {
             Entity id = availableEntities.front();

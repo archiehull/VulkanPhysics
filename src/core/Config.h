@@ -157,6 +157,7 @@ struct SceneObjectConfig {
     glm::vec3 spawnAngularVelocityRandomRange = glm::vec3(0.0f);
 
     float spawnMass = 1.0f;
+    float spawnLifespanSeconds = -1.0f;
 
     bool isDespawner = false;
 

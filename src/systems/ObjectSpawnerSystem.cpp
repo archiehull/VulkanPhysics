@@ -5,15 +5,26 @@
 #include <cctype>
 #include <cmath>
 #include <random>
+#include <vector>
 
 namespace {
-    std::string NormalizeSpawnerGroup(const std::string& group) {
-        if (group.empty()) return "A";
+    std::vector<Entity> g_TimedSpawnedEntities;
+
+    char NormalizeSpawnerGroup(const std::string& group) {
+        if (group.empty()) return 'A';
         char g = static_cast<char>(std::toupper(static_cast<unsigned char>(group[0])));
         if (g < 'A' || g > 'D') {
             g = 'A';
         }
-        return std::string(1, g);
+        return g;
+    }
+
+    char NormalizeSpawnerGroup(char group) {
+        char g = static_cast<char>(std::toupper(static_cast<unsigned char>(group)));
+        if (g < 'A' || g > 'D') {
+            g = 'A';
+        }
+        return g;
     }
 
     bool IsValidSpawner(Scene& scene, Entity entity) {
@@ -33,15 +44,51 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
     if (deltaTime <= 0.0f) return;
 
     auto& registry = scene.GetRegistry();
-    const Entity count = registry.GetEntityCount();
+    std::vector<Entity> expiredSpawnedEntities;
 
+    auto spawnedFromArray = registry.GetComponentArray<SpawnedFromSpawnerComponent>();
+    auto despawnerArray = registry.GetComponentArray<DespawnerComponent>();
+    auto spawnerArray = registry.GetComponentArray<ObjectSpawnerComponent>();
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+
+    if (!g_TimedSpawnedEntities.empty()) {
+        const Entity currentCount = registry.GetEntityCount();
+        g_TimedSpawnedEntities.erase(
+            std::remove_if(
+                g_TimedSpawnedEntities.begin(),
+                g_TimedSpawnedEntities.end(),
+                [&](Entity entity) {
+                    if (entity == MAX_ENTITIES || entity >= currentCount) {
+                        return true;
+                    }
+                    if (!spawnedFromArray->HasData(entity) || !despawnerArray->HasData(entity)) {
+                        return true;
+                    }
+
+                    auto& despawner = despawnerArray->GetData(entity);
+                    if (!despawner.enabled || despawner.remainingLifetimeSeconds <= 0.0f) {
+                        return false;
+                    }
+
+                    despawner.remainingLifetimeSeconds -= deltaTime;
+                    if (despawner.remainingLifetimeSeconds <= 0.0f) {
+                        expiredSpawnedEntities.push_back(entity);
+                        return true;
+                    }
+
+                    return false;
+                }),
+            g_TimedSpawnedEntities.end());
+    }
+
+    const Entity count = registry.GetEntityCount();
     for (Entity e = 0; e < count; ++e) {
-        if (!registry.HasComponent<ObjectSpawnerComponent>(e) ||
-            !registry.HasComponent<TransformComponent>(e)) {
+
+        if (!spawnerArray->HasData(e) || !transformArray->HasData(e)) {
             continue; 
         }
 
-        auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+        auto& spawner = spawnerArray->GetData(e);
         if (spawner.alwaysOn) {
             spawner.isRunning = true;
             spawner.runDurationSeconds = -1.0f;
@@ -87,6 +134,12 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
             spawner.spawnTimer = std::fmod(spawner.spawnTimer, interval);
         }
     }
+
+    for (Entity expired : expiredSpawnedEntities) {
+        if (expired < registry.GetEntityCount() && spawnedFromArray->HasData(expired)) {
+            scene.DeleteEntity(expired);
+        }
+    }
 }
 
 void ObjectSpawnerSystem::FireOnce(Scene& scene, Entity spawnerEntity) {
@@ -100,7 +153,7 @@ void ObjectSpawnerSystem::FireOnce(Scene& scene, Entity spawnerEntity) {
 void ObjectSpawnerSystem::FireGroup(Scene& scene, const std::string& group) {
     auto& registry = scene.GetRegistry();
     const Entity count = registry.GetEntityCount();
-    const std::string normalizedGroup = NormalizeSpawnerGroup(group);
+    const char normalizedGroup = NormalizeSpawnerGroup(group);
 
     for (Entity e = 0; e < count; ++e) {
         if (!registry.HasComponent<ObjectSpawnerComponent>(e) ||
@@ -130,7 +183,7 @@ void ObjectSpawnerSystem::StartSpawner(Scene& scene, Entity spawnerEntity) {
 void ObjectSpawnerSystem::StartGroup(Scene& scene, const std::string& group) {
     auto& registry = scene.GetRegistry();
     const Entity count = registry.GetEntityCount();
-    const std::string normalizedGroup = NormalizeSpawnerGroup(group);
+    const char normalizedGroup = NormalizeSpawnerGroup(group);
 
     for (Entity e = 0; e < count; ++e) {
         if (!IsValidSpawner(scene, e)) {
@@ -156,7 +209,7 @@ void ObjectSpawnerSystem::TriggerStartupSpawners(Scene& scene) {
         }
 
         auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
-        if (!spawner.triggerOnStartup) {
+        if (!spawner.triggerOnStartup && !spawner.alwaysOn) {
             continue;
         }
 
@@ -201,33 +254,58 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
         effectiveSpawnScale = axisScale * uniform;
     }
 
+    Entity spawnedEntity = MAX_ENTITIES;
     if (geometryType == "Cube") {
-        scene.AddCube(spawnedName, spawnPos, effectiveSpawnScale, spawner.spawnTexturePath);
+        spawnedEntity = scene.AddCube(spawnedName, spawnPos, effectiveSpawnScale, spawner.spawnTexturePath);
     }
     else if (geometryType == "Model" && !spawner.spawnModelPath.empty()) {
-        scene.AddModel(spawnedName, spawnPos, glm::vec3(0.0f), effectiveSpawnScale, spawner.spawnModelPath, spawner.spawnTexturePath, false);
+        spawnedEntity = scene.AddModel(spawnedName, spawnPos, glm::vec3(0.0f), effectiveSpawnScale, spawner.spawnModelPath, spawner.spawnTexturePath, false);
     }
     else {
-        scene.AddSphere(spawnedName, 16, 32, sphereBaseRadius, spawnPos, spawner.spawnTexturePath);
-        // Apply XYZ scaling for spheres (ellipsoid support) while keeping Object Scale as uniform size.
-        scene.SetObjectTransform(
-            spawnedName,
-            spawnPos,
-            glm::vec3(0.0f),
-            glm::vec3(
+        spawnedEntity = scene.AddSphere(spawnedName, 16, 32, sphereBaseRadius, spawnPos, spawner.spawnTexturePath);
+        if (spawnedEntity != MAX_ENTITIES && registry.HasComponent<TransformComponent>(spawnedEntity)) {
+            auto& spawnedTransform = registry.GetComponent<TransformComponent>(spawnedEntity);
+            spawnedTransform.position = spawnPos;
+            spawnedTransform.rotation = glm::vec3(0.0f);
+            spawnedTransform.scale = glm::vec3(
                 std::max(0.05f, spawner.spawnScale.x),
                 std::max(0.05f, spawner.spawnScale.y),
-                std::max(0.05f, spawner.spawnScale.z)));
+                std::max(0.05f, spawner.spawnScale.z));
+            spawnedTransform.UpdateMatrix();
+        }
     }
 
-    Entity spawnedEntity = scene.GetEntityByName(spawnedName);
     if (spawnedEntity == MAX_ENTITIES) return;
 
     registry.AddComponent<SpawnedFromSpawnerComponent>(spawnedEntity, { spawnerEntity });
+    if (spawner.spawnLifespanSeconds > 0.0f) {
+        if (registry.HasComponent<DespawnerComponent>(spawnedEntity)) {
+            auto& despawner = registry.GetComponent<DespawnerComponent>(spawnedEntity);
+            despawner.enabled = true;
+            despawner.remainingLifetimeSeconds = spawner.spawnLifespanSeconds;
+        }
+        else {
+            registry.AddComponent<DespawnerComponent>(spawnedEntity, { true, spawner.spawnLifespanSeconds });
+        }
+        g_TimedSpawnedEntities.push_back(spawnedEntity);
+    }
 
-    scene.SetObjectCollision(spawnedName, true);
-    scene.SetObjectPhysics(spawnedName, false, std::max(0.01f, spawner.spawnMass));
-    scene.SetObjectCollider(spawnedName, 0, std::max(0.1f, std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f), glm::vec3(0.0f, 1.0f, 0.0f));
+    if (!registry.HasComponent<PhysicsComponent>(spawnedEntity)) {
+        registry.AddComponent<PhysicsComponent>(spawnedEntity, PhysicsComponent{});
+    }
+    if (!registry.HasComponent<ColliderComponent>(spawnedEntity)) {
+        registry.AddComponent<ColliderComponent>(spawnedEntity, ColliderComponent{});
+    }
+
+    auto& collider = registry.GetComponent<ColliderComponent>(spawnedEntity);
+    collider.hasCollision = true;
+    collider.type = 0;
+    collider.radius = std::max(0.1f, std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f);
+    collider.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    auto& phys = registry.GetComponent<PhysicsComponent>(spawnedEntity);
+    phys.isStatic = false;
+    phys.SetMass(std::max(0.01f, spawner.spawnMass));
 
     glm::vec3 velocity = spawner.spawnVelocity;
     if (spawner.randomizeVelocity) {
@@ -254,10 +332,6 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
         angVel.z += aZ(rng_ang);
     }
 
-    if (registry.HasComponent<PhysicsComponent>(spawnedEntity)) {
-        auto& phys = registry.GetComponent<PhysicsComponent>(spawnedEntity);
-        phys.isStatic = false;
-        phys.velocity = velocity;
-        phys.angularVelocity = angVel; // assign initial spin
-    }
+    phys.velocity = velocity;
+    phys.angularVelocity = angVel; // assign initial spin
 }

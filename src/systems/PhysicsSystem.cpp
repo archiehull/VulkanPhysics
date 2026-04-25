@@ -6,6 +6,7 @@
 #include <PhysicsHelper.h>
 #include <cmath>
 #include <unordered_set>
+#include <vector>
 
 // Default settings
 int PhysicsSystem::subSteps = 4;
@@ -75,21 +76,25 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
     const float dt = deltaTime / static_cast<float>(subSteps);
 
+    auto springArray = registry.GetComponentArray<SpringComponent>();
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+
     // 1. Move the sub-step loop to wrap ALL physics force applications
     for (int i = 0; i < subSteps; ++i) {
         
         // --- Spring forces: iterate entities with SpringComponent ---
         const Entity entityCount = registry.GetEntityCount();
         for (Entity e = 0; e < entityCount; ++e) {
-            if (!registry.HasComponent<SpringComponent>(e) ||
-                !registry.HasComponent<TransformComponent>(e) ||
-                !registry.HasComponent<PhysicsComponent>(e)) {
+            if (!springArray->HasData(e) ||
+                !transformArray->HasData(e) ||
+                !physicsArray->HasData(e)) {
                 continue;
             }
 
-            auto& spring = registry.GetComponent<SpringComponent>(e);
-            auto& transformA = registry.GetComponent<TransformComponent>(e);
-            auto& physicsA = registry.GetComponent<PhysicsComponent>(e);
+            auto& spring = springArray->GetData(e);
+            auto& transformA = transformArray->GetData(e);
+            auto& physicsA = physicsArray->GetData(e);
 
             glm::vec3 posA = transformA.position;
             glm::vec3 velA = physicsA.velocity;
@@ -117,12 +122,12 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
 
             for (Entity target : spring.connectedEntities) {
                 if (target == MAX_ENTITIES || target >= entityCount) continue;
-                if (!registry.HasComponent<TransformComponent>(target)) continue;
+                if (!transformArray->HasData(target)) continue;
 
-                glm::vec3 posB = registry.GetComponent<TransformComponent>(target).position;
+                glm::vec3 posB = transformArray->GetData(target).position;
                 glm::vec3 velB = glm::vec3(0.0f);
-                if (registry.HasComponent<PhysicsComponent>(target)) {
-                    velB = registry.GetComponent<PhysicsComponent>(target).velocity;
+                if (physicsArray->HasData(target)) {
+                    velB = physicsArray->GetData(target).velocity;
                 }
 
                 glm::vec3 deltaPos = posB - posA;
@@ -140,8 +145,8 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
                 glm::vec3 totalForceOnA = direction * (springForceMagnitude + dampingForceMagnitude);
 
                 physicsA.ApplyForce(totalForceOnA);
-                if (registry.HasComponent<PhysicsComponent>(target)) {
-                    auto& physicsB = registry.GetComponent<PhysicsComponent>(target);
+                if (physicsArray->HasData(target)) {
+                    auto& physicsB = physicsArray->GetData(target);
                     physicsB.ApplyForce(-totalForceOnA);
                 }
             }
@@ -151,13 +156,32 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
         Integrate(registry, dt);
         ResolveCollisions(scene, registry, dt);
     }
+
+    // 3. Update transforms once per frame after all sub-steps
+    const Entity entityCount = registry.GetEntityCount();
+    for (Entity i = 0; i < entityCount; ++i) {
+        if (transformArray->HasData(i) && physicsArray->HasData(i)) {
+            auto& transform = transformArray->GetData(i);
+            auto& physics = physicsArray->GetData(i);
+            if (!physics.isStatic) {
+                glm::mat4 translation = glm::translate(glm::mat4(1.0f), transform.position);
+                glm::mat4 rotationMat = glm::mat4(physics.orientation);
+                glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), transform.scale);
+                transform.matrix = translation * rotationMat * scaleMat;
+            }
+        }
+    }
 }
 
 void PhysicsSystem::Integrate(Registry& registry, float dt) {
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+    auto colliderArray = registry.GetComponentArray<ColliderComponent>();
+
     for (Entity i = 0; i < registry.GetEntityCount(); ++i) {
-        if (registry.HasComponent<TransformComponent>(i) && registry.HasComponent<PhysicsComponent>(i)) {
-            auto& transform = registry.GetComponent<TransformComponent>(i);
-            auto& physics = registry.GetComponent<PhysicsComponent>(i);
+        if (transformArray->HasData(i) && physicsArray->HasData(i)) {
+            auto& transform = transformArray->GetData(i);
+            auto& physics = physicsArray->GetData(i);
 
             if (!physics.isStatic && physics.inverseMass > 0.0f) {
                 if (applyGravity) {
@@ -167,8 +191,8 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
 
                 // Use helper API directly for damping/drag
                 float colRadius = 1.0f;
-                if (registry.HasComponent<ColliderComponent>(i)) {
-                    colRadius = registry.GetComponent<ColliderComponent>(i).radius;
+                if (colliderArray->HasData(i)) {
+                    colRadius = colliderArray->GetData(i).radius;
                 }
 
                 MovingSphere helperBody(transform.position, colRadius, physics.velocity, physics.inverseMass, physics.restitution);
@@ -227,13 +251,6 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                 physics.torqueAccumulator = helperBody.torqueAccumulator; // should be cleared by integrator
 
                 physics.forceAccumulator = glm::vec3(0.0f);
-
-                // Sync orientation + position + scale into transform.matrix for renderer
-                glm::mat4 translation = glm::translate(glm::mat4(1.0f), transform.position);
-                glm::mat4 rotationMat = glm::mat4(physics.orientation);
-                glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), transform.scale);
-                transform.matrix = translation * rotationMat * scaleMat;
-                // Note: Do not call UpdateMatrix() which would overwrite matrix from Euler degrees
             }
         }
     }
@@ -253,11 +270,14 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
     bool useForce = (currentResolutionMethod == ResolutionMethod::Force);
     std::unordered_set<Entity> pendingDelete;
 
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto colliderArray = registry.GetComponentArray<ColliderComponent>();
+    auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+    auto despawnerArray = registry.GetComponentArray<DespawnerComponent>();
+
     auto queueDespawnerDeletion = [&](Entity a, Entity b, const PhysicsComponent& physA, const PhysicsComponent& physB) {
-        const bool aIsDespawner = registry.HasComponent<DespawnerComponent>(a) &&
-            registry.GetComponent<DespawnerComponent>(a).enabled;
-        const bool bIsDespawner = registry.HasComponent<DespawnerComponent>(b) &&
-            registry.GetComponent<DespawnerComponent>(b).enabled;
+        const bool aIsDespawner = despawnerArray->HasData(a) && despawnerArray->GetData(a).enabled;
+        const bool bIsDespawner = despawnerArray->HasData(b) && despawnerArray->GetData(b).enabled;
 
         if (aIsDespawner && !bIsDespawner && !physB.isStatic) {
             pendingDelete.insert(b);
@@ -267,17 +287,28 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
         }
     };
 
+    // Phase 2 Optimization: Dense active colliders list
+    std::vector<Entity> activeColliders;
+    activeColliders.reserve(entityCount);
     for (Entity i = 0; i < entityCount; ++i) {
-        for (Entity j = i + 1; j < entityCount; ++j) {
-            if (!IsCollidable(registry, i) || !IsCollidable(registry, j)) continue;
+        if (transformArray->HasData(i) && colliderArray->HasData(i) && physicsArray->HasData(i)) {
+            activeColliders.push_back(i);
+        }
+    }
 
-            auto& t1 = registry.GetComponent<TransformComponent>(i);
-            auto& c1 = registry.GetComponent<ColliderComponent>(i);
-            auto& p1 = registry.GetComponent<PhysicsComponent>(i);
+    const size_t activeCount = activeColliders.size();
+    for (size_t iIdx = 0; iIdx < activeCount; ++iIdx) {
+        Entity i = activeColliders[iIdx];
+        for (size_t jIdx = iIdx + 1; jIdx < activeCount; ++jIdx) {
+            Entity j = activeColliders[jIdx];
 
-            auto& t2 = registry.GetComponent<TransformComponent>(j);
-            auto& c2 = registry.GetComponent<ColliderComponent>(j);
-            auto& p2 = registry.GetComponent<PhysicsComponent>(j);
+            auto& t1 = transformArray->GetData(i);
+            auto& c1 = colliderArray->GetData(i);
+            auto& p1 = physicsArray->GetData(i);
+
+            auto& t2 = transformArray->GetData(j);
+            auto& c2 = colliderArray->GetData(j);
+            auto& p2 = physicsArray->GetData(j);
 
             // Sphere vs Sphere
             if (c1.type == 0 && c2.type == 0) { // Sphere vs Sphere
@@ -367,7 +398,7 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
     }
 
     for (Entity e : pendingDelete) {
-        if (!registry.HasComponent<PhysicsComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
+        if (!physicsArray->HasData(e) || !transformArray->HasData(e)) {
             continue;
         }
         scene.DeleteEntity(e);

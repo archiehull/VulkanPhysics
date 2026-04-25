@@ -30,14 +30,17 @@ void AnimationSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
     const Entity entityCount = registry.GetEntityCount();
 
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto pathArray = registry.GetComponentArray<PathAnimationComponent>();
+    auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+
     for (Entity e = 0; e < entityCount; ++e) {
-        if (!registry.HasComponent<TransformComponent>(e) ||
-            !registry.HasComponent<PathAnimationComponent>(e)) {
+        if (!transformArray->HasData(e) || !pathArray->HasData(e)) {
             continue;
         }
 
-        auto& transform = registry.GetComponent<TransformComponent>(e);
-        auto& path = registry.GetComponent<PathAnimationComponent>(e);
+        auto& transform = transformArray->GetData(e);
+        auto& path = pathArray->GetData(e);
 
         InitializePath(path, transform);
         if (path.waypoints.empty()) {
@@ -99,13 +102,15 @@ void AnimationSystem::Update(Scene& scene, float deltaTime) {
         path.lastEvaluatedPosition = worldPosition;
         path.hasLastEvaluatedPosition = true;
 
-        if (registry.HasComponent<PhysicsComponent>(e)) {
-            auto& physics = registry.GetComponent<PhysicsComponent>(e);
+        if (physicsArray->HasData(e)) {
+            auto& physics = physicsArray->GetData(e);
             physics.velocity = velocity;
             physics.forceAccumulator = glm::vec3(0.0f);
             physics.torqueAccumulator = glm::vec3(0.0f);
-            physics.isStatic = true;
-            physics.SetMass(0.0f);
+            if (!physics.isStatic || physics.mass != 0.0f || physics.inverseMass != 0.0f) {
+                physics.isStatic = true;
+                physics.SetMass(0.0f);
+            }
         }
     }
 }

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <random>
 #include <cmath>
+#include <cctype>
 #include <unordered_set>
 #include "../util/AnimationMath.h"
 
@@ -161,9 +162,7 @@ void Scene::SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity) {
     static int ballCount = 0;
     std::string name = "DynamicBall_" + std::to_string(ballCount++);
 
-    AddSphere(name, 16, 16, 1.0f, pos, "textures/default.jpg");
-
-    Entity e = GetEntityByName(name);
+    Entity e = AddSphere(name, 16, 16, 1.0f, pos, "textures/default.jpg");
 
     if (!m_Registry.HasComponent<PhysicsComponent>(e)) {
         m_Registry.AddComponent<PhysicsComponent>(e, PhysicsComponent{});
@@ -504,7 +503,7 @@ void Scene::AddPedestal(const std::string& name, float topRadius, float baseWidt
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "pedestal";
 }
 
-void Scene::AddCube(const std::string& name, const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
+Entity Scene::AddCube(const std::string& name, const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
     auto geo = GeometryGenerator::CreateCube(device, physicalDevice);
     Entity entity = AddObjectInternal(name, std::move(geo), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "cube";
@@ -512,6 +511,7 @@ void Scene::AddCube(const std::string& name, const glm::vec3& position, const gl
     auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
     transform.scale = scale;
     transform.UpdateMatrix();
+    return entity;
 }
 
 void Scene::AddGrid(const std::string& name, int rows, int cols, float cellSize, const glm::vec3& position, const std::string& texturePath) {
@@ -519,16 +519,17 @@ void Scene::AddGrid(const std::string& name, int rows, int cols, float cellSize,
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "grid";
 }
 
-void Scene::AddSphere(const std::string& name, int stacks, int slices, float radius, const glm::vec3& position, const std::string& texturePath) {
+Entity Scene::AddSphere(const std::string& name, int stacks, int slices, float radius, const glm::vec3& position, const std::string& texturePath) {
     Entity entity = AddObjectInternal(name, GeometryGenerator::CreateSphere(device, physicalDevice, stacks, slices, radius), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "sphere";
+    return entity;
 }
 
 void Scene::AddGeometry(const std::string& name, std::unique_ptr<Geometry> geometry, const glm::vec3& position) {
     AddObjectInternal(name, std::move(geometry), position, "", false);
 }
 
-void Scene::AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable) {
+Entity Scene::AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable) {
     try {
         std::shared_ptr<Geometry> geometry;
         std::string ext = modelPath.substr(modelPath.find_last_of(".") + 1);
@@ -547,10 +548,14 @@ void Scene::AddModel(const std::string& name, const glm::vec3& position, const g
         transform.rotation = rotation;
         transform.scale = scale;
         transform.UpdateMatrix();
+
+        return entity;
     }
     catch (const std::exception& e) {
         std::cerr << "Failed to add model '" << modelPath << "': " << e.what() << std::endl;
     }
+
+    return MAX_ENTITIES;
 }
 
 void Scene::CreateSimpleShadowEntity(Entity targetEntity) {
@@ -1431,16 +1436,16 @@ void Scene::UpdateSpawnerVisuals() {
         const auto& transform = registry.GetComponent<TransformComponent>(e);
         const glm::vec3 basePos = transform.position;
 
-        std::string group = spawner.group;
-        if (group.empty()) {
-            group = "A";
+        char group = static_cast<char>(std::toupper(static_cast<unsigned char>(spawner.group)));
+        if (group < 'A' || group > 'D') {
+            group = 'A';
         }
 
         glm::vec4 color(1.0f, 0.7f, 0.1f, 1.0f);
-        if (group == "A") color = glm::vec4(0.2f, 0.9f, 1.0f, 1.0f);
-        else if (group == "B") color = glm::vec4(1.0f, 0.45f, 0.2f, 1.0f);
-        else if (group == "C") color = glm::vec4(0.5f, 1.0f, 0.3f, 1.0f);
-        else if (group == "D") color = glm::vec4(1.0f, 0.3f, 0.9f, 1.0f);
+        if (group == 'A') color = glm::vec4(0.2f, 0.9f, 1.0f, 1.0f);
+        else if (group == 'B') color = glm::vec4(1.0f, 0.45f, 0.2f, 1.0f);
+        else if (group == 'C') color = glm::vec4(0.5f, 1.0f, 0.3f, 1.0f);
+        else if (group == 'D') color = glm::vec4(1.0f, 0.3f, 0.9f, 1.0f);
 
         if (spawner.triggerOnStartup) {
             color = glm::vec4(

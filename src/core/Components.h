@@ -291,7 +291,7 @@ struct ObjectSpawnerComponent {
     bool alwaysOn = true;
     bool isRunning = true;
     bool triggerOnStartup = false;
-    std::string group = "A";
+    char group = 'A';
 
     float spawnInterval = 1.0f;
     float spawnTimer = 0.0f;
@@ -317,6 +317,7 @@ struct ObjectSpawnerComponent {
     glm::vec3 randomAngularVelocityRange = glm::vec3(0.0f);
 
     float spawnMass = 1.0f;
+    float spawnLifespanSeconds = -1.0f; // -1 = no auto-despawn timer
     int spawnedCount = 0;
 };
 
@@ -326,6 +327,7 @@ struct SpawnedFromSpawnerComponent {
 
 struct DespawnerComponent {
     bool enabled = true;
+    float remainingLifetimeSeconds = -1.0f; // -1 = collision-only despawner behavior
 };
 
 // 10. Camera Data

@@ -595,15 +595,13 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 const ImVec4 fireBtnActive = ImVec4(0.62f, 0.10f, 0.10f, 1.0f);
 
                 const char* groupOptions[] = { "A", "B", "C", "D" };
-                char groupChar = spawner.group.empty()
-                    ? 'A'
-                    : static_cast<char>(std::toupper(static_cast<unsigned char>(spawner.group[0])));
+                char groupChar = static_cast<char>(std::toupper(static_cast<unsigned char>(spawner.group)));
                 if (groupChar < 'A' || groupChar > 'D') {
                     groupChar = 'A';
                 }
                 int groupIndex = groupChar - 'A';
                 if (ImGui::Combo("Group", &groupIndex, groupOptions, IM_ARRAYSIZE(groupOptions))) {
-                    spawner.group = groupOptions[groupIndex];
+                    spawner.group = static_cast<char>('A' + groupIndex);
                 }
 
                 const bool alwaysOnChanged = ImGui::Checkbox("Always On", &spawner.alwaysOn);
@@ -662,6 +660,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 ImGui::DragFloat("Object Scale", &spawner.spawnObjectScale, 0.05f, 0.05f, 100.0f);
                 ImGui::DragFloat3("Object Scale XYZ", &spawner.spawnScale.x, 0.05f, 0.05f, 100.0f);
                 ImGui::DragFloat("Spawn Mass", &spawner.spawnMass, 0.1f, 0.01f, 1000.0f);
+                ImGui::DragFloat("Spawn Lifespan (s, -1 inf)", &spawner.spawnLifespanSeconds, 0.1f, -1.0f, 600.0f);
 
                 const char* geometryTypes[] = { "Sphere", "Cube", "Model" };
                 int geometryIndex = 0;

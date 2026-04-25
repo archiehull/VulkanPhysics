@@ -323,9 +323,14 @@ void Application::SetupScene() {
 
             ObjectSpawnerComponent spawner;
             spawner.alwaysOn = objCfg.spawnerEnabled;
-            spawner.isRunning = objCfg.spawnerEnabled;
+            spawner.isRunning = objCfg.spawnerEnabled || objCfg.spawnerTriggerOnStartup;
             spawner.triggerOnStartup = objCfg.spawnerTriggerOnStartup;
-            spawner.group = objCfg.spawnerGroup;
+            spawner.group = objCfg.spawnerGroup.empty()
+                ? 'A'
+                : static_cast<char>(std::toupper(static_cast<unsigned char>(objCfg.spawnerGroup[0])));
+            if (spawner.group < 'A' || spawner.group > 'D') {
+                spawner.group = 'A';
+            }
             spawner.spawnInterval = objCfg.spawnInterval;
             spawner.runDurationSeconds = objCfg.spawnerRunDurationSeconds;
             spawner.maxSpawnsPerRun = objCfg.spawnerMaxSpawnsPerRun;
@@ -342,6 +347,7 @@ void Application::SetupScene() {
             spawner.randomizeAngularVelocity = objCfg.randomizeSpawnAngularVelocity;
             spawner.randomAngularVelocityRange = objCfg.spawnAngularVelocityRandomRange;
             spawner.spawnMass = objCfg.spawnMass;
+            spawner.spawnLifespanSeconds = objCfg.spawnLifespanSeconds;
 
             if (spawner.alwaysOn) {
                 spawner.runDurationSeconds = -1.0f;

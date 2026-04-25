@@ -404,6 +404,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 ss >> currentObject->spawnAngularVelocityRandomRange.x >> currentObject->spawnAngularVelocityRandomRange.y >> currentObject->spawnAngularVelocityRandomRange.z;
             }
             else if (key == "SpawnMass") ss >> currentObject->spawnMass;
+            else if (key == "SpawnLifespan") ss >> currentObject->spawnLifespanSeconds;
             else if (key == "Despawner") {
                 std::string value;
                 ss >> value;

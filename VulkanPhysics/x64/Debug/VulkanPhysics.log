@@ -1,2 +1,22 @@
-﻿  EditorUI_DrawWindows.cpp
+﻿  Application.cpp
+  main.cpp
+  EditorUI.cpp
+  EditorUI_DrawMainMenu.cpp
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI_DrawMainMenu.cpp(1325,43): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+  EditorUI_DrawWindows.cpp
+  CameraController.cpp
+  Renderer.cpp
+  Scene.cpp
+  SkyboxPass.cpp
+  AnimationSystem.cpp
+  CameraSystem.cpp
+  ObjectSpawnerSystem.cpp
+  OrbitSystem.cpp
+  ParticleUpdateSystem.cpp
+  PhysicsSystem.cpp
+  SimpleShadowSystem.cpp
+  ThermodynamicsSystem.cpp
+  TimeSystem.cpp
+  WeatherSystem.cpp
+  Generating Code...
   VulkanPhysics.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Debug\VulkanPhysics.exe

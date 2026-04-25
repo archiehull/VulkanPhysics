@@ -113,7 +113,7 @@ public:
         quadraticDragEnabled = m_QuadraticDragEnabled;
         quadraticDragCoeff = m_QuadraticDragCoeff;
         return true;
-    }
+    }   
 
     bool ConsumeSpringVisualizationRequest(bool& enabled) {
         if (!m_SpringVisualizationChanged) {
