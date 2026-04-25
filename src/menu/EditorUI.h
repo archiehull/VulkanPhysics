@@ -134,6 +134,20 @@ public:
         enabled = m_ShowSpawnerVisuals;
         return true;
     }
+    bool ConsumeGenerateLookaheadRequest(float& outTimeframe) {
+        if (m_GenerateLookaheadRequested) {
+            outTimeframe = m_LookaheadTimeframe;
+            m_GenerateLookaheadRequested = false;
+            return true;
+        }
+        return false;
+    }
+
+    bool IsReplaying() const { return m_IsReplaying; }
+    void SetIsReplaying(bool isReplaying) { m_IsReplaying = isReplaying; }
+    int GetReplayFrame() const { return m_CurrentReplayFrame; }
+    void SetReplayFrame(int frame) { m_CurrentReplayFrame = frame; }
+    void SetMaxReplayFrames(int maxFrames) { m_MaxReplayFrames = maxFrames; }
 
 private:
     void DrawMainMenuSection(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget, std::string& sceneToLoad, Entity& entityToDelete);
@@ -201,4 +215,10 @@ private:
     bool m_ShowSpawnerVisuals = false;
     bool m_SpawnerVisualizationChanged = false;
 
+    // Lookahead Replay UI state
+    bool m_IsReplaying = false;
+    int m_CurrentReplayFrame = 0;
+    int m_MaxReplayFrames = 0;
+    bool m_GenerateLookaheadRequested = false;
+    float m_LookaheadTimeframe = 5.0f;
 };

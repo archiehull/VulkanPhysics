@@ -114,5 +114,26 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
     // Post main-menu section performs cleanup actions such as handling entity deletions
     DrawPostMainMenuSection(scene, entityToDelete);
 
+    if (m_IsReplaying) {
+        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImVec2 window_pos = ImVec2(viewport->WorkPos.x + viewport->WorkSize.x / 2.0f, viewport->WorkPos.y + viewport->WorkSize.y - 20.0f);
+        ImVec2 window_pos_pivot = ImVec2(0.5f, 1.0f);
+        ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, window_pos_pivot);
+        ImGui::SetNextWindowBgAlpha(0.7f); // Transparent background
+        if (ImGui::Begin("Replay Scrubber", nullptr, window_flags)) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "REPLAY MODE ACTIVE");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(viewport->WorkSize.x * 0.5f);
+            ImGui::SliderInt("##Scrubber", &m_CurrentReplayFrame, 0, std::max(0, m_MaxReplayFrames - 1), "Frame %d");
+            
+            ImGui::SameLine();
+            if (ImGui::Button("Exit")) {
+                m_IsReplaying = false;
+            }
+        }
+        ImGui::End();
+    }
+
     return sceneToLoad;
 }

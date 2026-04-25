@@ -14,6 +14,31 @@
 
 #include <memory>
 #include <chrono>
+#include <unordered_map>
+
+struct EntitySnapshot {
+    glm::vec3 position;
+    glm::vec3 rotation;
+    glm::vec3 scale;
+    bool visible;
+    float lightIntensity;
+
+    // Physics state
+    bool hasPhysics = false;
+    glm::vec3 velocity;
+    glm::vec3 angularVelocity;
+    bool isStatic;
+    glm::vec3 forceAccumulator;
+    glm::vec3 torqueAccumulator;
+
+    // Collider state
+    bool hasCollider = false;
+    bool hasCollision;
+};
+
+struct FrameSnapshot {
+    std::unordered_map<Entity, EntitySnapshot> entities;
+};
 
 class Application final {
 public:
@@ -29,6 +54,8 @@ private:
     void Cleanup();
     void RecreateSwapChain();
     void ReloadCurrentScene();
+
+    void GenerateLookahead(float timeframe);
 
     void LoadScene(const std::string& scenePath);
 
@@ -61,6 +88,12 @@ private:
 
     uint32_t currentFrame = 0;
     bool framebufferResized = false;
+
+    // Lookahead Replay State
+    std::vector<FrameSnapshot> m_ReplayFrames;
+    bool m_IsReplaying = false;
+    int m_CurrentReplayFrame = 0;
+    float m_LookaheadTimeframe = 5.0f;
 
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 };

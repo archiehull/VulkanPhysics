@@ -304,6 +304,27 @@ void Scene::RemoveRenderComponent(Entity entity) {
     }
 }
 
+void Scene::DeactivateEntityForLookahead(Entity e) {
+    if (e == MAX_ENTITIES || e >= m_Registry.GetEntityCount()) return;
+
+    if (m_Registry.HasComponent<RenderComponent>(e)) {
+        m_Registry.GetComponent<RenderComponent>(e).visible = false;
+    }
+    if (m_Registry.HasComponent<ColliderComponent>(e)) {
+        m_Registry.GetComponent<ColliderComponent>(e).hasCollision = false;
+    }
+    if (m_Registry.HasComponent<PhysicsComponent>(e)) {
+        auto& phys = m_Registry.GetComponent<PhysicsComponent>(e);
+        phys.isStatic = true;
+        phys.velocity = glm::vec3(0.0f);
+        phys.forceAccumulator = glm::vec3(0.0f);
+        phys.angularVelocity = glm::vec3(0.0f);
+    }
+    if (m_Registry.HasComponent<LightComponent>(e)) {
+        m_Registry.GetComponent<LightComponent>(e).intensity = 0.0f;
+    }
+}
+
 void Scene::ToggleGlobalShadingMode() {
     globalShadingMode = (globalShadingMode == 1) ? 0 : 1;
 

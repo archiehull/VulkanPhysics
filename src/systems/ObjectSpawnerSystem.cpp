@@ -137,7 +137,11 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
 
     for (Entity expired : expiredSpawnedEntities) {
         if (expired < registry.GetEntityCount() && spawnedFromArray->HasData(expired)) {
-            scene.DeleteEntity(expired);
+            if (scene.IsLookaheadMode()) {
+                scene.DeactivateEntityForLookahead(expired);
+            } else {
+                scene.DeleteEntity(expired);
+            }
         }
     }
 }

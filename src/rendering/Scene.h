@@ -191,6 +191,10 @@ public:
     void SetSpawnerVisualizationEnabled(bool enabled);
     bool GetSpawnerVisualizationEnabled() const { return m_ShowSpawnerVisuals; }
 
+    bool IsLookaheadMode() const { return m_IsLookaheadMode; }
+    void SetLookaheadMode(bool mode) { m_IsLookaheadMode = mode; }
+    void DeactivateEntityForLookahead(Entity e);
+
 private:
     void FlushDeferredGeometryCleanup();
     void UpdateSpringVisuals();
@@ -246,5 +250,6 @@ private:
     bool m_RegionsOnlyDebugView = false;
     bool m_ShowSpringVisuals = false;
     bool m_ShowSpawnerVisuals = false;
+    bool m_IsLookaheadMode = false;
     float m_ElapsedTime = 0.0f;
 };

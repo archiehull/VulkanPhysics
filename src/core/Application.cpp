@@ -785,6 +785,68 @@ void Application::RecreateSwapChain() {
     framebufferResized = false;
 }
 
+void Application::GenerateLookahead(float timeframe) {
+    if (!scene) return;
+
+    std::cout << "Generating lookahead for " << timeframe << " seconds..." << std::endl;
+    m_ReplayFrames.clear();
+
+    const float stepTime = 1.0f / 60.0f;
+    const int steps = static_cast<int>(timeframe / stepTime);
+
+    // Save original state to restore if needed, but since we are applying the lookahead,
+    // the user will scrub back if they want the past.
+    scene->SetLookaheadMode(true);
+
+    for (int i = 0; i < steps; ++i) {
+        scene->Update(stepTime);
+
+        FrameSnapshot snapshot;
+        auto& registry = scene->GetRegistry();
+        const Entity entityCount = registry.GetEntityCount();
+        for (Entity e = 0; e < entityCount; ++e) {
+            if (registry.HasComponent<TransformComponent>(e) && registry.HasComponent<RenderComponent>(e)) {
+                EntitySnapshot eSnap;
+                auto& t = registry.GetComponent<TransformComponent>(e);
+                eSnap.position = t.position;
+                eSnap.rotation = t.rotation;
+                eSnap.scale = t.scale;
+                eSnap.visible = registry.GetComponent<RenderComponent>(e).visible;
+                if (registry.HasComponent<LightComponent>(e)) {
+                    eSnap.lightIntensity = registry.GetComponent<LightComponent>(e).intensity;
+                } else {
+                    eSnap.lightIntensity = 0.0f;
+                }
+                
+                if (registry.HasComponent<PhysicsComponent>(e)) {
+                    eSnap.hasPhysics = true;
+                    auto& phys = registry.GetComponent<PhysicsComponent>(e);
+                    eSnap.velocity = phys.velocity;
+                    eSnap.angularVelocity = phys.angularVelocity;
+                    eSnap.isStatic = phys.isStatic;
+                    eSnap.forceAccumulator = phys.forceAccumulator;
+                    eSnap.torqueAccumulator = phys.torqueAccumulator;
+                }
+                
+                if (registry.HasComponent<ColliderComponent>(e)) {
+                    eSnap.hasCollider = true;
+                    eSnap.hasCollision = registry.GetComponent<ColliderComponent>(e).hasCollision;
+                }
+
+                snapshot.entities[e] = eSnap;
+            }
+        }
+        m_ReplayFrames.push_back(snapshot);
+    }
+
+    scene->SetLookaheadMode(false);
+    
+    // Pass the generated frames count to UI
+    editorUI->SetMaxReplayFrames(static_cast<int>(m_ReplayFrames.size()));
+    editorUI->SetReplayFrame(0);
+    std::cout << "Lookahead generation complete. " << m_ReplayFrames.size() << " frames recorded." << std::endl;
+}
+
 void Application::MainLoop() {
     bool hasPendingVSyncApply = false;
     bool pendingVSync = config.vsync;
@@ -976,8 +1038,69 @@ void Application::MainLoop() {
         const auto updateStart = std::chrono::high_resolution_clock::now();
         cameraController->Update(simDeltaTime, *scene, *inputManager);
 
-        // 4. Update the scene with the calculated delta
-        scene->Update(stepDelta);
+        // --- Replay Mode Override ---
+        if (editorUI->ConsumeGenerateLookaheadRequest(m_LookaheadTimeframe)) {
+            GenerateLookahead(m_LookaheadTimeframe);
+            editorUI->SetIsReplaying(true);
+        }
+
+        if (editorUI->IsReplaying()) {
+            m_IsReplaying = true;
+            m_CurrentReplayFrame = editorUI->GetReplayFrame();
+
+            if (!m_ReplayFrames.empty() && m_CurrentReplayFrame >= 0 && m_CurrentReplayFrame < m_ReplayFrames.size()) {
+                const auto& snapshot = m_ReplayFrames[m_CurrentReplayFrame];
+                auto& registry = scene->GetRegistry();
+                const Entity entityCount = registry.GetEntityCount();
+                for (Entity e = 0; e < entityCount; ++e) {
+                    if (registry.HasComponent<TransformComponent>(e) && registry.HasComponent<RenderComponent>(e)) {
+                        auto it = snapshot.entities.find(e);
+                        if (it != snapshot.entities.end()) {
+                            auto& t = registry.GetComponent<TransformComponent>(e);
+                            t.position = it->second.position;
+                            t.rotation = it->second.rotation;
+                            t.scale = it->second.scale;
+                            t.UpdateMatrix();
+                            registry.GetComponent<RenderComponent>(e).visible = it->second.visible;
+                            if (registry.HasComponent<LightComponent>(e)) {
+                                registry.GetComponent<LightComponent>(e).intensity = it->second.lightIntensity;
+                            }
+                            if (it->second.hasPhysics && registry.HasComponent<PhysicsComponent>(e)) {
+                                auto& phys = registry.GetComponent<PhysicsComponent>(e);
+                                phys.velocity = it->second.velocity;
+                                phys.angularVelocity = it->second.angularVelocity;
+                                phys.isStatic = it->second.isStatic;
+                                phys.forceAccumulator = it->second.forceAccumulator;
+                                phys.torqueAccumulator = it->second.torqueAccumulator;
+                            }
+                            if (it->second.hasCollider && registry.HasComponent<ColliderComponent>(e)) {
+                                registry.GetComponent<ColliderComponent>(e).hasCollision = it->second.hasCollision;
+                            }
+                        } else {
+                            // Entity was spawned after this frame, so hide it
+                            registry.GetComponent<RenderComponent>(e).visible = false;
+                            if (registry.HasComponent<LightComponent>(e)) {
+                                registry.GetComponent<LightComponent>(e).intensity = 0.0f;
+                            }
+                            if (registry.HasComponent<ColliderComponent>(e)) {
+                                registry.GetComponent<ColliderComponent>(e).hasCollision = false;
+                            }
+                            if (registry.HasComponent<PhysicsComponent>(e)) {
+                                auto& phys = registry.GetComponent<PhysicsComponent>(e);
+                                phys.isStatic = true;
+                                phys.velocity = glm::vec3(0.0f);
+                                phys.angularVelocity = glm::vec3(0.0f);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            m_IsReplaying = false;
+            // 4. Update the scene with the calculated delta
+            scene->Update(stepDelta);
+        }
+        
         const auto updateEnd = std::chrono::high_resolution_clock::now();
 
         Entity activeCamEntity = cameraController->GetActiveCameraEntity();

@@ -892,6 +892,24 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         ImGui::EndMenu();
     }
 
+    if (ImGui::BeginMenu("Replay")) {
+        if (!m_IsReplaying) {
+            ImGui::SliderFloat("Timeframe (s)", &m_LookaheadTimeframe, 1.0f, 60.0f, "%.1f");
+        }
+        
+        if (m_IsReplaying) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Replay Mode Active");
+            if (ImGui::MenuItem("Exit Replay")) {
+                m_IsReplaying = false;
+            }
+        } else {
+            if (ImGui::MenuItem("Generate Lookahead")) {
+                m_GenerateLookaheadRequested = true;
+            }
+        }
+        ImGui::EndMenu();
+    }
+
     if (ImGui::BeginMenu("Animations")) {
         Registry& registry = scene.GetRegistry();
         const Entity entityCount = registry.GetEntityCount();

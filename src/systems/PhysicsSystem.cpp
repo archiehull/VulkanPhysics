@@ -401,7 +401,11 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
         if (!physicsArray->HasData(e) || !transformArray->HasData(e)) {
             continue;
         }
-        scene.DeleteEntity(e);
+        if (scene.IsLookaheadMode()) {
+            scene.DeactivateEntityForLookahead(e);
+        } else {
+            scene.DeleteEntity(e);
+        }
     }
 }
 
