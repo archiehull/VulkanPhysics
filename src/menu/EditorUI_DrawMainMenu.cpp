@@ -4,6 +4,7 @@
 #include "../systems/PhysicsSystem.h"
 #include "../systems/AnimationSystem.h"
 #include "../systems/CameraSystem.h"
+#include "../systems/ObjectSpawnerSystem.h"
 #include <cmath>
 #include <cstring>
 #include <algorithm>
@@ -587,36 +588,66 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             if (ImGui::BeginMenu(menuLabel.c_str())) {
                 ImGui::PushID(static_cast<int>(e));
 
-                ImGui::Checkbox("Always On", &spawner.alwaysOn);
+                const float fireButtonWidth = 88.0f;
+                const ImVec4 fireBtn = ImVec4(0.78f, 0.16f, 0.16f, 1.0f);
+                const ImVec4 fireBtnHover = ImVec4(0.88f, 0.22f, 0.22f, 1.0f);
+                const ImVec4 fireBtnActive = ImVec4(0.62f, 0.10f, 0.10f, 1.0f);
+
+                const bool alwaysOnChanged = ImGui::Checkbox("Always On", &spawner.alwaysOn);
+                ImGui::SameLine();
+                ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - fireButtonWidth);
+                ImGui::PushStyleColor(ImGuiCol_Button, fireBtn);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, fireBtnHover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, fireBtnActive);
+                if (ImGui::Button("Fire", ImVec2(fireButtonWidth, 0))) {
+                    ObjectSpawnerSystem::FireOnce(scene, e);
+                }
+                ImGui::PopStyleColor(3);
+
                 if (spawner.alwaysOn) {
                     spawner.isRunning = true;
+                    spawner.runDurationSeconds = -1.0f;
+                    spawner.maxSpawnsPerRun = -1;
                 }
-                else {
-                    if (!spawner.isRunning) {
-                        if (ImGui::Button("Run")) {
-                            spawner.isRunning = true;
-                            spawner.spawnTimer = 0.0f;
-                            spawner.runElapsedSeconds = 0.0f;
-                            spawner.spawnedThisRun = 0;
-                        }
-                    }
-                    else {
-                        if (ImGui::Button("Stop")) {
-                            spawner.isRunning = false;
-                        }
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Reset Run")) {
+                else if (alwaysOnChanged) {
+                    spawner.spawnTimer = 0.0f;
+                    spawner.runElapsedSeconds = 0.0f;
+                    spawner.spawnedThisRun = 0;
+                }
+
+                ImGui::BeginDisabled(spawner.alwaysOn);
+                if (!spawner.isRunning) {
+                    if (ImGui::Button("Run")) {
+                        spawner.isRunning = true;
                         spawner.spawnTimer = 0.0f;
                         spawner.runElapsedSeconds = 0.0f;
                         spawner.spawnedThisRun = 0;
                     }
                 }
+                else {
+                    if (ImGui::Button("Stop")) {
+                        spawner.isRunning = false;
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reset Run")) {
+                    spawner.spawnTimer = 0.0f;
+                    spawner.runElapsedSeconds = 0.0f;
+                    spawner.spawnedThisRun = 0;
+                }
+                ImGui::EndDisabled();
 
                 ImGui::DragFloat("Spawn Interval (s)", &spawner.spawnInterval, 0.05f, 0.05f, 60.0f);
+                ImGui::BeginDisabled(spawner.alwaysOn);
                 ImGui::DragFloat("Run Duration (s, -1 inf)", &spawner.runDurationSeconds, 0.1f, -1.0f, 3600.0f);
                 ImGui::InputInt("Max Spawns Per Run (-1 inf)", &spawner.maxSpawnsPerRun);
-                ImGui::DragFloat3("Spawn Scale", &spawner.spawnScale.x, 0.05f, 0.05f, 100.0f);
+                ImGui::EndDisabled();
+                if (spawner.maxSpawnsPerRun < -1) {
+                    spawner.maxSpawnsPerRun = -1;
+                }
+
+                ImGui::DragFloat("Object Scale", &spawner.spawnObjectScale, 0.05f, 0.05f, 100.0f);
+                ImGui::DragFloat3("Object Scale XYZ", &spawner.spawnScale.x, 0.05f, 0.05f, 100.0f);
                 ImGui::DragFloat("Spawn Mass", &spawner.spawnMass, 0.1f, 0.01f, 1000.0f);
 
                 const char* geometryTypes[] = { "Sphere", "Cube", "Model" };
@@ -626,6 +657,9 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
 
                 if (ImGui::Combo("Spawn Geometry", &geometryIndex, geometryTypes, IM_ARRAYSIZE(geometryTypes))) {
                     spawner.spawnGeometryType = geometryTypes[geometryIndex];
+                    if (spawner.spawnGeometryType == "Sphere") {
+                        spawner.spawnObjectScale = std::max(0.05f, std::max({ spawner.spawnScale.x, spawner.spawnScale.y, spawner.spawnScale.z }));
+                    }
                 }
 
                 if (spawner.spawnGeometryType == "Model") {
@@ -659,6 +693,12 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 ImGui::Checkbox("Randomise Velocity", &spawner.randomizeVelocity);
                 if (spawner.randomizeVelocity) {
                     ImGui::DragFloat3("Random Velocity Range", &spawner.randomVelocityRange.x, 0.1f, 0.0f, 200.0f);
+                }
+
+                ImGui::DragFloat3("Base Spin", &spawner.spawnAngularVelocity.x, 0.05f);
+                ImGui::Checkbox("Randomise Spin", &spawner.randomizeAngularVelocity);
+                if (spawner.randomizeAngularVelocity) {
+                    ImGui::DragFloat3("Random Spin Range", &spawner.randomAngularVelocityRange.x, 0.05f, 0.0f, 50.0f);
                 }
 
                 ImGui::TextDisabled("Status: %s", spawner.isRunning ? "Running" : "Stopped");

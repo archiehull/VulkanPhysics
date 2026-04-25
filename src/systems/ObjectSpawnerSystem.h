@@ -5,7 +5,8 @@
 class ObjectSpawnerSystem : public ISystem {
 public:
     void Update(Scene& scene, float deltaTime) override;
+    static void FireOnce(Scene& scene, Entity spawnerEntity);
 
 private:
-    void SpawnObjectFromSpawner(Scene& scene, Entity spawnerEntity);
+    static void SpawnObjectFromSpawner(Scene& scene, Entity spawnerEntity);
 };

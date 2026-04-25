@@ -329,6 +329,7 @@ void Application::SetupScene() {
             spawner.spawnModelPath = objCfg.spawnModelPath;
             spawner.spawnTexturePath = objCfg.spawnTexturePath.empty() ? objCfg.texturePath : objCfg.spawnTexturePath;
             spawner.spawnScale = objCfg.spawnScale;
+            spawner.spawnObjectScale = std::max(0.05f, std::max({ objCfg.spawnScale.x, objCfg.spawnScale.y, objCfg.spawnScale.z }));
             spawner.spawnVelocity = objCfg.spawnVelocity;
             spawner.randomizeVelocity = objCfg.randomizeSpawnVelocity;
             spawner.randomVelocityRange = objCfg.spawnVelocityRandomRange;
@@ -337,6 +338,11 @@ void Application::SetupScene() {
             spawner.randomizeAngularVelocity = objCfg.randomizeSpawnAngularVelocity;
             spawner.randomAngularVelocityRange = objCfg.spawnAngularVelocityRandomRange;
             spawner.spawnMass = objCfg.spawnMass;
+
+            if (spawner.alwaysOn) {
+                spawner.runDurationSeconds = -1.0f;
+                spawner.maxSpawnsPerRun = -1;
+            }
 
             scene->GetRegistry().AddComponent<ObjectSpawnerComponent>(spawnerEntity, spawner);
             if (kSceneDebug) {

@@ -100,7 +100,7 @@ public:
         m_LinearDampingFactor = linearDampingFactor;
         m_QuadraticDragEnabled = quadraticDragEnabled;
         m_QuadraticDragCoeff = quadraticDragCoeff;
-    }
+    }   
 
     bool ConsumePhysicsSettingsRequest(bool& linearDampingEnabled, float& linearDampingFactor, bool& quadraticDragEnabled, float& quadraticDragCoeff) {
         if (!m_PhysicsSettingsChanged) {

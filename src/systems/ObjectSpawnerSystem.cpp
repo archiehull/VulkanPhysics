@@ -20,6 +20,8 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
         auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
         if (spawner.alwaysOn) {
             spawner.isRunning = true;
+            spawner.runDurationSeconds = -1.0f;
+            spawner.maxSpawnsPerRun = -1;
         }
         if (!spawner.isRunning) continue;
 
@@ -63,6 +65,10 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
     }
 }
 
+void ObjectSpawnerSystem::FireOnce(Scene& scene, Entity spawnerEntity) {
+    SpawnObjectFromSpawner(scene, spawnerEntity);
+}
+
 void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEntity) {
     auto& registry = scene.GetRegistry();
     if (!registry.HasComponent<ObjectSpawnerComponent>(spawnerEntity) ||
@@ -86,15 +92,37 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     const glm::vec3 spawnPos = transform.position;
 
     const std::string& geometryType = spawner.spawnGeometryType;
+    glm::vec3 effectiveSpawnScale = spawner.spawnScale;
+    float sphereBaseRadius = 0.5f;
+    if (geometryType == "Sphere") {
+        const float uniform = std::max(0.05f, spawner.spawnObjectScale);
+        const glm::vec3 axisScale(
+            std::max(0.05f, spawner.spawnScale.x),
+            std::max(0.05f, spawner.spawnScale.y),
+            std::max(0.05f, spawner.spawnScale.z));
+
+        sphereBaseRadius = std::max(0.1f, 0.5f * uniform);
+        // Final sphere world extents = base radius (uniform) * axis scale (XYZ)
+        effectiveSpawnScale = axisScale * uniform;
+    }
+
     if (geometryType == "Cube") {
-        scene.AddCube(spawnedName, spawnPos, spawner.spawnScale, spawner.spawnTexturePath);
+        scene.AddCube(spawnedName, spawnPos, effectiveSpawnScale, spawner.spawnTexturePath);
     }
     else if (geometryType == "Model" && !spawner.spawnModelPath.empty()) {
-        scene.AddModel(spawnedName, spawnPos, glm::vec3(0.0f), spawner.spawnScale, spawner.spawnModelPath, spawner.spawnTexturePath, false);
+        scene.AddModel(spawnedName, spawnPos, glm::vec3(0.0f), effectiveSpawnScale, spawner.spawnModelPath, spawner.spawnTexturePath, false);
     }
     else {
-        const float radius = std::max(0.1f, std::max({ spawner.spawnScale.x, spawner.spawnScale.y, spawner.spawnScale.z }) * 0.5f);
-        scene.AddSphere(spawnedName, 16, 32, radius, spawnPos, spawner.spawnTexturePath);
+        scene.AddSphere(spawnedName, 16, 32, sphereBaseRadius, spawnPos, spawner.spawnTexturePath);
+        // Apply XYZ scaling for spheres (ellipsoid support) while keeping Object Scale as uniform size.
+        scene.SetObjectTransform(
+            spawnedName,
+            spawnPos,
+            glm::vec3(0.0f),
+            glm::vec3(
+                std::max(0.05f, spawner.spawnScale.x),
+                std::max(0.05f, spawner.spawnScale.y),
+                std::max(0.05f, spawner.spawnScale.z)));
     }
 
     Entity spawnedEntity = scene.GetEntityByName(spawnedName);
@@ -104,7 +132,7 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
 
     scene.SetObjectCollision(spawnedName, true);
     scene.SetObjectPhysics(spawnedName, false, std::max(0.01f, spawner.spawnMass));
-    scene.SetObjectCollider(spawnedName, 0, std::max(0.1f, std::max({ spawner.spawnScale.x, spawner.spawnScale.y, spawner.spawnScale.z }) * 0.5f), glm::vec3(0.0f, 1.0f, 0.0f));
+    scene.SetObjectCollider(spawnedName, 0, std::max(0.1f, std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f), glm::vec3(0.0f, 1.0f, 0.0f));
 
     glm::vec3 velocity = spawner.spawnVelocity;
     if (spawner.randomizeVelocity) {

@@ -293,6 +293,7 @@ struct ObjectSpawnerComponent {
     std::string spawnGeometryType = "Sphere"; // Sphere, Cube, Model
     std::string spawnModelPath = "";
     std::string spawnTexturePath = "textures/default.jpg";
+    float spawnObjectScale = 1.0f; // Uniform scale used for spheres
     glm::vec3 spawnScale = glm::vec3(1.0f);
 
     glm::vec3 spawnVelocity = glm::vec3(0.0f, 10.0f, 0.0f);
