@@ -75,7 +75,10 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
 
     std::string spawnerName = "Spawner";
     if (registry.HasComponent<NameComponent>(spawnerEntity)) {
-        spawnerName = registry.GetComponent<NameComponent>(spawnerEntity).name;
+        std::string name = registry.GetComponent<NameComponent>(spawnerEntity).name;
+        if (!name.empty()) {
+            spawnerName = name;
+        }
     }
 
     const std::string spawnedName = spawnerName + "_Spawned_" + std::to_string(spawner.spawnedCount++);

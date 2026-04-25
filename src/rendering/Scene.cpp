@@ -1381,8 +1381,14 @@ void Scene::Clear() {
         }
     }
 
-    for (Entity i = 0; i < m_Registry.GetEntityCount(); i++) {
-        m_Registry.DestroyEntity(i);
+    // Collect all existing entity IDs first, then destroy them to avoid issues with sparse entity IDs
+    std::vector<Entity> entitiesToDestroy;
+    const Entity entityCount = m_Registry.GetEntityCount();
+    for (Entity i = 0; i < entityCount; ++i) {
+        entitiesToDestroy.push_back(i);
+    }
+    for (Entity e : entitiesToDestroy) {
+        m_Registry.DestroyEntity(e);
     }
 
     m_EntityMap.clear();
@@ -1393,18 +1399,6 @@ void Scene::Clear() {
     m_PathVisualEntities.clear();
 
     FlushDeferredGeometryCleanup();
-
-    //// 1. Recreate Environment Entity
-    //m_EnvironmentEntity = m_Registry.CreateEntity();
-    //m_Registry.AddComponent<NameComponent>(m_EnvironmentEntity, { "GlobalEnvironment" });
-    //m_Registry.AddComponent<EnvironmentComponent>(m_EnvironmentEntity, EnvironmentComponent{});
-    //m_EntityMap["GlobalEnvironment"] = m_EnvironmentEntity;
-
-    //// 2. Recreate Dust Cloud Entity
-    //Entity dustEntity = m_Registry.CreateEntity();
-    //m_Registry.AddComponent<NameComponent>(dustEntity, { "GlobalDustCloud" });
-    //m_Registry.AddComponent<DustCloudComponent>(dustEntity, DustCloudComponent{});
-    //m_EntityMap["GlobalDustCloud"] = dustEntity;
 
     m_EnvironmentEntity = MAX_ENTITIES;
 }

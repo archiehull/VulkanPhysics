@@ -189,8 +189,4 @@ private:
     bool m_ShowSpringVisuals = false;
     bool m_SpringVisualizationChanged = false;
 
-    float m_AnimationLookaheadSeconds = 5.0f;
-    bool m_AnimationReplayScrubEnabled = false;
-    float m_AnimationScrubTime = 0.0f;
-    bool m_ViewRecordedCameraInReplay = false;
 };

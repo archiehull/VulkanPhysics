@@ -1,1 +1,4 @@
 /.vs
+/SimulationStaticLib/x64
+/x64
+/VulkanPhysics/x64
