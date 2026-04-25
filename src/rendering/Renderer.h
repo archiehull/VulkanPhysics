@@ -40,6 +40,9 @@ public:
     void WaitIdle() const;
     void Cleanup();
 
+    void RecreateSwapChainResources();
+    void CleanupSwapChainResources();
+
     void SetupSceneParticles(Scene& scene) const;
 
     VulkanRenderPass* GetRenderPass() const { return renderPass.get(); }

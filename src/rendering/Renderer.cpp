@@ -1276,3 +1276,53 @@ void Renderer::CleanupOffScreenResources() {
         refractionImageMemory = VK_NULL_HANDLE;
     }
 }
+
+void Renderer::CleanupSwapChainResources() {
+    for (auto fb : uiFramebuffers) {
+        if (fb != VK_NULL_HANDLE) vkDestroyFramebuffer(device->GetDevice(), fb, nullptr);
+    }
+    uiFramebuffers.clear();
+
+    CleanupOffScreenResources();
+}
+
+void Renderer::RecreateSwapChainResources() {
+    CreateOffScreenResources();
+    renderPass->CreateOffScreenFramebuffer(offScreenImageView, depthImageView, swapChain->GetExtent());
+
+    const std::array<VkImageView, 2> attachments = {
+        refractionImageView,
+        depthImageView
+    };
+
+    VkFramebufferCreateInfo framebufferInfo{};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = renderPass->GetRenderPass();
+    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebufferInfo.pAttachments = attachments.data();
+    framebufferInfo.width = swapChain->GetExtent().width;
+    framebufferInfo.height = swapChain->GetExtent().height;
+    framebufferInfo.layers = 1;
+
+    if (vkCreateFramebuffer(device->GetDevice(), &framebufferInfo, nullptr, &refractionFramebuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create refraction framebuffer!");
+    }
+
+    const auto& imageViews = swapChain->GetImageViews();
+    uiFramebuffers.resize(imageViews.size());
+    for (size_t i = 0; i < imageViews.size(); i++) {
+        VkImageView ui_attachments[] = { imageViews[i] };
+        VkFramebufferCreateInfo fb_info = {};
+        fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fb_info.renderPass = uiRenderPass;
+        fb_info.attachmentCount = 1;
+        fb_info.pAttachments = ui_attachments;
+        fb_info.width = swapChain->GetExtent().width;
+        fb_info.height = swapChain->GetExtent().height;
+        fb_info.layers = 1;
+
+        if (vkCreateFramebuffer(device->GetDevice(), &fb_info, nullptr, &uiFramebuffers[i]) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create ui framebuffer!");
+        }
+    }
+}

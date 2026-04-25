@@ -774,16 +774,13 @@ void Application::RecreateSwapChain() {
 
     vkDeviceWaitIdle(vulkanDevice->GetDevice());
 
-    ImGui_ImplVulkan_Shutdown();
-
-    renderer->Cleanup();
+    renderer->CleanupSwapChainResources();
     vulkanSwapChain->Cleanup();
 
     vulkanSwapChain->Create(vulkanDevice->GetQueueFamilies());
     vulkanSwapChain->CreateImageViews();
 
-    renderer->Initialize();
-    renderer->SetupSceneParticles(*scene);
+    renderer->RecreateSwapChainResources();
 
     framebufferResized = false;
 }

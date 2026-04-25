@@ -115,6 +115,11 @@ void VulkanRenderPass::CreateFramebuffers(const std::vector<VkImageView>& imageV
 }
 
 void VulkanRenderPass::CreateOffScreenFramebuffer(VkImageView colorImageView, VkImageView depthImageView, const VkExtent2D& extent) {
+    if (offScreenFramebuffer != VK_NULL_HANDLE) {
+        vkDestroyFramebuffer(device, offScreenFramebuffer, nullptr);
+        offScreenFramebuffer = VK_NULL_HANDLE;
+    }
+
     std::array<VkImageView, 2> attachments = { colorImageView, depthImageView };
 
     VkFramebufferCreateInfo framebufferInfo{};
