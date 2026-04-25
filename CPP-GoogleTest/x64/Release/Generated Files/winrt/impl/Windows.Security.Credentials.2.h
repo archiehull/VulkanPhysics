@@ -22,7 +22,7 @@ WINRT_EXPORT namespace winrt::Windows::Security::Credentials
         auto operator()(winrt::Windows::Storage::Streams::IBuffer const& challenge) const;
     };
     struct __declspec(empty_bases) KeyCredential : winrt::Windows::Security::Credentials::IKeyCredential,
-        impl::require<KeyCredential, winrt::Windows::Security::Credentials::IKeyCredential2, winrt::Windows::Security::Credentials::IKeyCredentialWithWindow>
+        impl::require<KeyCredential, winrt::Windows::Security::Credentials::IKeyCredential2>
     {
         KeyCredential(std::nullptr_t) noexcept {}
         KeyCredential(void* ptr, take_ownership_from_abi_t) noexcept : winrt::Windows::Security::Credentials::IKeyCredential(ptr, take_ownership_from_abi) {}
@@ -41,7 +41,6 @@ WINRT_EXPORT namespace winrt::Windows::Security::Credentials
     struct KeyCredentialManager
     {
         KeyCredentialManager() = delete;
-        static auto RequestCreateForWindowAsync(winrt::Windows::UI::WindowId const& window, param::hstring const& name, winrt::Windows::Security::Credentials::KeyCredentialCreationOption const& option);
         static auto IsSupportedAsync();
         static auto RenewAttestationAsync();
         static auto RequestCreateAsync(param::hstring const& name, winrt::Windows::Security::Credentials::KeyCredentialCreationOption const& option);
@@ -49,7 +48,6 @@ WINRT_EXPORT namespace winrt::Windows::Security::Credentials
         static auto DeleteAsync(param::hstring const& name);
         static auto RequestCreateAsync(param::hstring const& name, winrt::Windows::Security::Credentials::KeyCredentialCreationOption const& option, param::hstring const& algorithm, param::hstring const& message, winrt::Windows::Security::Credentials::KeyCredentialCacheConfiguration const& cacheConfiguration, winrt::Windows::UI::WindowId const& windowId, winrt::Windows::Security::Credentials::ChallengeResponseKind const& callbackType, winrt::Windows::Security::Credentials::AttestationChallengeHandler const& attestationCallback);
         static auto OpenAsync(param::hstring const& name, winrt::Windows::Security::Credentials::ChallengeResponseKind const& callbackType, winrt::Windows::Security::Credentials::AttestationChallengeHandler const& attestationCallback);
-        static auto GetSecureId();
     };
     struct __declspec(empty_bases) KeyCredentialOperationResult : winrt::Windows::Security::Credentials::IKeyCredentialOperationResult
     {

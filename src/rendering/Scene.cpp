@@ -161,9 +161,18 @@ void Scene::SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity) {
     static int ballCount = 0;
     std::string name = "DynamicBall_" + std::to_string(ballCount++);
 
+    const Entity existingEntity = GetEntityByName(name);
+    if (existingEntity != MAX_ENTITIES) {
+        std::cout << "[EntityDebug] SpawnPhysicsBall name collision: '" << name
+            << "' already mapped to entity " << existingEntity << std::endl;
+    }
+
     AddSphere(name, 16, 16, 1.0f, pos, "textures/default.jpg");
 
     Entity e = GetEntityByName(name);
+    std::cout << "[EntityDebug] SpawnPhysicsBall created name='" << name
+        << "' entity=" << e
+        << " entityCount=" << m_Registry.GetEntityCount() << std::endl;
 
     if (!m_Registry.HasComponent<PhysicsComponent>(e)) {
         m_Registry.AddComponent<PhysicsComponent>(e, PhysicsComponent{});
@@ -211,9 +220,115 @@ void Scene::ResetSpawnerSpawnedObjects() {
 Entity Scene::GetEntityByName(const std::string& name) const {
     auto it = m_EntityMap.find(name);
     if (it != m_EntityMap.end()) {
-        return it->second;
+        const Entity mapped = it->second;
+        if (mapped < m_Registry.GetEntityCount() &&
+            m_Registry.HasComponent<NameComponent>(mapped) &&
+            m_Registry.GetComponent<NameComponent>(mapped).name == name) {
+            return mapped;
+        }
     }
+
+    for (Entity e = 0; e < m_Registry.GetEntityCount(); ++e) {
+        if (!m_Registry.HasComponent<NameComponent>(e)) {
+            continue;
+        }
+        if (m_Registry.GetComponent<NameComponent>(e).name == name) {
+            return e;
+        }
+    }
+
     return MAX_ENTITIES;
+}
+
+std::unique_ptr<Scene> Scene::CreateSimulationClone() const {
+    auto clone = std::make_unique<Scene>(device, physicalDevice);
+
+    clone->globalShadingMode = globalShadingMode;
+    clone->m_TerrainConfig = m_TerrainConfig;
+    clone->m_RegionsOnlyDebugView = m_RegionsOnlyDebugView;
+    clone->m_ShowSpringVisuals = m_ShowSpringVisuals;
+    clone->m_ElapsedTime = m_ElapsedTime;
+
+    const Entity entityCount = m_Registry.GetEntityCount();
+    for (Entity e = 0; e < entityCount; ++e) {
+        clone->m_Registry.CreateEntity();
+    }
+
+    auto copyIfPresent = [&](auto dummyComponent) {
+        using T = decltype(dummyComponent);
+        for (Entity e = 0; e < entityCount; ++e) {
+            if (m_Registry.HasComponent<T>(e)) {
+                clone->m_Registry.AddComponent<T>(e, m_Registry.GetComponent<T>(e));
+            }
+        }
+    };
+
+    copyIfPresent(NameComponent{});
+    copyIfPresent(TransformComponent{});
+    copyIfPresent(RenderComponent{});
+    copyIfPresent(OrbitComponent{});
+    copyIfPresent(PathAnimationComponent{});
+    copyIfPresent(ThermoComponent{});
+    copyIfPresent(PhysicsComponent{});
+    copyIfPresent(SpringComponent{});
+    copyIfPresent(ColliderComponent{});
+    copyIfPresent(LightComponent{});
+    copyIfPresent(AttachedEmitterComponent{});
+    copyIfPresent(EnvironmentComponent{});
+    copyIfPresent(DustCloudComponent{});
+    copyIfPresent(ObjectSpawnerComponent{});
+    copyIfPresent(SpawnedFromSpawnerComponent{});
+    copyIfPresent(DespawnerComponent{});
+    copyIfPresent(CameraComponent{});
+    copyIfPresent(LayerRegionComponent{});
+
+    auto hasTrackedComponent = [&](Entity e) {
+        return m_Registry.HasComponent<NameComponent>(e) ||
+            m_Registry.HasComponent<TransformComponent>(e) ||
+            m_Registry.HasComponent<RenderComponent>(e) ||
+            m_Registry.HasComponent<OrbitComponent>(e) ||
+            m_Registry.HasComponent<PathAnimationComponent>(e) ||
+            m_Registry.HasComponent<ThermoComponent>(e) ||
+            m_Registry.HasComponent<PhysicsComponent>(e) ||
+            m_Registry.HasComponent<SpringComponent>(e) ||
+            m_Registry.HasComponent<ColliderComponent>(e) ||
+            m_Registry.HasComponent<LightComponent>(e) ||
+            m_Registry.HasComponent<AttachedEmitterComponent>(e) ||
+            m_Registry.HasComponent<EnvironmentComponent>(e) ||
+            m_Registry.HasComponent<DustCloudComponent>(e) ||
+            m_Registry.HasComponent<ObjectSpawnerComponent>(e) ||
+            m_Registry.HasComponent<SpawnedFromSpawnerComponent>(e) ||
+            m_Registry.HasComponent<DespawnerComponent>(e) ||
+            m_Registry.HasComponent<CameraComponent>(e) ||
+            m_Registry.HasComponent<LayerRegionComponent>(e);
+    };
+
+    for (Entity e = 0; e < entityCount; ++e) {
+        if (!hasTrackedComponent(e)) {
+            clone->m_Registry.DestroyEntity(e);
+        }
+    }
+
+    for (Entity e = 0; e < entityCount; ++e) {
+        if (clone->m_Registry.HasComponent<NameComponent>(e)) {
+            clone->m_EntityMap[clone->m_Registry.GetComponent<NameComponent>(e).name] = e;
+        }
+        if (clone->m_Registry.HasComponent<RenderComponent>(e)) {
+            clone->m_RenderableEntities.push_back(e);
+        }
+        if (clone->m_Registry.HasComponent<LightComponent>(e)) {
+            clone->m_LightEntities.push_back(e);
+        }
+    }
+
+    clone->m_EnvironmentEntity = MAX_ENTITIES;
+    if (m_EnvironmentEntity != MAX_ENTITIES &&
+        m_EnvironmentEntity < entityCount &&
+        clone->m_Registry.HasComponent<EnvironmentComponent>(m_EnvironmentEntity)) {
+        clone->m_EnvironmentEntity = m_EnvironmentEntity;
+    }
+
+    return clone;
 }
 
 void Scene::DeleteEntity(Entity entity) {
@@ -318,8 +433,19 @@ void Scene::ToggleGlobalShadingMode() {
 }
 
 Entity Scene::AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable) {
+    const Entity preExistingEntity = GetEntityByName(name);
+    if (preExistingEntity != MAX_ENTITIES) {
+        std::cout << "[EntityDebug] AddObjectInternal duplicate name: '" << name
+            << "' existingEntity=" << preExistingEntity << std::endl;
+    }
+
     Entity entity = m_Registry.CreateEntity();
     m_EntityMap[name] = entity;
+
+    if (name.rfind("DynamicBall_", 0) == 0 || preExistingEntity != MAX_ENTITIES) {
+        std::cout << "[EntityDebug] AddObjectInternal assigned entity=" << entity
+            << " for name='" << name << "'" << std::endl;
+    }
 
     m_Registry.AddComponent<NameComponent>(entity, { name });
 

@@ -33,6 +33,8 @@ public:
     static float linearDampingFactor;      // [0..1], 1 = no damping
     static bool applyQuadraticDrag;
     static float quadraticDragCoefficient; // ~0.0f..1.0f depending scale
+    static bool suppressDespawnerDeletion;
+    static bool debugDespawnerDeletion;
 
     // Setters for runtime adjustment
     static void SetLinearDamping(bool enabled, float factor) {
@@ -43,6 +45,14 @@ public:
     static void SetQuadraticDrag(bool enabled, float coefficient) {
         applyQuadraticDrag = enabled;
         quadraticDragCoefficient = glm::clamp(coefficient, 0.0f, 10.0f); // arbitrary upper limit
+    }
+
+    static void SetSuppressDespawnerDeletion(bool suppress) {
+        suppressDespawnerDeletion = suppress;
+    }
+
+    static void SetDebugDespawnerDeletion(bool enabled) {
+        debugDespawnerDeletion = enabled;
     }
 
     void Update(Scene& scene, float deltaTime) override;

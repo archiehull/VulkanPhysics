@@ -120,7 +120,7 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
 void EditorUI::ApplyReplayLookahead(Scene& scene) {
     if (m_AnimationReplayScrubEnabled && AnimationSystem::HasLookahead()) {
-        AnimationSystem::ScrubLookahead(scene, m_AnimationScrubTime, m_ViewRecordedCameraInReplay);
+        AnimationSystem::ScrubLookahead(scene, m_AnimationScrubTime, m_ViewRecordedCameraInReplay, m_HighlightSpawnedObjectsInReplay);
     }
     else if (!m_AnimationReplayScrubEnabled) {
         AnimationSystem::HideReplayCameraModel(scene);
@@ -138,10 +138,34 @@ void EditorUI::ToggleReplayPlayback() {
     }
 
     const float replayDuration = std::max(AnimationSystem::GetLookaheadDuration(), 0.001f);
-    if (m_AnimationScrubTime >= replayDuration) {
+    if (!m_ReplayPlayBackward && m_AnimationScrubTime >= replayDuration) {
         m_AnimationScrubTime = 0.0f;
+    }
+    else if (m_ReplayPlayBackward && m_AnimationScrubTime <= 0.0f) {
+        m_AnimationScrubTime = replayDuration;
     }
 
     m_AnimationReplayPlaying = true;
     m_IsPaused = true;
+}
+
+void EditorUI::RestartReplayPlayback() {
+    if (!m_AnimationReplayScrubEnabled || !AnimationSystem::HasLookahead()) {
+        return;
+    }
+
+    m_AnimationScrubTime = m_ReplayPlayBackward ? std::max(AnimationSystem::GetLookaheadDuration(), 0.001f) : 0.0f;
+    m_AnimationReplayPlaying = true;
+    m_IsPaused = true;
+}
+
+void EditorUI::ResetReplayState() {
+    m_AnimationReplayScrubEnabled = false;
+    m_AnimationReplayPlaying = false;
+    m_AnimationScrubTime = 0.0f;
+    m_ViewRecordedCameraInReplay = false;
+    m_HighlightSpawnedObjectsInReplay = false;
+    m_ReplayPlaybackSpeed = 1.0f;
+    m_ReplayPlayBackward = false;
+    AnimationSystem::ResetReplayState();
 }

@@ -62,7 +62,7 @@ if (AnimationSystem::IsRealtimeRecording() && m_IsPaused) {
 // --- REPLAY TIMELINE BOTTOM BAR ---
 if (m_AnimationReplayScrubEnabled && AnimationSystem::HasLookahead()) {
     ImGuiIO& io = ImGui::GetIO();
-    float barHeight = 55.0f * m_UIScale;
+    float barHeight = 95.0f * m_UIScale;
     ImVec2 windowPos = ImVec2(0.0f, io.DisplaySize.y - barHeight);
     ImVec2 windowSize = ImVec2(io.DisplaySize.x, barHeight);
 
@@ -80,9 +80,16 @@ if (m_AnimationReplayScrubEnabled && AnimationSystem::HasLookahead()) {
         const float replayDuration = std::max(AnimationSystem::GetLookaheadDuration(), 0.001f);
 
         if (m_AnimationReplayPlaying) {
-            m_AnimationScrubTime += io.DeltaTime;
+            const float speed = std::max(0.0f, m_ReplayPlaybackSpeed);
+            const float signedDelta = io.DeltaTime * speed * (m_ReplayPlayBackward ? -1.0f : 1.0f);
+            m_AnimationScrubTime += signedDelta;
+
             if (m_AnimationScrubTime >= replayDuration) {
                 m_AnimationScrubTime = replayDuration;
+                m_AnimationReplayPlaying = false;
+            }
+            else if (m_AnimationScrubTime <= 0.0f) {
+                m_AnimationScrubTime = 0.0f;
                 m_AnimationReplayPlaying = false;
             }
         }
@@ -98,8 +105,11 @@ if (m_AnimationReplayScrubEnabled && AnimationSystem::HasLookahead()) {
         }
         else {
             if (ImGui::Button("Play", ImVec2(80.0f * m_UIScale, 0))) {
-                if (m_AnimationScrubTime >= replayDuration) {
+                if (!m_ReplayPlayBackward && m_AnimationScrubTime >= replayDuration) {
                     m_AnimationScrubTime = 0.0f;
+                }
+                else if (m_ReplayPlayBackward && m_AnimationScrubTime <= 0.0f) {
+                    m_AnimationScrubTime = replayDuration;
                 }
                 m_AnimationReplayPlaying = true;
             }
@@ -107,9 +117,18 @@ if (m_AnimationReplayScrubEnabled && AnimationSystem::HasLookahead()) {
 
         ImGui::SameLine();
 
-        ImGui::PushItemWidth(io.DisplaySize.x - (485.0f * m_UIScale));
-        ImGui::SliderFloat("##ScrubBar", &m_AnimationScrubTime, 0.0f, replayDuration, "Time: %.2f s");
-        ImGui::PopItemWidth();
+        if (ImGui::Button(m_ReplayPlayBackward ? "Reverse: On" : "Reverse", ImVec2(100.0f * m_UIScale, 0))) {
+            m_ReplayPlayBackward = !m_ReplayPlayBackward;
+        }
+
+        ImGui::SameLine();
+
+        ImGui::SetNextItemWidth(110.0f * m_UIScale);
+        ImGui::SliderFloat("Speed", &m_ReplayPlaybackSpeed, 0.1f, 10.0f, "%.2fx");
+
+        ImGui::SameLine();
+
+        ImGui::Checkbox("Highlight Spawned Objects", &m_HighlightSpawnedObjectsInReplay);
 
         ImGui::SameLine();
 
@@ -135,6 +154,11 @@ if (m_AnimationReplayScrubEnabled && AnimationSystem::HasLookahead()) {
             AnimationSystem::HideReplayCameraModel(scene);
         }
         ImGui::PopStyleColor();
+
+        ImGui::Spacing();
+        ImGui::PushItemWidth(-1.0f);
+        ImGui::SliderFloat("##ScrubBar", &m_AnimationScrubTime, 0.0f, replayDuration, "Time: %.2f s");
+        ImGui::PopItemWidth();
     }
     ImGui::End();
 

@@ -138,6 +138,10 @@ void Application::InitVulkan() {
 }
 
 void Application::LoadScene(const std::string& scenePath) {
+    if (editorUI) {
+        editorUI->ResetReplayState();
+    }
+
     // 1. Wait for GPU to finish current frames
     if (vulkanDevice) {
         vkDeviceWaitIdle(vulkanDevice->GetDevice());
@@ -987,7 +991,12 @@ void Application::ProcessInput() {
         scene->ToggleWeather();
     }
     if (inputManager->IsActionJustPressed(InputAction::ResetEnvironment)) {
-        ReloadCurrentScene();
+        if (editorUI->IsReplayActive()) {
+            editorUI->RestartReplayPlayback();
+        }
+        else {
+            ReloadCurrentScene();
+        }
     }
 
     if (inputManager->IsActionJustPressed(InputAction::ToggleNoclip)) {

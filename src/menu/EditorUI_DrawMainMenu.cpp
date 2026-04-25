@@ -927,6 +927,9 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             m_AnimationReplayScrubEnabled = true;
             m_AnimationReplayPlaying = false;
             m_ViewRecordedCameraInReplay = true;
+            m_HighlightSpawnedObjectsInReplay = false;
+            m_ReplayPlaybackSpeed = 1.0f;
+            m_ReplayPlayBackward = false;
         }
 
         if (AnimationSystem::IsRealtimeRecording()) {

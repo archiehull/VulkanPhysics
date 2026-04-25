@@ -68,6 +68,8 @@ public:
     void ApplyReplayLookahead(Scene& scene);
     bool IsReplayActive() const { return m_AnimationReplayScrubEnabled; }
     void ToggleReplayPlayback();
+    void RestartReplayPlayback();
+    void ResetReplayState();
 
     bool ConsumeStepRequest() { bool req = m_StepRequested; m_StepRequested = false; return req; }
     bool ConsumeRestartRequest() { bool req = m_RestartRequested; m_RestartRequested = false; return req; }
@@ -197,4 +199,7 @@ private:
     bool m_AnimationReplayPlaying = false;
     float m_AnimationScrubTime = 0.0f;
     bool m_ViewRecordedCameraInReplay = false;
+    bool m_HighlightSpawnedObjectsInReplay = false;
+    float m_ReplayPlaybackSpeed = 1.0f;
+    bool m_ReplayPlayBackward = false;
 };

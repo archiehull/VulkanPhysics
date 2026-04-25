@@ -45,6 +45,7 @@ public:
     Scene& operator=(const Scene&) = delete;
 
     Entity GetEntityByName(const std::string& name) const;
+    std::unique_ptr<Scene> CreateSimulationClone() const;
     void DeleteEntity(Entity entity);
     void RemoveRenderComponent(Entity entity);
 
@@ -201,7 +202,7 @@ private:
 
     Registry m_Registry;
     std::vector<std::unique_ptr<ISystem>> m_Systems;
-    std::unordered_map<std::string, Entity> m_EntityMap;
+    mutable std::unordered_map<std::string, Entity> m_EntityMap;
     std::vector<Entity> m_RenderableEntities;
     std::vector<Entity> m_LightEntities;
 

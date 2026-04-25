@@ -5,6 +5,7 @@
 #include <Plane.h>
 #include <PhysicsHelper.h>
 #include <cmath>
+#include <iostream>
 #include <unordered_set>
 
 // Default settings
@@ -24,6 +25,8 @@ bool PhysicsSystem::applyLinearDamping = true;
 float PhysicsSystem::linearDampingFactor = 0.98f;
 bool PhysicsSystem::applyQuadraticDrag = true;
 float PhysicsSystem::quadraticDragCoefficient = 0.01f;
+bool PhysicsSystem::suppressDespawnerDeletion = false;
+bool PhysicsSystem::debugDespawnerDeletion = false;
 
 namespace {
     inline void ApplySleepThreshold(PhysicsComponent& phys, const Plane& plane) {
@@ -242,6 +245,26 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
     const auto entityCount = registry.GetEntityCount();
     bool useForce = (currentResolutionMethod == ResolutionMethod::Force);
     std::unordered_set<Entity> pendingDelete;
+    int despawnerHitCount = 0;
+
+    auto isDespawnerTarget = [&](Entity e, const PhysicsComponent& phys) {
+        if (phys.isStatic) {
+            return false;
+        }
+
+        if (registry.HasComponent<SpawnedFromSpawnerComponent>(e)) {
+            return true;
+        }
+
+        if (registry.HasComponent<NameComponent>(e)) {
+            const auto& name = registry.GetComponent<NameComponent>(e).name;
+            if (name.rfind("DynamicBall_", 0) == 0) {
+                return true;
+            }
+        }
+
+        return false;
+    };
 
     auto queueDespawnerDeletion = [&](Entity a, Entity b, const PhysicsComponent& physA, const PhysicsComponent& physB) {
         const bool aIsDespawner = registry.HasComponent<DespawnerComponent>(a) &&
@@ -249,11 +272,18 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
         const bool bIsDespawner = registry.HasComponent<DespawnerComponent>(b) &&
             registry.GetComponent<DespawnerComponent>(b).enabled;
 
-        if (aIsDespawner && !bIsDespawner && !physB.isStatic) {
-            pendingDelete.insert(b);
+        const bool aCanBeDespawned = isDespawnerTarget(a, physA);
+        const bool bCanBeDespawned = isDespawnerTarget(b, physB);
+
+        if (aIsDespawner && !bIsDespawner && bCanBeDespawned) {
+            if (pendingDelete.insert(b).second) {
+                ++despawnerHitCount;
+            }
         }
-        if (bIsDespawner && !aIsDespawner && !physA.isStatic) {
-            pendingDelete.insert(a);
+        if (bIsDespawner && !aIsDespawner && aCanBeDespawned) {
+            if (pendingDelete.insert(a).second) {
+                ++despawnerHitCount;
+            }
         }
     };
 
@@ -356,11 +386,23 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
         }
     }
 
+    if (PhysicsSystem::debugDespawnerDeletion && despawnerHitCount > 0) {
+        std::cout << "[PhysicsDebug] despawner hits this resolve: " << despawnerHitCount
+            << " | queued deletions: " << pendingDelete.size() << std::endl;
+    }
+
     for (Entity e : pendingDelete) {
+        if (PhysicsSystem::suppressDespawnerDeletion) {
+            continue;
+        }
         if (!registry.HasComponent<PhysicsComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
             continue;
         }
         scene.DeleteEntity(e);
+    }
+
+    if (PhysicsSystem::debugDespawnerDeletion && !pendingDelete.empty()) {
+        std::cout << "[PhysicsDebug] applied despawner deletions: " << pendingDelete.size() << std::endl;
     }
 }
 

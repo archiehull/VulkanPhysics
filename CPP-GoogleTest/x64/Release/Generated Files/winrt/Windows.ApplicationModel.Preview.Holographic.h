@@ -6,7 +6,7 @@
 #include "winrt/base.h"
 static_assert(winrt::check_version(CPPWINRT_VERSION, "2.0.220531.1"), "Mismatched C++/WinRT headers.");
 #define CPPWINRT_VERSION "2.0.220531.1"
-#include "winrt/Windows.ApplicationModel.Preview.h"
+#include "winrt/Windows.ApplicationModel.h"
 #include "winrt/impl/Windows.ApplicationModel.Activation.2.h"
 #include "winrt/impl/Windows.Foundation.Numerics.2.h"
 #include "winrt/impl/Windows.Perception.Spatial.2.h"
