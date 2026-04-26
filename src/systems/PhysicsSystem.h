@@ -34,6 +34,8 @@ public:
     static bool applyQuadraticDrag;
     static float quadraticDragCoefficient; // ~0.0f..1.0f depending scale
 
+    static bool simulationPaused;
+
     // Setters for runtime adjustment
     static void SetLinearDamping(bool enabled, float factor);
     static void SetQuadraticDrag(bool enabled, float coefficient);

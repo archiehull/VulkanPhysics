@@ -2,6 +2,7 @@
 #include "ParticleLibrary.h"
 #include "../geometry/OBJLoader.h"
 #include "../geometry/SJGLoader.h"
+#include "../geometry/GeometryGenerator.h"
 #include <glm/gtc/matrix_transform.hpp> 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/common.hpp>
@@ -237,17 +238,10 @@ void Scene::RegisterEntityName(const std::string& name, Entity entity) {
 }
 
 void Scene::DeleteEntity(Entity entity) {
-    if (entity == MAX_ENTITIES || entity >= m_Registry.GetEntityCount()) return;
+    if (entity == MAX_ENTITIES || entity >= m_Registry.GetEntityCount() || !m_Registry.IsAlive(entity)) return;
 
-    // Remove stale spring links to this entity so recycled entity IDs
-    // do not get accidentally pulled by existing spring anchors.
-    for (Entity e = 0; e < m_Registry.GetEntityCount(); ++e) {
-        if (!m_Registry.HasComponent<SpringComponent>(e)) continue;
-        auto& spring = m_Registry.GetComponent<SpringComponent>(e);
-        spring.connectedEntities.erase(
-            std::remove(spring.connectedEntities.begin(), spring.connectedEntities.end(), entity),
-            spring.connectedEntities.end());
-    }
+    // NOTE: Removed the O(N) spring scan. PhysicsSystem now checks IsAlive(target) 
+    // during its update loop, which is much more efficient.
 
     // [NEW] Stop all attached particle emitters before deleting the entity
     if (m_Registry.HasComponent<AttachedEmitterComponent>(entity)) {
@@ -280,14 +274,24 @@ void Scene::DeleteEntity(Entity entity) {
         m_EntityMap.erase(m_Registry.GetComponent<NameComponent>(entity).name);
     }
 
-    m_RenderableEntities.erase(std::remove(m_RenderableEntities.begin(), m_RenderableEntities.end(), entity), m_RenderableEntities.end());
-    m_LightEntities.erase(std::remove(m_LightEntities.begin(), m_LightEntities.end(), entity), m_LightEntities.end());
+    auto itR = std::find(m_RenderableEntities.begin(), m_RenderableEntities.end(), entity);
+    if (itR != m_RenderableEntities.end()) {
+        m_RenderableEntities.erase(itR);
+    }
 
-    for (Entity e : m_RenderableEntities) {
-        if (m_Registry.HasComponent<RenderComponent>(e)) {
-            auto& render = m_Registry.GetComponent<RenderComponent>(e);
-            if (render.simpleShadowEntity == entity) {
-                render.simpleShadowEntity = MAX_ENTITIES;
+    auto itL = std::find(m_LightEntities.begin(), m_LightEntities.end(), entity);
+    if (itL != m_LightEntities.end()) {
+        m_LightEntities.erase(itL);
+    }
+
+    // Optimization: Spring visuals never have linked shadows, so skip the expensive O(N) scan
+    if (!m_Registry.HasComponent<SpringVisualComponent>(entity)) {
+        for (Entity e : m_RenderableEntities) {
+            if (m_Registry.HasComponent<RenderComponent>(e)) {
+                auto& render = m_Registry.GetComponent<RenderComponent>(e);
+                if (render.simpleShadowEntity == entity) {
+                    render.simpleShadowEntity = MAX_ENTITIES;
+                }
             }
         }
     }
@@ -414,6 +418,10 @@ float Scene::RadiusAdjustment(const float radius, const float deltaY) const {
 
 Scene::Scene(VkDevice vkDevice, VkPhysicalDevice physDevice)
     : device(vkDevice), physicalDevice(physDevice) {
+}
+
+Scene::~Scene() {
+    Clear();
 }
 
 void Scene::Initialize() {
@@ -1158,17 +1166,7 @@ glm::vec4 Scene::ComputeSpringVisualColor(float currentLength, float restLength)
     return glm::vec4(glm::mix(relaxed, tense, t), 1.0f);
 }
 
-Entity Scene::GetOrCreateSpringVisualEntity(const std::string& key) {
-    auto it = m_SpringVisualEntities.find(key);
-    if (it != m_SpringVisualEntities.end()) {
-        const Entity existing = it->second;
-        if (existing < m_Registry.GetEntityCount() &&
-            m_Registry.HasComponent<TransformComponent>(existing) &&
-            m_Registry.HasComponent<RenderComponent>(existing)) {
-            return existing;
-        }
-    }
-
+Entity Scene::CreateSpringVisualEntity() {
     Entity visualEntity = m_Registry.CreateEntity();
 
     TransformComponent transform;
@@ -1189,163 +1187,102 @@ Entity Scene::GetOrCreateSpringVisualEntity(const std::string& key) {
     render.useDebugOverlay = true;
     render.debugOverlayColor = glm::vec4(0.1f, 1.0f, 0.1f, 1.0f);
     m_Registry.AddComponent<RenderComponent>(visualEntity, render);
+    m_Registry.AddComponent<SpringVisualComponent>(visualEntity, SpringVisualComponent{});
 
     m_RenderableEntities.push_back(visualEntity);
-    m_SpringVisualEntities[key] = visualEntity;
     return visualEntity;
 }
 
 void Scene::ClearSpringVisuals() {
-    for (const auto& [_, entity] : m_SpringVisualEntities) {
-        if (entity < m_Registry.GetEntityCount()) {
+    for (Entity entity : m_SpringVisualEntitiesList) {
+        if (m_Registry.IsAlive(entity)) {
             DeleteEntity(entity);
         }
     }
-    m_SpringVisualEntities.clear();
+    m_SpringVisualEntitiesList.clear();
 }
 
-Entity Scene::GetOrCreatePathVisualEntity(const std::string& key) {
-    auto it = m_PathVisualEntities.find(key);
-    if (it != m_PathVisualEntities.end()) {
-        const Entity existing = it->second;
-        if (existing < m_Registry.GetEntityCount() &&
-            m_Registry.HasComponent<TransformComponent>(existing) &&
-            m_Registry.HasComponent<RenderComponent>(existing)) {
-            return existing;
-        }
-    }
 
+Entity Scene::CreatePathVisualEntity() {
     Entity visualEntity = m_Registry.CreateEntity();
-
     TransformComponent transform;
     transform.UpdateMatrix();
     m_Registry.AddComponent<TransformComponent>(visualEntity, transform);
-
     RenderComponent render;
-    render.geometry = m_SpringVisualGeometry;
+    render.geometry = m_PathVisualGeometry;
     render.geometryName = "path_visual";
-    render.texturePath = "";
-    render.originalTexturePath = "";
     render.shadingMode = 1;
-    render.castsShadow = false;
-    render.originalCastsShadow = false;
-    render.receiveShadows = false;
     render.layerMask = SceneLayers::ALL;
-    render.onlyInRegionMask = 0;
     render.useDebugOverlay = true;
-    render.debugOverlayColor = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f);
     m_Registry.AddComponent<RenderComponent>(visualEntity, render);
-
     m_RenderableEntities.push_back(visualEntity);
-    m_PathVisualEntities[key] = visualEntity;
     return visualEntity;
 }
 
 void Scene::ClearPathVisuals() {
-    for (const auto& [_, entity] : m_PathVisualEntities) {
-        if (entity < m_Registry.GetEntityCount()) {
-            DeleteEntity(entity);
-        }
+    for (Entity entity : m_PathVisualEntitiesList) {
+        if (m_Registry.IsAlive(entity)) DeleteEntity(entity);
     }
-    m_PathVisualEntities.clear();
+    m_PathVisualEntitiesList.clear();
 }
 
-Entity Scene::GetOrCreateSpawnerVisualEntity(const std::string& key) {
-    auto it = m_SpawnerVisualEntities.find(key);
-    if (it != m_SpawnerVisualEntities.end()) {
-        const Entity existing = it->second;
-        if (existing < m_Registry.GetEntityCount() &&
-            m_Registry.HasComponent<TransformComponent>(existing) &&
-            m_Registry.HasComponent<RenderComponent>(existing)) {
-            return existing;
-        }
-    }
 
+Entity Scene::CreateSpawnerVisualEntity() {
     Entity visualEntity = m_Registry.CreateEntity();
-
     TransformComponent transform;
     transform.UpdateMatrix();
     m_Registry.AddComponent<TransformComponent>(visualEntity, transform);
-
     RenderComponent render;
-    render.geometry = m_SpringVisualGeometry;
+    render.geometry = m_SpawnerVisualGeometry;
     render.geometryName = "spawner_visual";
-    render.texturePath = "";
-    render.originalTexturePath = "";
     render.shadingMode = 1;
-    render.castsShadow = false;
-    render.originalCastsShadow = false;
-    render.receiveShadows = false;
     render.layerMask = SceneLayers::ALL;
-    render.onlyInRegionMask = 0;
     render.useDebugOverlay = true;
-    render.debugOverlayColor = glm::vec4(1.0f, 0.7f, 0.1f, 1.0f);
     m_Registry.AddComponent<RenderComponent>(visualEntity, render);
-
     m_RenderableEntities.push_back(visualEntity);
-    m_SpawnerVisualEntities[key] = visualEntity;
     return visualEntity;
 }
 
 void Scene::ClearSpawnerVisuals() {
-    for (const auto& [_, entity] : m_SpawnerVisualEntities) {
-        if (entity < m_Registry.GetEntityCount()) {
-            DeleteEntity(entity);
-        }
+    for (Entity entity : m_SpawnerVisualEntitiesList) {
+        if (m_Registry.IsAlive(entity)) DeleteEntity(entity);
     }
-    m_SpawnerVisualEntities.clear();
+    m_SpawnerVisualEntitiesList.clear();
 }
 
 void Scene::UpdatePathVisuals() {
-    std::unordered_set<std::string> activeKeys;
     auto& registry = m_Registry;
-    const Entity entityCount = registry.GetEntityCount();
     constexpr float kLineThickness = 0.02f;
     constexpr float kMarkerSize = 0.08f;
+    size_t nextVisualIdx = 0;
 
-    auto updateLineVisual = [&](const std::string& key, const glm::vec3& start, const glm::vec3& end, const glm::vec4& color) {
-        const glm::vec3 delta = end - start;
-        const float distance = glm::length(delta);
-        if (distance <= 0.0001f) return;
+    auto updateVisual = [&](const glm::vec3& pos, const glm::vec3& scale, const glm::vec3& rot, const glm::vec4& color) {
+        Entity v;
+        if (nextVisualIdx < m_PathVisualEntitiesList.size()) {
+            v = m_PathVisualEntitiesList[nextVisualIdx];
+            if (!registry.IsAlive(v)) {
+                v = CreatePathVisualEntity();
+                m_PathVisualEntitiesList[nextVisualIdx] = v;
+            }
+        } else {
+            v = CreatePathVisualEntity();
+            m_PathVisualEntitiesList.push_back(v);
+        }
+        nextVisualIdx++;
 
-        const glm::vec3 direction = delta / distance;
-        const glm::vec3 midpoint = start + (delta * 0.5f);
-        const float yaw = std::atan2(direction.x, direction.z);
-        const float pitch = -std::asin(glm::clamp(direction.y, -1.0f, 1.0f));
+        auto& tr = registry.GetComponent<TransformComponent>(v);
+        tr.position = pos;
+        tr.rotation = rot;
+        tr.scale = scale;
+        tr.UpdateMatrix();
 
-        Entity visualEntity = GetOrCreatePathVisualEntity(key);
-        auto& transform = registry.GetComponent<TransformComponent>(visualEntity);
-        transform.position = midpoint;
-        transform.rotation = glm::degrees(glm::vec3(pitch, yaw, 0.0f));
-        transform.scale = glm::vec3(kLineThickness, kLineThickness, distance);
-        transform.UpdateMatrix();
+        auto& rd = registry.GetComponent<RenderComponent>(v);
+        rd.visible = true;
+        rd.debugOverlayColor = color;
+    };
 
-        auto& render = registry.GetComponent<RenderComponent>(visualEntity);
-        render.visible = true;
-        render.useDebugOverlay = true;
-        render.debugOverlayColor = color;
-
-        activeKeys.insert(key);
-        };
-
-    auto updateMarkerVisual = [&](const std::string& key, const glm::vec3& position, const glm::vec4& color) {
-        Entity visualEntity = GetOrCreatePathVisualEntity(key);
-        auto& transform = registry.GetComponent<TransformComponent>(visualEntity);
-        transform.position = position;
-        transform.rotation = glm::vec3(0.0f);
-        transform.scale = glm::vec3(kMarkerSize);
-        transform.UpdateMatrix();
-
-        auto& render = registry.GetComponent<RenderComponent>(visualEntity);
-        render.visible = true;
-        render.useDebugOverlay = true;
-        render.debugOverlayColor = color;
-
-        activeKeys.insert(key);
-        };
-
-    for (Entity e = 0; e < entityCount; ++e) {
-        if (!registry.HasComponent<PathAnimationComponent>(e)) continue;
+    for (Entity e : m_RenderableEntities) {
+        if (!registry.IsAlive(e) || !registry.HasComponent<PathAnimationComponent>(e)) continue;
 
         const auto& path = registry.GetComponent<PathAnimationComponent>(e);
         if (!path.showPath || path.waypoints.empty()) continue;
@@ -1357,9 +1294,7 @@ void Scene::UpdatePathVisuals() {
         }
 
         for (size_t i = 0; i < path.waypoints.size(); ++i) {
-            const auto& waypoint = path.waypoints[i];
-            const std::string base = "PathVis_" + std::to_string(e) + "_" + std::to_string(i);
-            updateMarkerVisual(base + "_waypoint", waypoint.position + offset, glm::vec4(0.1f, 1.0f, 0.1f, 1.0f));
+            updateVisual(path.waypoints[i].position + offset, glm::vec3(kMarkerSize), glm::vec3(0.0f), glm::vec4(0.1f, 1.0f, 0.1f, 1.0f));
         }
 
         const size_t segmentCount = std::min(
@@ -1372,150 +1307,165 @@ void Scene::UpdatePathVisuals() {
             const size_t endIndex = (path.connectEndToStart && i + 1 == path.waypoints.size()) ? 0 : (i + 1);
             const auto& startWaypoint = path.waypoints[startIndex];
             const auto& endWaypoint = path.waypoints[endIndex];
-            const std::string base = "PathVis_" + std::to_string(e) + "_" + std::to_string(i);
 
             if (segment.curveType == PathCurveType::BezierQuadratic) {
                 constexpr int kSamples = 20;
-                glm::vec3 previousPoint = AnimationMath::QuadraticBezier(startWaypoint.position, segment.controlPoint, endWaypoint.position, 0.0f) + offset;
+                glm::vec3 prev = AnimationMath::QuadraticBezier(startWaypoint.position, segment.controlPoint, endWaypoint.position, 0.0f) + offset;
                 for (int s = 1; s <= kSamples; ++s) {
-                    const float t = static_cast<float>(s) / static_cast<float>(kSamples);
-                    const glm::vec3 currentPoint = AnimationMath::QuadraticBezier(startWaypoint.position, segment.controlPoint, endWaypoint.position, t) + offset;
-                    updateLineVisual(base + "_curve_" + std::to_string(s), previousPoint, currentPoint, path.pathColor);
-                    previousPoint = currentPoint;
+                    float t = s / (float)kSamples;
+                    glm::vec3 curr = AnimationMath::QuadraticBezier(startWaypoint.position, segment.controlPoint, endWaypoint.position, t) + offset;
+                    const glm::vec3 delta = curr - prev;
+                    const float d = glm::length(delta);
+                    if (d > 0.0001f) {
+                        const glm::vec3 dir = delta / d;
+                        const float yaw = std::atan2(dir.x, dir.z);
+                        const float pitch = -std::asin(glm::clamp(dir.y, -1.0f, 1.0f));
+                        updateVisual(prev + delta * 0.5f, glm::vec3(kLineThickness, kLineThickness, d), glm::degrees(glm::vec3(pitch, yaw, 0.0f)), path.pathColor);
+                    }
+                    prev = curr;
                 }
-                updateMarkerVisual(base + "_ctrl", segment.controlPoint + offset, glm::vec4(1.0f, 1.0f, 0.1f, 1.0f));
-            }
-            else {
-                updateLineVisual(base + "_line", startWaypoint.position + offset, endWaypoint.position + offset, path.pathColor);
+                updateVisual(segment.controlPoint + offset, glm::vec3(kMarkerSize * 0.5f), glm::vec3(0.0f), glm::vec4(1.0f, 1.0f, 0.1f, 1.0f));
+            } else {
+                const glm::vec3 pA = startWaypoint.position + offset;
+                const glm::vec3 pB = endWaypoint.position + offset;
+                const glm::vec3 delta = pB - pA;
+                const float d = glm::length(delta);
+                if (d > 0.0001f) {
+                    const glm::vec3 dir = delta / d;
+                    const float yaw = std::atan2(dir.x, dir.z);
+                    const float pitch = -std::asin(glm::clamp(dir.y, -1.0f, 1.0f));
+                    updateVisual(pA + delta * 0.5f, glm::vec3(kLineThickness, kLineThickness, d), glm::degrees(glm::vec3(pitch, yaw, 0.0f)), path.pathColor);
+                }
             }
         }
     }
 
-    for (auto it = m_PathVisualEntities.begin(); it != m_PathVisualEntities.end(); ) {
-        if (activeKeys.find(it->first) == activeKeys.end()) {
-            DeleteEntity(it->second);
-            it = m_PathVisualEntities.erase(it);
-        }
-        else {
-            ++it;
-        }
+    for (size_t i = nextVisualIdx; i < m_PathVisualEntitiesList.size(); ++i) {
+        Entity v = m_PathVisualEntitiesList[i];
+        if (registry.IsAlive(v)) registry.GetComponent<RenderComponent>(v).visible = false;
     }
 }
 
 void Scene::UpdateSpringVisuals() {
-    std::unordered_set<std::string> activeKeys;
     auto& registry = m_Registry;
+    auto springArray = registry.GetComponentArray<SpringComponent>();
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto renderArray = registry.GetComponentArray<RenderComponent>();
+    
     const Entity entityCount = registry.GetEntityCount();
     constexpr float kThickness = 0.03f;
+    size_t nextVisualIdx = 0;
 
-    auto updateVisual = [&](const std::string& key, const glm::vec3& posA, const glm::vec3& posB, float restLength) {
+    auto updateVisual = [&](const glm::vec3& posA, const glm::vec3& posB, float restLength) {
         const glm::vec3 delta = posB - posA;
         const float distance = glm::length(delta);
-        if (distance <= 0.0001f) {
-            return;
-        }
+        if (distance <= 0.0001f) return;
 
         const glm::vec3 direction = delta / distance;
         const glm::vec3 midpoint = posA + (delta * 0.5f);
-
         const float yaw = std::atan2(direction.x, direction.z);
         const float pitch = -std::asin(glm::clamp(direction.y, -1.0f, 1.0f));
         const glm::vec3 eulerDegrees = glm::degrees(glm::vec3(pitch, yaw, 0.0f));
 
-        Entity visualEntity = GetOrCreateSpringVisualEntity(key);
-        auto& transform = registry.GetComponent<TransformComponent>(visualEntity);
+        Entity visualEntity;
+        if (nextVisualIdx < m_SpringVisualEntitiesList.size()) {
+            visualEntity = m_SpringVisualEntitiesList[nextVisualIdx];
+            if (!registry.IsAlive(visualEntity) || !registry.HasComponent<SpringVisualComponent>(visualEntity)) {
+                visualEntity = CreateSpringVisualEntity();
+                m_SpringVisualEntitiesList[nextVisualIdx] = visualEntity;
+            }
+        } else {
+            visualEntity = CreateSpringVisualEntity();
+            m_SpringVisualEntitiesList.push_back(visualEntity);
+        }
+        nextVisualIdx++;
+
+        auto& transform = transformArray->GetData(visualEntity);
         transform.position = midpoint;
         transform.rotation = eulerDegrees;
         transform.scale = glm::vec3(kThickness, kThickness, distance);
         transform.UpdateMatrix();
 
-        auto& render = registry.GetComponent<RenderComponent>(visualEntity);
+        auto& render = renderArray->GetData(visualEntity);
         render.visible = true;
         render.useDebugOverlay = true;
         render.debugOverlayColor = ComputeSpringVisualColor(distance, restLength);
-
-        activeKeys.insert(key);
     };
 
-    for (Entity e = 0; e < entityCount; ++e) {
-        if (!registry.HasComponent<SpringComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
+    auto springEntities = springArray->GetSize();
+    for (size_t i = 0; i < springEntities; ++i) {
+        Entity e = springArray->GetEntityAtIndex(i);
+        if (e == MAX_ENTITIES || !registry.IsAlive(e) || !transformArray->HasData(e)) {
             continue;
         }
 
-        auto& spring = registry.GetComponent<SpringComponent>(e);
-        const glm::vec3 posA = registry.GetComponent<TransformComponent>(e).position;
+        const auto& spring = springArray->GetData(e);
+        const glm::vec3 posA = transformArray->GetData(e).position;
 
         if (!spring.isAttachedToEntity) {
-            const std::string key = "SpringVis_" + std::to_string(e) + "_Fixed";
-            updateVisual(key, posA, spring.fixedAnchorPoint, spring.restingLength);
-            continue;
-        }
+            updateVisual(posA, spring.fixedAnchorPoint, spring.restingLength);
+        } else {
+            for (const Entity target : spring.connectedEntities) {
+                if (target == MAX_ENTITIES || target >= entityCount) continue;
+                if (!registry.IsAlive(target) || !transformArray->HasData(target)) continue;
 
-        for (size_t i = 0; i < spring.connectedEntities.size(); ++i) {
-            const Entity target = spring.connectedEntities[i];
-            if (target == MAX_ENTITIES || target >= entityCount) continue;
-            if (!registry.HasComponent<TransformComponent>(target)) continue;
-
-            const glm::vec3 posB = registry.GetComponent<TransformComponent>(target).position;
-            const std::string key = "SpringVis_" + std::to_string(e) + "_" + std::to_string(i);
-            updateVisual(key, posA, posB, spring.restingLength);
+                const glm::vec3 posB = transformArray->GetData(target).position;
+                updateVisual(posA, posB, spring.restingLength);
+            }
         }
     }
 
-    for (auto it = m_SpringVisualEntities.begin(); it != m_SpringVisualEntities.end(); ) {
-        if (activeKeys.find(it->first) == activeKeys.end()) {
-            DeleteEntity(it->second);
-            it = m_SpringVisualEntities.erase(it);
-        }
-        else {
-            ++it;
+    // Hide unused pool entities
+    for (size_t i = nextVisualIdx; i < m_SpringVisualEntitiesList.size(); ++i) {
+        Entity v = m_SpringVisualEntitiesList[i];
+        if (registry.IsAlive(v) && registry.HasComponent<SpringVisualComponent>(v)) {
+            renderArray->GetData(v).visible = false;
         }
     }
 }
 
 void Scene::UpdateSpawnerVisuals() {
-    std::unordered_set<std::string> activeKeys;
     auto& registry = m_Registry;
-    const Entity entityCount = registry.GetEntityCount();
     constexpr float kStemThickness = 0.035f;
     constexpr float kStemHeight = 1.2f;
     constexpr float kCrossArm = 0.45f;
     constexpr float kArrowLength = 0.65f;
+    size_t nextVisualIdx = 0;
 
-    auto updateVisual = [&](const std::string& key,
-        const glm::vec3& position,
-        const glm::vec3& rotation,
-        const glm::vec3& scale,
-        const glm::vec4& color) {
-            Entity visualEntity = GetOrCreateSpawnerVisualEntity(key);
-            auto& transform = registry.GetComponent<TransformComponent>(visualEntity);
-            transform.position = position;
-            transform.rotation = rotation;
-            transform.scale = scale;
-            transform.UpdateMatrix();
-
-            auto& render = registry.GetComponent<RenderComponent>(visualEntity);
-            render.visible = true;
-            render.useDebugOverlay = true;
-            render.debugOverlayColor = color;
-
-            activeKeys.insert(key);
-        };
-
-    for (Entity e = 0; e < entityCount; ++e) {
-        if (!registry.HasComponent<ObjectSpawnerComponent>(e) ||
-            !registry.HasComponent<TransformComponent>(e)) {
-            continue;
+    auto updateVisual = [&](const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const glm::vec4& color) {
+        Entity v;
+        if (nextVisualIdx < m_SpawnerVisualEntitiesList.size()) {
+            v = m_SpawnerVisualEntitiesList[nextVisualIdx];
+            if (!registry.IsAlive(v)) {
+                v = CreateSpawnerVisualEntity();
+                m_SpawnerVisualEntitiesList[nextVisualIdx] = v;
+            }
+        } else {
+            v = CreateSpawnerVisualEntity();
+            m_SpawnerVisualEntitiesList.push_back(v);
         }
+        nextVisualIdx++;
+
+        auto& tr = registry.GetComponent<TransformComponent>(v);
+        tr.position = position;
+        tr.rotation = rotation;
+        tr.scale = scale;
+        tr.UpdateMatrix();
+
+        auto& rd = registry.GetComponent<RenderComponent>(v);
+        rd.visible = true;
+        rd.debugOverlayColor = color;
+    };
+
+    for (Entity e : m_RenderableEntities) {
+        if (!registry.IsAlive(e) || !registry.HasComponent<ObjectSpawnerComponent>(e) || !registry.HasComponent<TransformComponent>(e)) continue;
 
         const auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
         const auto& transform = registry.GetComponent<TransformComponent>(e);
         const glm::vec3 basePos = transform.position;
 
         char group = static_cast<char>(std::toupper(static_cast<unsigned char>(spawner.group)));
-        if (group < 'A' || group > 'D') {
-            group = 'A';
-        }
+        if (group < 'A' || group > 'D') group = 'A';
 
         glm::vec4 color(1.0f, 0.7f, 0.1f, 1.0f);
         if (group == 'A') color = glm::vec4(0.2f, 0.9f, 1.0f, 1.0f);
@@ -1524,32 +1474,12 @@ void Scene::UpdateSpawnerVisuals() {
         else if (group == 'D') color = glm::vec4(1.0f, 0.3f, 0.9f, 1.0f);
 
         if (spawner.triggerOnStartup) {
-            color = glm::vec4(
-                glm::min(color.r + 0.15f, 1.0f),
-                glm::min(color.g + 0.15f, 1.0f),
-                glm::min(color.b + 0.15f, 1.0f),
-                1.0f);
+            color = glm::vec4(glm::min(color.r + 0.15f, 1.0f), glm::min(color.g + 0.15f, 1.0f), glm::min(color.b + 0.15f, 1.0f), 1.0f);
         }
 
-        const std::string baseKey = "SpawnerVis_" + std::to_string(e);
-
-        updateVisual(baseKey + "_stem",
-            basePos + glm::vec3(0.0f, kStemHeight * 0.5f, 0.0f),
-            glm::vec3(0.0f),
-            glm::vec3(kStemThickness, kStemHeight, kStemThickness),
-            color);
-
-        updateVisual(baseKey + "_cross_x",
-            basePos + glm::vec3(0.0f, kStemHeight, 0.0f),
-            glm::vec3(0.0f, 90.0f, 0.0f),
-            glm::vec3(kStemThickness * 0.8f, kStemThickness * 0.8f, kCrossArm),
-            color);
-
-        updateVisual(baseKey + "_cross_z",
-            basePos + glm::vec3(0.0f, kStemHeight, 0.0f),
-            glm::vec3(90.0f, 0.0f, 0.0f),
-            glm::vec3(kStemThickness * 0.8f, kStemThickness * 0.8f, kCrossArm),
-            color);
+        updateVisual(basePos + glm::vec3(0.0f, kStemHeight * 0.5f, 0.0f), glm::vec3(0.0f), glm::vec3(kStemThickness, kStemHeight, kStemThickness), color);
+        updateVisual(basePos + glm::vec3(0.0f, kStemHeight, 0.0f), glm::vec3(0.0f, 90.0f, 0.0f), glm::vec3(kStemThickness * 0.8f, kStemThickness * 0.8f, kCrossArm), color);
+        updateVisual(basePos + glm::vec3(0.0f, kStemHeight, 0.0f), glm::vec3(90.0f, 0.0f, 0.0f), glm::vec3(kStemThickness * 0.8f, kStemThickness * 0.8f, kCrossArm), color);
 
         const glm::vec3 velocity = spawner.spawnVelocity;
         const float velocityLength = glm::length(velocity);
@@ -1557,25 +1487,14 @@ void Scene::UpdateSpawnerVisuals() {
             const glm::vec3 dir = velocity / velocityLength;
             const float yaw = std::atan2(dir.x, dir.z);
             const float pitch = -std::asin(glm::clamp(dir.y, -1.0f, 1.0f));
-            const glm::vec3 arrowRot = glm::degrees(glm::vec3(pitch, yaw, 0.0f));
             const float arrowScale = std::max(kArrowLength, std::min(velocityLength * 0.08f, 2.0f));
-
-            updateVisual(baseKey + "_arrow",
-                basePos + glm::vec3(0.0f, kStemHeight, 0.0f) + dir * (arrowScale * 0.5f),
-                arrowRot,
-                glm::vec3(kStemThickness * 0.9f, kStemThickness * 0.9f, arrowScale),
-                glm::vec4(color.r, color.g, color.b, 0.9f));
+            updateVisual(basePos + glm::vec3(0.0f, kStemHeight, 0.0f) + dir * (arrowScale * 0.5f), glm::degrees(glm::vec3(pitch, yaw, 0.0f)), glm::vec3(kStemThickness * 0.9f, kStemThickness * 0.9f, arrowScale), glm::vec4(color.r, color.g, color.b, 0.9f));
         }
     }
 
-    for (auto it = m_SpawnerVisualEntities.begin(); it != m_SpawnerVisualEntities.end(); ) {
-        if (activeKeys.find(it->first) == activeKeys.end()) {
-            DeleteEntity(it->second);
-            it = m_SpawnerVisualEntities.erase(it);
-        }
-        else {
-            ++it;
-        }
+    for (size_t i = nextVisualIdx; i < m_SpawnerVisualEntitiesList.size(); ++i) {
+        Entity v = m_SpawnerVisualEntitiesList[i];
+        if (registry.IsAlive(v)) registry.GetComponent<RenderComponent>(v).visible = false;
     }
 }
 
@@ -1588,14 +1507,14 @@ void Scene::Update(float deltaTime) {
     if (m_ShowSpringVisuals) {
         UpdateSpringVisuals();
     }
-    else if (!m_SpringVisualEntities.empty()) {
+    else if (!m_SpringVisualEntitiesList.empty()) {
         ClearSpringVisuals();
     }
 
     if (m_ShowSpawnerVisuals) {
         UpdateSpawnerVisuals();
     }
-    else if (!m_SpawnerVisualEntities.empty()) {
+    else if (!m_SpawnerVisualEntitiesList.empty()) {
         ClearSpawnerVisuals();
     }
 
@@ -1636,34 +1555,33 @@ std::vector<Light> Scene::GetLights() const {
 }
 
 void Scene::Clear() {
+    // 1. Collect all shared geometry for deferred cleanup
     for (Entity e : m_RenderableEntities) {
-        if (m_Registry.HasComponent<RenderComponent>(e)) {
+        if (m_Registry.IsAlive(e) && m_Registry.HasComponent<RenderComponent>(e)) {
             auto& renderComp = m_Registry.GetComponent<RenderComponent>(e);
-            if (renderComp.geometry) {
-                if (renderComp.geometry.use_count() == 1) {
-                    m_DeferredGeometryCleanup.push_back(std::move(renderComp.geometry));
-                }
+            if (renderComp.geometry && renderComp.geometry.use_count() == 1) {
+                m_DeferredGeometryCleanup.push_back(std::move(renderComp.geometry));
             }
         }
     }
 
-    // Safely destroy all entities. Registry::DestroyEntity now guards against double-free via isAlive check
-    const Entity entityCount = m_Registry.GetEntityCount();
-    for (Entity i = 0; i < entityCount; ++i) {
-        DeleteEntity(i);
-    }
+    // 2. High-speed Registry Clear
+    m_Registry.Clear();
 
+    // 3. Clear all scene-side tracking lists
     m_EntityMap.clear();
     m_RenderableEntities.clear();
     m_LightEntities.clear();
     particleSystems.clear();
-    m_SpringVisualEntities.clear();
-    m_PathVisualEntities.clear();
-    m_SpawnerVisualEntities.clear();
+    m_SpringVisualEntitiesList.clear();
+    m_PathVisualEntitiesList.clear();
+    m_SpawnerVisualEntitiesList.clear();
 
+    // 4. Synchronize with GPU and flush
     FlushDeferredGeometryCleanup();
 
     m_EnvironmentEntity = MAX_ENTITIES;
+    m_ElapsedTime = 0.0f;
 }
 
 void Scene::FlushDeferredGeometryCleanup() {

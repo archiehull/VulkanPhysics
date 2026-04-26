@@ -222,6 +222,7 @@ struct ClothComponent {
     float spacing = 1.0f;
     std::vector<Entity> particles; // 1D array of entities in the grid
     std::shared_ptr<Geometry> dynamicGeometry = nullptr;
+    bool collisionsEnabled = true;
 };
 
 struct ColliderComponent {
@@ -233,6 +234,8 @@ struct ColliderComponent {
     uint32_t collisionLayer = 1; // Default layer
     uint32_t collisionMask = 0xFFFFFFFF; // Collide with all layers by default
 };
+
+struct SpringVisualComponent {};
 
 // 7. Light
 struct LightComponent {

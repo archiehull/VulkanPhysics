@@ -826,14 +826,15 @@ void Application::GenerateLookahead(float timeframe) {
         auto& registry = scene->GetRegistry();
         const Entity entityCount = registry.GetEntityCount();
         for (Entity e = 0; e < entityCount; ++e) {
-            if (registry.HasComponent<TransformComponent>(e) && registry.HasComponent<RenderComponent>(e)) {
+            if (registry.HasComponent<TransformComponent>(e)) {
                 EntitySnapshot eSnap;
                 auto& t = registry.GetComponent<TransformComponent>(e);
                 eSnap.position = t.position;
                 eSnap.rotation = t.rotation;
                 eSnap.scale = t.scale;
                 eSnap.matrix = t.matrix;
-                eSnap.visible = registry.GetComponent<RenderComponent>(e).visible;
+                eSnap.visible = registry.HasComponent<RenderComponent>(e) ? registry.GetComponent<RenderComponent>(e).visible : true;
+                
                 if (registry.HasComponent<LightComponent>(e)) {
                     eSnap.lightIntensity = registry.GetComponent<LightComponent>(e).intensity;
                 } else {
@@ -1088,7 +1089,7 @@ void Application::MainLoop() {
                 auto& registry = scene->GetRegistry();
                 const Entity entityCount = registry.GetEntityCount();
                 for (Entity e = 0; e < entityCount; ++e) {
-                    if (registry.HasComponent<TransformComponent>(e) && registry.HasComponent<RenderComponent>(e)) {
+                    if (registry.HasComponent<TransformComponent>(e)) {
                         auto it = snapshot.entities.find(e);
                         if (it != snapshot.entities.end()) {
                             auto& t = registry.GetComponent<TransformComponent>(e);
@@ -1110,13 +1111,16 @@ void Application::MainLoop() {
                                 phys.torqueAccumulator = it->second.torqueAccumulator;
                             }
                             
-                            registry.GetComponent<RenderComponent>(e).visible = it->second.visible;
+                            if (registry.HasComponent<RenderComponent>(e)) {
+                                registry.GetComponent<RenderComponent>(e).visible = it->second.visible;
+                            }
                             if (it->second.hasCollider && registry.HasComponent<ColliderComponent>(e)) {
                                 registry.GetComponent<ColliderComponent>(e).hasCollision = it->second.hasCollision;
                             }
                         } else {
-                            // Entity was spawned after this frame, so hide it
-                            registry.GetComponent<RenderComponent>(e).visible = false;
+                            if (registry.HasComponent<RenderComponent>(e)) {
+                                registry.GetComponent<RenderComponent>(e).visible = false;
+                            }
                             if (registry.HasComponent<LightComponent>(e)) {
                                 registry.GetComponent<LightComponent>(e).intensity = 0.0f;
                             }
@@ -1133,10 +1137,13 @@ void Application::MainLoop() {
                     }
                 }
             }
+            PhysicsSystem::simulationPaused = true;
+            scene->Update(deltaTime);
         } else {
             m_IsReplaying = false;
+            PhysicsSystem::simulationPaused = false;
             // 4. Update the scene with the calculated delta
-            scene->Update(stepDelta);
+            scene->Update(deltaTime);
         }
         
         const auto updateEnd = std::chrono::high_resolution_clock::now();
@@ -1155,7 +1162,9 @@ void Application::MainLoop() {
             currentViewMask = camComp.viewMask;
             currentInsideRegionMask = camComp.insideRegionMask;
 
-            renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask, currentInsideRegionMask);
+            if (renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask, currentInsideRegionMask)) {
+                framebufferResized = true;
+            }
         }
         const auto drawEnd = std::chrono::high_resolution_clock::now();
 

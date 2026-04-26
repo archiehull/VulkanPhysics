@@ -1,58 +1,51 @@
 #pragma once
-
-#include "../geometry/Geometry.h"
-#include "../geometry/GeometryGenerator.h"
 #include <vector>
-#include <memory>
-#include <glm/glm.hpp>
 #include <string>
-#include "../vulkan/UniformBufferObject.h"
-#include "../core/Config.h" 
-#include "ParticleSystem.h"
-
-
-// ECS Includes
-#include "../core/CoreTypes.h"
+#include <memory>
+#include <unordered_map>
+#include <functional>
+#include <glm/glm.hpp>
+#include <vulkan/vulkan.h>
 #include "../core/ECS.h"
 #include "../core/Components.h"
-#include <unordered_map>
-#include "../systems/ISystem.h"
+#include "../core/CoreTypes.h"
+#include "../core/Config.h"
+#include "../geometry/Geometry.h"
+#include "../vulkan/VulkanContext.h"
+#include "../vulkan/UniformBufferObject.h"
+#include "ParticleSystem.h"
 
 struct TerrainConfig {
     bool exists = false;
-    float radius = 100.0f;
-    float heightScale = 1.0f;
-    float noiseFreq = 0.01f;
+    float radius = 0.0f;
+    float heightScale = 0.0f;
+    float noiseFreq = 0.0f;
     glm::vec3 position = glm::vec3(0.0f);
 };
 
 struct ProceduralObjectConfig {
     std::string modelPath;
     std::string texturePath;
-    float frequency = 1.0f;
-    glm::vec3 minScale = glm::vec3(1.0f);
-    glm::vec3 maxScale = glm::vec3(1.0f);
-    glm::vec3 baseRotation = glm::vec3(0.0f);
-    bool isFlammable = false;
+    float frequency;
+    glm::vec3 minScale;
+    glm::vec3 maxScale;
+    glm::vec3 baseRotation;
+    bool isFlammable;
 };
 
-class Scene final {
+class Scene {
 public:
-    Scene(VkDevice vkDevice, VkPhysicalDevice physDevice);
-    ~Scene() = default;
+    Scene(VkDevice device, VkPhysicalDevice physicalDevice);
+    ~Scene();
 
-    Scene(const Scene&) = delete;
-    Scene& operator=(const Scene&) = delete;
-
-    Entity GetEntityByName(const std::string& name) const;
     void RegisterEntityName(const std::string& name, Entity entity);
+    Entity GetEntityByName(const std::string& name) const;
     void DeleteEntity(Entity entity);
     void RemoveRenderComponent(Entity entity);
 
     void Initialize();
 
     void CreateEnvironment(const std::string& name = "GlobalEnvironment");
-    Entity CreateDustCloud(const std::string& name, const glm::vec3& position, const glm::vec3& direction, float speed, bool isActive = false);
     Entity CreateSpawnerEntity(const std::string& name, const glm::vec3& position);
     Entity AddSpawner(const std::string& name, const glm::vec3& position);
     Entity CreateDeathWall(const std::string& name, float yLevel, float halfWidth, float halfDepth);
@@ -117,7 +110,6 @@ public:
     void AddSimpleShadow(const std::string& objectName, float radius);
     void ToggleSimpleShadows();
 
-    // Updated to query the component instead of a local boolean
     bool IsUsingSimpleShadows() const {
         if (m_EnvironmentEntity == MAX_ENTITIES) return false;
         return m_Registry.GetComponent<EnvironmentComponent>(m_EnvironmentEntity).useSimpleShadows;
@@ -127,7 +119,6 @@ public:
 
     void Clear();
 
-    // --- ECS Data Accessors ---
     const Registry& GetRegistry() const { return m_Registry; }
     Registry& GetRegistry() { return m_Registry; }
     const std::vector<Entity>& GetRenderableEntities() const { return m_RenderableEntities; }
@@ -155,7 +146,6 @@ public:
 
     void SetObjectTexture(const std::string& objectName, const std::string& texturePath);
 
-    // --- Configuration Setters (These route to EnvironmentComponent) ---
     void SetTimeConfig(const TimeConfig& config);
     void SetWeatherConfig(const WeatherConfig& config);
     void SetSeasonConfig(const SeasonConfig& config);
@@ -168,7 +158,6 @@ public:
 
     void Cleanup() { Clear(); }
 
-    // --- Environment Component Getters ---
     float GetWeatherIntensity() const;
     std::string GetSeasonName() const;
     bool IsPrecipitating() const;
@@ -200,11 +189,12 @@ public:
     void SetLookaheadMode(bool mode) { m_IsLookaheadMode = mode; }
     void DeactivateEntityForLookahead(Entity e);
 
+    Entity CreateDustCloud(const std::string& name, const glm::vec3& position, const glm::vec3& direction, float speed, bool isActive);
+
 private:
     void FlushDeferredGeometryCleanup();
     void UpdateSpringVisuals();
     void ClearSpringVisuals();
-    Entity GetOrCreateSpringVisualEntity(const std::string& key);
     glm::vec4 ComputeSpringVisualColor(float currentLength, float restLength) const;
     void UpdatePathVisuals();
     void ClearPathVisuals();
@@ -214,30 +204,24 @@ private:
     Entity GetOrCreateSpawnerVisualEntity(const std::string& key);
 
     Registry m_Registry;
-    std::vector<std::unique_ptr<ISystem>> m_Systems;
+    std::vector<std::unique_ptr<class ISystem>> m_Systems;
     std::unordered_map<std::string, Entity> m_EntityMap;
     std::vector<Entity> m_RenderableEntities;
     std::vector<Entity> m_LightEntities;
 
-    // The singleton entity tracking global environment configurations
     Entity m_EnvironmentEntity = MAX_ENTITIES;
 
     Entity AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable);
     void CreateSimpleShadowEntity(Entity targetEntity);
 
-
-    // Particle System state variables
     int m_RainEmitterId = -1;
     int m_SnowEmitterId = -1;
-
-    int globalShadingMode = 1;
 
     TerrainConfig m_TerrainConfig;
     std::vector<ProceduralObjectConfig> proceduralRegistry;
 
     VkDevice device;
     VkPhysicalDevice physicalDevice;
-
     VkCommandPool commandPool = VK_NULL_HANDLE;
     VkQueue graphicsQueue = VK_NULL_HANDLE;
     GraphicsPipeline* particlePipelineAdditive = nullptr;
@@ -247,14 +231,21 @@ private:
 
     std::vector<std::unique_ptr<ParticleSystem>> particleSystems;
     std::vector<std::shared_ptr<Geometry>> m_DeferredGeometryCleanup;
-    std::unordered_map<std::string, Entity> m_SpringVisualEntities;
-    std::unordered_map<std::string, Entity> m_PathVisualEntities;
-    std::unordered_map<std::string, Entity> m_SpawnerVisualEntities;
+    std::vector<Entity> m_SpringVisualEntitiesList;
+    std::vector<Entity> m_SpawnerVisualEntitiesList;
+    std::vector<Entity> m_PathVisualEntitiesList;
     std::shared_ptr<Geometry> m_SpringVisualGeometry;
+    std::shared_ptr<Geometry> m_SpawnerVisualGeometry;
+    std::shared_ptr<Geometry> m_PathVisualGeometry;
 
-    bool m_RegionsOnlyDebugView = false;
+    Entity CreateSpringVisualEntity();
+    Entity CreateSpawnerVisualEntity();
+    Entity CreatePathVisualEntity();
+
     bool m_ShowSpringVisuals = false;
     bool m_ShowSpawnerVisuals = false;
     bool m_IsLookaheadMode = false;
+    bool m_RegionsOnlyDebugView = false;
     float m_ElapsedTime = 0.0f;
+    int globalShadingMode = 1;
 };

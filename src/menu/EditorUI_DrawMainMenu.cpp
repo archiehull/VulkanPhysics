@@ -78,6 +78,14 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             ImGui::EndDisabled();
         }
 
+        if (ImGui::Button("Force Recreate Swapchain")) {
+            m_PerformanceSettingsChanged = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Use this if your FPS is locked at 90 unexpectedly.\nForces Vulkan to reset its swapchain and presentation modes.");
+
+        ImGui::Separator();
+        ImGui::MenuItem("UI Profiler", nullptr, &m_Profiler.showProfiler);
+
         ImGui::Separator();
 
         // --- Layer Manager ---
@@ -970,16 +978,15 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
     if (ImGui::BeginMenu("Replay")) {
         if (!m_IsReplaying) {
             ImGui::SliderFloat("Timeframe (s)", &m_LookaheadTimeframe, 1.0f, 60.0f, "%.1f");
-        }
-        
-        if (m_IsReplaying) {
-            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Replay Mode Active");
-            if (ImGui::MenuItem("Exit Replay")) {
-                m_IsReplaying = false;
-            }
-        } else {
+            ImGui::Separator();
             if (ImGui::MenuItem("Generate Lookahead")) {
                 m_GenerateLookaheadRequested = true;
+            }
+        } else {
+            ImGui::TextDisabled("Replay in Progress...");
+            if (ImGui::MenuItem("Stop Replay")) {
+                m_IsReplaying = false;
+                m_ReplayPlaying = false;
             }
         }
         ImGui::EndMenu();

@@ -53,6 +53,28 @@ if (m_ShowControlsWindow) {
     ImGui::End();
 }
 
+if (m_Profiler.showProfiler) {
+    ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("UI Profiler", &m_Profiler.showProfiler)) {
+        ImGui::Text("Total UI Draw: %.3f ms", m_Profiler.totalTime);
+        ImGui::Separator();
+        ImGui::Text("Main Menu Bar: %.3f ms", m_Profiler.drawMainMenuTime);
+        ImGui::Text("Property Windows: %.3f ms", m_Profiler.drawWindowsTime);
+        
+        ImGui::Separator();
+        ImGui::TextDisabled("Vulkan Stats:");
+        ImGui::Text("Target FPS: %s", m_FpsCapEnabled ? std::to_string(m_MaxFps).c_str() : "Unlimited");
+        ImGui::Text("VSync: %s", m_VSyncEnabled ? "On" : "Off");
+        
+        if (ImGui::Button("Reset All Timers")) {
+            m_Profiler.totalTime = 0;
+            m_Profiler.drawMainMenuTime = 0;
+            m_Profiler.drawWindowsTime = 0;
+        }
+    }
+    ImGui::End();
+}
+
 }
 
 void EditorUI::DrawPropertyWindowsSection(Scene& scene, Entity& entityToDelete) {
@@ -128,13 +150,21 @@ void EditorUI::DrawPropertyWindowsSection(Scene& scene, Entity& entityToDelete) 
         const int maxVisibleLayer = std::max(1, SceneLayers::ActiveLayerCount);
         visibleBits.reserve(maxVisibleLayer);
 
+        static std::vector<bool> layerUsedCache;
+        static uint64_t lastFrameCount = 0;
+        // Simple way to refresh once per frame (assuming this is called within a frame context)
+        // For simplicity here, we'll just cache it for the duration of the section call
+        
         for (int i = 0; i < maxVisibleLayer; ++i) {
             const int bitMask = (1 << i);
-            const bool currentlySet =
-                (visibleMask & bitMask) != 0 ||
-                (onlyMask & bitMask) != 0;
+            const bool currentlySet = (visibleMask & bitMask) != 0 || (onlyMask & bitMask) != 0;
 
-            if (isLayerUsed(i) || currentlySet) {
+            bool used = currentlySet;
+            if (!used) {
+                used = isLayerUsed(i);
+            }
+
+            if (used) {
                 visibleBits.push_back(i);
             }
         }
@@ -899,6 +929,15 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                                 auto& sc = registry.GetComponent<SpringComponent>(p);
                                 sc.stiffness = currentStiffness;
                                 sc.damping = currentDamping;
+                            }
+                        }
+                    }
+
+                    ImGui::Spacing();
+                    if (ImGui::Checkbox("Collisions Enabled", &comp.collisionsEnabled)) {
+                        for (Entity p : comp.particles) {
+                            if (registry.HasComponent<ColliderComponent>(p)) {
+                                registry.GetComponent<ColliderComponent>(p).hasCollision = comp.collisionsEnabled;
                             }
                         }
                     }

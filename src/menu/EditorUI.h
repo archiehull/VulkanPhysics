@@ -4,6 +4,14 @@
 #include <vector>
 #include "../core/Config.h"
 #include "../rendering/Scene.h"
+#include <chrono>
+
+struct UIProfiler {
+    float drawMainMenuTime = 0.0f;
+    float drawWindowsTime = 0.0f;
+    float totalTime = 0.0f;
+    bool showProfiler = false;
+};
 
 class EditorUI {
 public:
@@ -156,6 +164,7 @@ private:
     void DrawMainMenuStatusBar(float deltaTime);
     void DrawPostMainMenuSection(Scene& scene, Entity entityToDelete);
     void DrawPropertyWindowsSection(Scene& scene, Entity& entityToDelete);
+    void DrawReplayEditor(Scene& scene);
 
     Entity m_ViewRequested = MAX_ENTITIES;
 
@@ -183,6 +192,8 @@ private:
     };
     std::vector<PropertyWindowData> m_PropertyWindows;
     int m_NextPropertyWindowId = 1;
+
+    UIProfiler m_Profiler;
 
     float m_UIScale = 1.0f;
 
@@ -221,4 +232,9 @@ private:
     int m_MaxReplayFrames = 0;
     bool m_GenerateLookaheadRequested = false;
     float m_LookaheadTimeframe = 5.0f;
+
+    // Replay Playback State
+    bool m_ReplayPlaying = false;
+    float m_ReplayPlaybackSpeed = 1.0f;
+    float m_ReplayAccumulator = 0.0f;
 };

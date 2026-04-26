@@ -35,7 +35,7 @@ public:
 
     void RegisterProceduralTexture(const std::string& name, const std::function<void(Texture&)>& generator);
 
-    void DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int viewMask = SceneLayers::ALL, int insideRegionMask = 0);
+    bool DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int viewMask = SceneLayers::ALL, int insideRegionMask = 0);
     void UpdateUniformBuffer(uint32_t currentFrame, const UniformBufferObject& ubo);
     void WaitIdle() const;
     void Cleanup();

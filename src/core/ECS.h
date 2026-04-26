@@ -9,7 +9,7 @@
 #include <vector>
 
 using Entity = uint32_t;
-const Entity MAX_ENTITIES = 5000;
+const Entity MAX_ENTITIES = 30000;
 
 class IComponentArray {
 public:
@@ -89,6 +89,12 @@ public:
             RemoveData(entity);
         }
     }
+
+    size_t GetSize() const { return validSize; }
+    Entity GetEntityAtIndex(size_t index) const {
+        if (index >= validSize) return MAX_ENTITIES;
+        return indexToEntity[index];
+    }
 };
 
 class Registry {
@@ -117,6 +123,11 @@ public:
         auto it = componentArrays.find(type);
         if (it == componentArrays.end()) return nullptr;
         return std::static_pointer_cast<const ComponentArray<T>>(it->second);
+    }
+
+    bool IsAlive(Entity entity) const {
+        if (entity >= isAlive.size()) return false;
+        return isAlive[entity];
     }
 
     Entity CreateEntity() {
@@ -150,6 +161,19 @@ public:
             pair.second->EntityDestroyed(entity);
         }
         availableEntities.push(entity);
+    }
+
+    void Clear() {
+        for (auto const& pair : componentArrays) {
+            // We can't easily clear the vectors inside without more template logic, 
+            // but we can at least invalidate all entities.
+            for (Entity i = 0; i < nextEntityId; ++i) {
+                if (isAlive[i]) pair.second->EntityDestroyed(i);
+            }
+        }
+        nextEntityId = 0;
+        while (!availableEntities.empty()) availableEntities.pop();
+        std::fill(isAlive.begin(), isAlive.end(), false);
     }
 
     template <typename T>

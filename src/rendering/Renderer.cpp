@@ -239,7 +239,7 @@ void Renderer::DrawUI(VkCommandBuffer cmd, uint32_t imageIndex) {
     vkCmdEndRenderPass(cmd);
 }
 
-void Renderer::DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int viewMask, int insideRegionMask) {
+bool Renderer::DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& viewMatrix, const glm::mat4& projMatrix, int viewMask, int insideRegionMask) {
     // Wait for this frame's fence
     const VkFence fence = syncObjects->GetInFlightFence(currentFrame);
     vkWaitForFences(device->GetDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
@@ -256,7 +256,7 @@ void Renderer::DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& v
     );
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        return;
+        return true;
     }
     else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
         throw std::runtime_error("failed to acquire swap chain image!");
@@ -303,7 +303,12 @@ void Renderer::DrawFrame(Scene& scene, uint32_t currentFrame, const glm::mat4& v
     presentInfo.pSwapchains = &swapChainHandle;
     presentInfo.pImageIndices = &imageIndex;
 
-    vkQueuePresentKHR(device->GetPresentQueue(), &presentInfo);
+    if (vkQueuePresentKHR(device->GetPresentQueue(), &presentInfo) == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+        framebufferResized = false;
+        return true;
+    }
+    
+    return false;
 }
 
 void Renderer::CreateShadowPass() {

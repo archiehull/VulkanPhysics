@@ -99,41 +99,144 @@ std::string EditorUI::ConsumeCameraSwitchRequest() {
 }
 
 std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget) {
+    auto totalStart = std::chrono::high_resolution_clock::now();
     std::string sceneToLoad = "";
     Entity entityToDelete = MAX_ENTITIES;
 
     ImGui::GetIO().FontGlobalScale = m_UIScale;
 
     // Draw main menu first (top bar)
+    auto mainMenuStart = std::chrono::high_resolution_clock::now();
     DrawMainMenuSection(deltaTime, currentTemp, seasonName, scene, activeOrbitTarget, sceneToLoad, entityToDelete);
+    auto mainMenuEnd = std::chrono::high_resolution_clock::now();
+    m_Profiler.drawMainMenuTime = std::chrono::duration<float, std::milli>(mainMenuEnd - mainMenuStart).count();
 
-    // Property windows may set `entityToDelete` (Delete button lives in property windows)
-    // Ensure we draw property windows before the post-main-menu processing so deletion takes effect
+    // Property windows
+    auto windowsStart = std::chrono::high_resolution_clock::now();
     DrawPropertyWindowsSection(scene, entityToDelete);
+    auto windowsEnd = std::chrono::high_resolution_clock::now();
+    m_Profiler.drawWindowsTime = std::chrono::duration<float, std::milli>(windowsEnd - windowsStart).count();
 
     // Post main-menu section performs cleanup actions such as handling entity deletions
     DrawPostMainMenuSection(scene, entityToDelete);
 
     if (m_IsReplaying) {
-        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImVec2 window_pos = ImVec2(viewport->WorkPos.x + viewport->WorkSize.x / 2.0f, viewport->WorkPos.y + viewport->WorkSize.y - 20.0f);
-        ImVec2 window_pos_pivot = ImVec2(0.5f, 1.0f);
-        ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, window_pos_pivot);
-        ImGui::SetNextWindowBgAlpha(0.7f); // Transparent background
-        if (ImGui::Begin("Replay Scrubber", nullptr, window_flags)) {
-            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "REPLAY MODE ACTIVE");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(viewport->WorkSize.x * 0.5f);
-            ImGui::SliderInt("##Scrubber", &m_CurrentReplayFrame, 0, std::max(0, m_MaxReplayFrames - 1), "Frame %d");
-            
-            ImGui::SameLine();
-            if (ImGui::Button("Exit")) {
-                m_IsReplaying = false;
+        DrawReplayEditor(scene);
+
+        if (m_ReplayPlaying) {
+            m_ReplayAccumulator += deltaTime * m_ReplayPlaybackSpeed;
+            float frameDuration = m_StepSize; // Assuming snapshots are taken at m_StepSize intervals
+            while (m_ReplayAccumulator >= frameDuration) {
+                m_ReplayAccumulator -= frameDuration;
+                m_CurrentReplayFrame++;
+                if (m_CurrentReplayFrame >= m_MaxReplayFrames) {
+                    m_CurrentReplayFrame = 0; // Loop replay
+                }
             }
         }
-        ImGui::End();
     }
 
+    auto totalEnd = std::chrono::high_resolution_clock::now();
+    m_Profiler.totalTime = std::chrono::duration<float, std::milli>(totalEnd - totalStart).count();
+
     return sceneToLoad;
+}
+
+void EditorUI::DrawReplayEditor(Scene& scene) {
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    float windowHeight = 140.0f * m_UIScale;
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - windowHeight));
+    ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, windowHeight));
+
+    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoTitleBar;
+    
+    // Premium dark-glass aesthetic
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.1f, 0.92f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f * m_UIScale, 15.0f * m_UIScale));
+
+    if (ImGui::Begin("Replay Timeline", nullptr, windowFlags)) {
+        
+        // --- Header Section ---
+        ImGui::BeginGroup();
+        ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.0f, 1.0f), "REPLAY SYSTEM");
+        ImGui::SameLine();
+        ImGui::TextDisabled("|");
+        ImGui::SameLine();
+        ImGui::Text("Frame %d of %d", m_CurrentReplayFrame + 1, m_MaxReplayFrames);
+        ImGui::EndGroup();
+
+        ImGui::SameLine(ImGui::GetWindowWidth() - 140.0f * m_UIScale);
+        if (ImGui::Button("STOP REPLAY", ImVec2(120.0f * m_UIScale, 0))) {
+            m_IsReplaying = false;
+            m_ReplayPlaying = false;
+        }
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // --- Controls Section ---
+        float buttonSize = 40.0f * m_UIScale;
+        float spacing = 8.0f * m_UIScale;
+        
+        // Center the controls
+        float controlsWidth = 4 * buttonSize + 3 * spacing + 180.0f * m_UIScale;
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - controlsWidth) * 0.5f);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, 0));
+        
+        if (ImGui::Button("|<", ImVec2(buttonSize, buttonSize))) {
+            m_CurrentReplayFrame = 0;
+            m_ReplayPlaying = false;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("<", ImVec2(buttonSize, buttonSize))) {
+            m_CurrentReplayFrame = std::max(0, m_CurrentReplayFrame - 1);
+            m_ReplayPlaying = false;
+        }
+        ImGui::SameLine();
+        
+        // Play/Pause with vibrant color
+        if (m_ReplayPlaying) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+        if (ImGui::Button(m_ReplayPlaying ? "||" : ">", ImVec2(buttonSize, buttonSize))) {
+            m_ReplayPlaying = !m_ReplayPlaying;
+        }
+        if (m_ReplayPlaying) ImGui::PopStyleColor();
+        
+        ImGui::SameLine();
+        if (ImGui::Button(">", ImVec2(buttonSize, buttonSize))) {
+            m_CurrentReplayFrame = std::min(m_MaxReplayFrames - 1, m_CurrentReplayFrame + 1);
+            m_ReplayPlaying = false;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(">|", ImVec2(buttonSize, buttonSize))) {
+            m_CurrentReplayFrame = m_MaxReplayFrames - 1;
+            m_ReplayPlaying = false;
+        }
+        
+        ImGui::SameLine();
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (buttonSize - 20.0f * m_UIScale) * 0.5f); // Center slider vertically
+        ImGui::SetNextItemWidth(150.0f * m_UIScale);
+        ImGui::SliderFloat("##PlaybackSpeed", &m_ReplayPlaybackSpeed, 0.1f, 5.0f, "Speed: %.1fx");
+        
+        ImGui::PopStyleVar(); // ItemSpacing
+
+        // --- Timeline Section ---
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.15f, 0.15f, 0.18f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(1.0f, 0.65f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+        
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::SliderInt("##Timeline", &m_CurrentReplayFrame, 0, m_MaxReplayFrames - 1, "")) {
+            m_ReplayPlaying = false;
+        }
+        
+        ImGui::PopStyleColor(3);
+    }
+    ImGui::End();
+
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor();
 }

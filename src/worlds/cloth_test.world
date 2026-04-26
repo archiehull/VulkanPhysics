@@ -56,7 +56,7 @@ Object MainCloth
     Texture cloth_tex
     Position 0.0 30.0 0.0
     Mass 0.25
-    SpringProps 1.0 22.0 1.5
+    SpringProps 1.0 70.0 1.5
     RenderProps 1 true true true 3
 EndObject
 

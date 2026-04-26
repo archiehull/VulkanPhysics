@@ -25,6 +25,7 @@ bool PhysicsSystem::applyLinearDamping = true;
 float PhysicsSystem::linearDampingFactor = 0.98f;
 bool PhysicsSystem::applyQuadraticDrag = true;
 float PhysicsSystem::quadraticDragCoefficient = 0.01f;
+bool PhysicsSystem::simulationPaused = false;
 
 void PhysicsSystem::SetLinearDamping(bool enabled, float factor) {
     applyLinearDamping = enabled;
@@ -74,6 +75,9 @@ namespace {
 
 void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
+    
+    if (simulationPaused) return;
+
     const float dt = deltaTime / static_cast<float>(subSteps);
 
     auto springArray = registry.GetComponentArray<SpringComponent>();
@@ -122,7 +126,7 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
 
             for (size_t j = 0; j < spring.connectedEntities.size(); ++j) {
                 Entity target = spring.connectedEntities[j];
-                if (target == MAX_ENTITIES || target >= entityCount) continue;
+                if (target == MAX_ENTITIES || target >= entityCount || !registry.IsAlive(target)) continue;
                 if (!transformArray->HasData(target)) continue;
 
                 glm::vec3 posB = transformArray->GetData(target).position;
@@ -346,7 +350,9 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
     activeColliders.reserve(entityCount);
     for (Entity i = 0; i < entityCount; ++i) {
         if (transformArray->HasData(i) && colliderArray->HasData(i) && physicsArray->HasData(i)) {
-            activeColliders.push_back(i);
+            if (colliderArray->GetData(i).hasCollision) {
+                activeColliders.push_back(i);
+            }
         }
     }
 

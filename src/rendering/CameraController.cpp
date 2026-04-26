@@ -1,5 +1,6 @@
 #include "CameraController.h"
 #include "Scene.h"
+#include "../geometry/GeometryGenerator.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <iostream>
