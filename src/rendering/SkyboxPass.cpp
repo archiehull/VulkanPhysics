@@ -88,7 +88,7 @@ void SkyboxPass::Initialize(VkRenderPass renderPass, const VkExtent2D& extent, V
     config.descriptorSetLayouts = { globalSetLayout, cubemap->GetDescriptorSetLayout() };
 
     // Settings for "Crystal Ball" (viewable from inside)
-    config.cullMode = VK_CULL_MODE_FRONT_BIT;
+    config.cullMode = VK_CULL_MODE_NONE;
     config.depthTestEnable = true;
     config.depthWriteEnable = false;
 

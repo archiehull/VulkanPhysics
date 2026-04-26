@@ -56,6 +56,7 @@ float ComputeFlickerPresetValue(int preset, float t, float phase) {
 #include "../systems/ObjectSpawnerSystem.h"
 #include "../systems/AnimationSystem.h"
 #include "../systems/ClothSystem.h"
+#include "../systems/SmokeGrenadeSystem.h"
 
 Entity Scene::AddLayerRegion(const std::string& name, int layerBit, int volumeType, float radius, const glm::vec3& halfExtents, const glm::vec3& position) {
     Entity entity = m_Registry.CreateEntity();
@@ -224,6 +225,17 @@ Entity Scene::GetEntityByName(const std::string& name) const {
     return MAX_ENTITIES;
 }
 
+void Scene::RegisterEntityName(const std::string& name, Entity entity) {
+    if (entity != MAX_ENTITIES) {
+        m_EntityMap[name] = entity;
+        if (m_Registry.HasComponent<NameComponent>(entity)) {
+            m_Registry.GetComponent<NameComponent>(entity).name = name;
+        } else {
+            m_Registry.AddComponent<NameComponent>(entity, {name});
+        }
+    }
+}
+
 void Scene::DeleteEntity(Entity entity) {
     if (entity == MAX_ENTITIES || entity >= m_Registry.GetEntityCount()) return;
 
@@ -235,6 +247,17 @@ void Scene::DeleteEntity(Entity entity) {
         spring.connectedEntities.erase(
             std::remove(spring.connectedEntities.begin(), spring.connectedEntities.end(), entity),
             spring.connectedEntities.end());
+    }
+
+    // [NEW] Stop all attached particle emitters before deleting the entity
+    if (m_Registry.HasComponent<AttachedEmitterComponent>(entity)) {
+        auto& attached = m_Registry.GetComponent<AttachedEmitterComponent>(entity);
+        for (auto& activeEm : attached.emitters) {
+            if (activeEm.emitterId != -1) {
+                GetOrCreateSystem(activeEm.props)->StopEmitter(activeEm.emitterId);
+            }
+        }
+        attached.emitters.clear();
     }
 
     Entity linkedShadow = MAX_ENTITIES;
@@ -429,6 +452,7 @@ void Scene::Initialize() {
     m_Systems.push_back(std::make_unique<PhysicsSystem>());
     m_Systems.push_back(std::make_unique<ClothSystem>());
     m_Systems.push_back(std::make_unique<ObjectSpawnerSystem>());
+    m_Systems.push_back(std::make_unique<SmokeGrenadeSystem>());
 }
 
 void Scene::RegisterProceduralObject(const std::string& modelPath, const std::string& texturePath, float frequency, const glm::vec3& minScale, const glm::vec3& maxScale, const glm::vec3& baseRotation, bool isFlammable) {
@@ -543,6 +567,17 @@ Entity Scene::AddCube(const std::string& name, const glm::vec3& position, const 
     return entity;
 }
 
+Entity Scene::AddPlane(const std::string& name, const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
+    auto geo = GeometryGenerator::CreatePlane(device, physicalDevice, true); // Double sided
+    Entity entity = AddObjectInternal(name, std::move(geo), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "plane";
+
+    auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
+    transform.scale = scale;
+    transform.UpdateMatrix();
+    return entity;
+}
+
 void Scene::AddGrid(const std::string& name, int rows, int cols, float cellSize, const glm::vec3& position, const std::string& texturePath) {
     Entity entity = AddObjectInternal(name, GeometryGenerator::CreateGrid(device, physicalDevice, rows, cols, cellSize), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "grid";
@@ -551,6 +586,12 @@ void Scene::AddGrid(const std::string& name, int rows, int cols, float cellSize,
 Entity Scene::AddSphere(const std::string& name, int stacks, int slices, float radius, const glm::vec3& position, const std::string& texturePath) {
     Entity entity = AddObjectInternal(name, GeometryGenerator::CreateSphere(device, physicalDevice, stacks, slices, radius), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "sphere";
+    return entity;
+}
+
+Entity Scene::AddCylinder(const std::string& name, float radius, float height, int slices, const glm::vec3& position, const std::string& texturePath) {
+    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateCylinder(device, physicalDevice, radius, height, slices), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "cylinder";
     return entity;
 }
 
@@ -738,6 +779,12 @@ Entity Scene::CreateSpawnerEntity(const std::string& name, const glm::vec3& posi
     transform.UpdateMatrix();
     m_Registry.AddComponent<TransformComponent>(entity, transform);
 
+    return entity;
+}
+    
+Entity Scene::AddSpawner(const std::string& name, const glm::vec3& position) {
+    Entity entity = CreateSpawnerEntity(name, position);
+    m_Registry.AddComponent<ObjectSpawnerComponent>(entity, ObjectSpawnerComponent{});
     return entity;
 }
 
@@ -1603,7 +1650,7 @@ void Scene::Clear() {
     // Safely destroy all entities. Registry::DestroyEntity now guards against double-free via isAlive check
     const Entity entityCount = m_Registry.GetEntityCount();
     for (Entity i = 0; i < entityCount; ++i) {
-        m_Registry.DestroyEntity(i);
+        DeleteEntity(i);
     }
 
     m_EntityMap.clear();

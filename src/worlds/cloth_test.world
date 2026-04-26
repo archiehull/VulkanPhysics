@@ -19,6 +19,14 @@ ProceduralTexture tex_checker_floor
     CellSize 64
 EndTexture
 
+ProceduralTexture cloth_tex
+    Type Checker
+    Color1 0.8 0.8 0.2 1.0
+    Color2 0.1 0.1 0.8 1.0
+    Size 512
+    CellSize 15
+EndTexture
+
 ProceduralTexture tex_ball
     Type Gradient
     Color1 1.0 0.2 0.2 1.0
@@ -42,26 +50,36 @@ Object FloorPlane
     Despawner true
 EndObject
 
+Object MainCloth
+    Type Cloth
+    Params 30 30 0.5
+    Texture cloth_tex
+    Position 0.0 30.0 0.0
+    Mass 0.25
+    SpringProps 1.0 22.0 1.5
+    RenderProps 1 true true true 3
+EndObject
+
 # --- DYNAMIC BALLS ---
 
 Object LeftBallSpawner
     Type Spawner
     Position 7.5 22.5 -25.0
-    SpawnerEnabled true
-    TriggerOnStartup true
-    SpawnerGroup B
+    SpawnerEnabled false
+    TriggerOnStartup false
+    SpawnerGroup A
     SpawnInterval 1.0
     SpawnerMaxSpawns 50
     SpawnGeometry Sphere
     SpawnTexture tex_ball
     SpawnScale 1.2 1.2 1.2
-    SpawnVelocity 0.0 5.0 25.0
-    SpawnAngularVelocity 0.0 0.0 6.0
+    SpawnVelocity 0.0 5.0 35.0
+    SpawnAngularVelocity 0.0 0.0 12.0
     RandomSpawnVelocity false
     SpawnVelocityRandomRange 0.0 0.0 0.0
     RandomSpawnAngularVelocity false
     SpawnAngularVelocityRandomRange 0.0 0.0 0.0
-    SpawnMass 5.0
+    SpawnMass 10.0
 EndObject
 
 Object RightBallSpawner

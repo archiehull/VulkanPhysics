@@ -19,6 +19,32 @@ MovingSphere::MovingSphere(const glm::vec3& pos, float r, const glm::vec3& vel, 
 	}
 }
 
+MovingCapsule::MovingCapsule(const Capsule& cap, const glm::vec3& vel, float invM, float rest)
+	: capsule(cap), velocity(vel), forceAccumulator(0.0f), invMass(invM), restitution(rest), orientation(glm::mat3(1.0f)), angularVelocity(glm::vec3(0.0f)), torqueAccumulator(glm::vec3(0.0f)), inertiaTensor(glm::mat3(1.0f)), inverseInertiaTensor(glm::mat3(1.0f))
+{
+	if (invMass > 0.0f) {
+		float mass = 1.0f / invMass;
+		glm::vec3 axis = cap.m_p2 - cap.Position();
+		float h = glm::length(axis);
+		float r = cap.m_radius;
+		// Approximate inertia as a cylinder
+		float ixx = (1.0f / 12.0f) * mass * (3.0f * r * r + h * h);
+		float iyy = (0.5f) * mass * (r * r);
+		// Local inertia tensor (assuming Y is along the axis, but here the axis is arbitrary)
+		// For simplicity we use a spherical approximation or isotropic inertia if we don't know the local orientation,
+		// but since we track orientation, let's just use an isotropic approximation for now, or use the bounding sphere.
+		// A full tensor requires aligning it with the local axis. Let's use a spherical approximation based on average radius to avoid complex tensor rotation for now.
+		float rAvg = (h / 2.0f + r);
+		float i = (2.0f / 5.0f) * mass * (rAvg * rAvg);
+		inertiaTensor = glm::mat3(i);
+		inverseInertiaTensor = glm::mat3(1.0f / i);
+	}
+	else {
+		inertiaTensor = glm::mat3(0.0f);
+		inverseInertiaTensor = glm::mat3(0.0f);
+	}
+}
+
 void ResolveElasticCollision(MovingSphere& a, MovingSphere& b, bool useForce, float dt, float friction)
 {
 	glm::vec3 delta = b.sphere.Position() - a.sphere.Position();
@@ -160,6 +186,71 @@ void ResolveSpherePlaneCollision(
 	a.angularVelocity += a.inverseInertiaTensor * glm::cross(rA, frictionImpulse);
 }
 
+void ResolveCapsulePlaneCollision(
+	MovingCapsule& a,
+	const Plane& p,
+	float planeRestitution,
+	float contactFriction)
+{
+	if (a.invMass <= 0.0f) return;
+
+	glm::vec3 n = p.GetNormal();
+	glm::vec3 com = (a.capsule.Position() + a.capsule.m_p2) * 0.5f;
+	
+	// Check both endpoints
+	glm::vec3 points[2] = { a.capsule.Position(), a.capsule.m_p2 };
+	for (int i = 0; i < 2; ++i) {
+		float dist = p.GetSignedDistance(points[i]);
+		if (dist <= a.capsule.m_radius) {
+			// Collision at this point
+			glm::vec3 contactPoint = points[i] - n * a.capsule.m_radius;
+			glm::vec3 rA = contactPoint - com;
+			
+			glm::vec3 vAp = a.velocity + glm::cross(a.angularVelocity, rA);
+			float vn = glm::dot(vAp, n);
+			if (vn >= 0.0f) continue;
+			
+			float e = glm::clamp(a.restitution * planeRestitution, 0.0f, 1.0f);
+			
+			glm::vec3 rCrossN = glm::cross(rA, n);
+			glm::vec3 angularEffect = glm::cross(a.inverseInertiaTensor * rCrossN, rA);
+			float invMassEffect = a.invMass + glm::dot(angularEffect, n);
+			
+			float j = -(1.0f + e) * vn;
+			j /= invMassEffect;
+			// Halve impulse if both points are penetrating to avoid double energy
+			// (A simplistic hack for multiple contacts, otherwise we need an LCP solver)
+			bool bothPenetrating = (p.GetSignedDistance(points[0]) <= a.capsule.m_radius && 
+									p.GetSignedDistance(points[1]) <= a.capsule.m_radius);
+			if (bothPenetrating) j *= 0.5f;
+
+			glm::vec3 normalImpulse = n * j;
+			
+			a.velocity += normalImpulse * a.invMass;
+			a.angularVelocity += a.inverseInertiaTensor * glm::cross(rA, normalImpulse);
+			
+			// Friction
+			vAp = a.velocity + glm::cross(a.angularVelocity, rA);
+			glm::vec3 tangent = vAp - (n * glm::dot(vAp, n));
+			float tangentLen = glm::length(tangent);
+			
+			if (tangentLen > 1e-6f) {
+				glm::vec3 t = tangent / tangentLen;
+				glm::vec3 rA_cross_t = glm::cross(rA, t);
+				float angularTerm = glm::dot(a.inverseInertiaTensor * rA_cross_t, rA_cross_t);
+				
+				float jt = -glm::dot(vAp, t) / (a.invMass + angularTerm);
+				float maxFriction = std::abs(j) * glm::clamp(contactFriction, 0.0f, 1.0f);
+				jt = glm::clamp(jt, -maxFriction, maxFriction);
+				
+				glm::vec3 frictionImpulse = t * jt;
+				a.velocity += frictionImpulse * a.invMass;
+				a.angularVelocity += a.inverseInertiaTensor * glm::cross(rA, frictionImpulse);
+			}
+		}
+	}
+}
+
 float GetKineticEnergy(const MovingSphere& body)
 {
 	if (body.invMass <= 0.0f) return 0.0f;
@@ -180,7 +271,19 @@ void ApplyImpulse(MovingSphere& body, const glm::vec3& impulse)
 	body.velocity += impulse * body.invMass;
 }
 
+void ApplyImpulse(MovingCapsule& body, const glm::vec3& impulse)
+{
+	if (body.invMass <= 0.0f) return;
+	body.velocity += impulse * body.invMass;
+}
+
 void ApplyForce(MovingSphere& body, const glm::vec3& force)
+{
+	if (body.invMass <= 0.0f) return;
+	body.forceAccumulator += force;
+}
+
+void ApplyForce(MovingCapsule& body, const glm::vec3& force)
 {
 	if (body.invMass <= 0.0f) return;
 	body.forceAccumulator += force;
@@ -197,6 +300,16 @@ void ApplyForceAtPoint(MovingSphere& body, const glm::vec3& force, const glm::ve
     glm::vec3 r = point - body.sphere.Position();
 
     // Torque = r x F
+    glm::vec3 torque = glm::cross(r, force);
+    body.torqueAccumulator += torque;
+}
+
+void ApplyForceAtPoint(MovingCapsule& body, const glm::vec3& force, const glm::vec3& point) {
+    if (body.invMass <= 0.0f) return;
+
+    body.forceAccumulator += force;
+    glm::vec3 com = (body.capsule.Position() + body.capsule.m_p2) * 0.5f;
+    glm::vec3 r = point - com;
     glm::vec3 torque = glm::cross(r, force);
     body.torqueAccumulator += torque;
 }
@@ -253,6 +366,14 @@ void ApplyLinearDamping(MovingSphere& body, float damping, float dt)
 	body.velocity *= dampingFactor;
 }
 
+void ApplyLinearDamping(MovingCapsule& body, float damping, float dt)
+{
+	if (body.invMass <= 0.0f || dt <= 0.0f) return;
+	const float d = glm::clamp(damping, 0.0f, 1.0f);
+	const float dampingFactor = std::pow(d, dt);
+	body.velocity *= dampingFactor;
+}
+
 void ApplyQuadraticDrag(MovingSphere& body, float dragCoefficient, float dt)
 {
 	if (body.invMass <= 0.0f || dragCoefficient <= 0.0f || dt <= 0.0f) return;
@@ -268,6 +389,20 @@ void ApplyQuadraticDrag(MovingSphere& body, float dragCoefficient, float dt)
 	ApplyImpulse(body, dragImpulse);
 }
 
+void ApplyQuadraticDrag(MovingCapsule& body, float dragCoefficient, float dt)
+{
+	if (body.invMass <= 0.0f || dragCoefficient <= 0.0f || dt <= 0.0f) return;
+
+	const float speed = glm::length(body.velocity);
+	if (speed < 1e-6f) return;
+
+	const glm::vec3 dragDir = -body.velocity / speed;
+	const float dragMagnitude = dragCoefficient * speed * speed;
+
+	const glm::vec3 dragImpulse = dragDir * dragMagnitude * dt;
+	ApplyImpulse(body, dragImpulse);
+}
+
 // Apply an angular displacement (rotation) around axis by angleRadians
 void ApplyAngularDisplacement(MovingSphere& body, const glm::vec3& axis, float angleRadians)
 {
@@ -276,6 +411,13 @@ void ApplyAngularDisplacement(MovingSphere& body, const glm::vec3& axis, float a
 	glm::mat3 rot3 = glm::mat3(rot4);
 
 	// Apply rotation: newOrientation = rot * oldOrientation
+	body.orientation = rot3 * body.orientation;
+}
+
+void ApplyAngularDisplacement(MovingCapsule& body, const glm::vec3& axis, float angleRadians)
+{
+	glm::mat4 rot4 = glm::rotate(glm::mat4(1.0f), angleRadians, glm::normalize(axis));
+	glm::mat3 rot3 = glm::mat3(rot4);
 	body.orientation = rot3 * body.orientation;
 }
 
@@ -299,5 +441,24 @@ void IntegrateAngularVelocity(MovingSphere& body, float dt)
 	ApplyAngularDisplacement(body, axis, angle);
 
 	// clear torque accumulator after integration
+	body.torqueAccumulator = glm::vec3(0.0f);
+}
+
+void IntegrateAngularVelocity(MovingCapsule& body, float dt)
+{
+	if (dt <= 0.0f) return;
+
+	if (glm::length(body.torqueAccumulator) > 0.0f) {
+		glm::vec3 angularAcceleration = body.inverseInertiaTensor * body.torqueAccumulator;
+		body.angularVelocity += angularAcceleration * dt;
+	}
+
+	const float speed = glm::length(body.angularVelocity);
+	if (speed <= 1e-8f) return; 
+
+	const glm::vec3 axis = body.angularVelocity / speed;
+	const float angle = speed * dt;
+	ApplyAngularDisplacement(body, axis, angle);
+
 	body.torqueAccumulator = glm::vec3(0.0f);
 }

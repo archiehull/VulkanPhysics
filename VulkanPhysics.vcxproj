@@ -56,6 +56,7 @@
     <ClCompile Include="src\systems\OrbitSystem.cpp" />
     <ClCompile Include="src\systems\ParticleUpdateSystem.cpp" />
     <ClCompile Include="src\systems\PhysicsSystem.cpp" />
+    <ClCompile Include="src\systems\SmokeGrenadeSystem.cpp" />
     <ClCompile Include="src\systems\SimpleShadowSystem.cpp" />
     <ClCompile Include="src\systems\ThermodynamicsSystem.cpp" />
     <ClCompile Include="src\systems\TimeSystem.cpp" />
@@ -103,6 +104,7 @@
     <ClInclude Include="src\systems\OrbitSystem.h" />
     <ClInclude Include="src\systems\ParticleUpdateSystem.h" />
     <ClInclude Include="src\systems\PhysicsSystem.h" />
+    <ClInclude Include="src\systems\SmokeGrenadeSystem.h" />
     <ClInclude Include="src\systems\SimpleShadowSystem.h" />
     <ClInclude Include="src\systems\ThermodynamicsSystem.h" />
     <ClInclude Include="src\systems\TimeSystem.h" />

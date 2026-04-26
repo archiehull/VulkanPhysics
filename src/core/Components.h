@@ -226,9 +226,9 @@ struct ClothComponent {
 
 struct ColliderComponent {
     bool hasCollision = true;
-    int type = 0; // 0 = Sphere, 1 = Plane
-    float radius = 2.0f; // Used if type == 0
-    glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f); // Used if type == 1
+    int type = 0; // 0 = Sphere, 1 = Plane, 2 = Capsule, 3 = Cylinder, 4 = Cube
+    float radius = 2.0f; 
+    glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f); 
     float height = 5.0f;
     uint32_t collisionLayer = 1; // Default layer
     uint32_t collisionMask = 0xFFFFFFFF; // Collide with all layers by default
@@ -262,6 +262,15 @@ struct ActiveEmitter {
 // A component that can hold MULTIPLE attached emitters
 struct AttachedEmitterComponent {
     std::vector<ActiveEmitter> emitters;
+};
+
+// Smoke Grenade logic state
+struct SmokeGrenadeComponent {
+    float delayBeforeSmoke = 2.0f;
+    float smokeDuration = 10.0f;
+    float timer = 0.0f;
+    bool isEmitting = false;
+    int smokeEmitterId = -1; // Keep track of the attached emitter
 };
 
 // 8. Global Environment / Time / Weather Data
@@ -330,6 +339,10 @@ struct ObjectSpawnerComponent {
     float spawnMass = 1.0f;
     float spawnLifespanSeconds = -1.0f; // -1 = no auto-despawn timer
     int spawnedCount = 0;
+
+    // Attachment
+    bool attachToTarget = false;
+    std::string attachTargetName = ""; // Empty = use active camera
 };
 
 struct SpawnedFromSpawnerComponent {
@@ -359,7 +372,7 @@ struct CameraComponent {
     float pitch = 0.0f;
     float moveSpeed = 35.0f;
     float rotateSpeed = 60.0f;
-    bool noclipEnabled = false;
+    bool noclipEnabled = true;
 };
 
 struct LayerRegionComponent {

@@ -185,6 +185,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (key == "Rotation") ss >> currentObject->rotation.x >> currentObject->rotation.y >> currentObject->rotation.z;
             else if (key == "Scale") ss >> currentObject->scale.x >> currentObject->scale.y >> currentObject->scale.z;
             else if (key == "Params") ss >> currentObject->params.x >> currentObject->params.y >> currentObject->params.z;
+            else if (key == "Mass") ss >> currentObject->mass;
             else if (key == "LayerMask") ss >> currentObject->layerMask;
             else if (key == "AttachParticle") {
                 AttachedParticleConfig ap;
@@ -405,6 +406,14 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             }
             else if (key == "SpawnMass") ss >> currentObject->spawnMass;
             else if (key == "SpawnLifespan") ss >> currentObject->spawnLifespanSeconds;
+            else if (key == "SpawnerAttachToCamera" || key == "SpawnerAttachToTarget") {
+                std::string value;
+                ss >> value;
+                currentObject->spawnerAttachToTarget = (value == "true" || value == "1");
+            }
+            else if (key == "SpawnerCameraName" || key == "SpawnerTargetName") {
+                ss >> currentObject->spawnerTargetName;
+            }
             else if (key == "Despawner") {
                 std::string value;
                 ss >> value;

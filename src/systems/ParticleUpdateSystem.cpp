@@ -50,16 +50,20 @@ void ParticleUpdateSystem::Update(Scene& scene, float deltaTime) {
                 }
             }
 
-            // 2. Sync Position
-            if (activeEm.emitterId != -1) {
-                ParticleProps props = activeEm.props;
+            // 2. Sync Position & Creation
+            ParticleProps props = activeEm.props;
 
-                // Lock the emitter position to the object's transform
-                props.position = glm::vec3(transform.matrix[3]);
-                if (registry.HasComponent<ColliderComponent>(e)) {
-                    props.position.y += registry.GetComponent<ColliderComponent>(e).height * 0.5f;
-                }
+            // Lock the emitter position to the object's transform
+            props.position = glm::vec3(transform.matrix[3]);
+            if (registry.HasComponent<ColliderComponent>(e)) {
+                props.position.y += registry.GetComponent<ColliderComponent>(e).height * 0.5f;
+            }
 
+            if (activeEm.emitterId == -1) {
+                // INITIALIZE: Create the emitter in the Vulkan system
+                activeEm.emitterId = scene.GetOrCreateSystem(props)->AddEmitter(props, activeEm.emissionRate);
+            } else {
+                // UPDATE: Sync properties
                 scene.GetOrCreateSystem(props)->UpdateEmitter(activeEm.emitterId, props, activeEm.emissionRate);
             }
             ++it;

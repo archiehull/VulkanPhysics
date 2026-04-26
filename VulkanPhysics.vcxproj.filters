@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source Files">
@@ -174,6 +174,9 @@
     <ClCompile Include="src\systems\PhysicsSystem.cpp">
       <Filter>Source Files\src\systems</Filter>
     </ClCompile>
+    <ClCompile Include="src\systems\SmokeGrenadeSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
     <ClCompile Include="src\menu\EditorUI.cpp">
       <Filter>Source Files\src\menu</Filter>
     </ClCompile>
@@ -187,6 +190,12 @@
       <Filter>Source Files\src\systems</Filter>
     </ClCompile>
     <ClCompile Include="src\systems\AnimationSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\ClothFactory.cpp">
+      <Filter>Source Files\src\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\systems\ClothSystem.cpp">
       <Filter>Source Files\src\systems</Filter>
     </ClCompile>
   </ItemGroup>
@@ -320,6 +329,9 @@
     <ClInclude Include="src\systems\PhysicsSystem.h">
       <Filter>Source Files\src\systems</Filter>
     </ClInclude>
+    <ClInclude Include="src\systems\SmokeGrenadeSystem.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
     <ClInclude Include="src\menu\EditorUI.h">
       <Filter>Source Files\src\menu</Filter>
     </ClInclude>
@@ -330,6 +342,12 @@
       <Filter>Source Files\src\systems</Filter>
     </ClInclude>
     <ClInclude Include="src\util\AnimationMath.h">
+      <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\ClothFactory.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\ClothSystem.h">
       <Filter>Source Files\src\systems</Filter>
     </ClInclude>
   </ItemGroup>

@@ -16,12 +16,18 @@ void ClothSystem::Update(Scene& scene, float deltaTime) {
 
         bool updated = false;
 
+        glm::mat4 invTransform = glm::mat4(1.0f);
+        if (transformArray->HasData(e)) {
+            invTransform = glm::inverse(transformArray->GetData(e).matrix);
+        }
+
         for (size_t i = 0; i < cloth.particles.size(); ++i) {
             Entity p = cloth.particles[i];
             if (p != MAX_ENTITIES && transformArray->HasData(p)) {
-                const glm::vec3& pos = transformArray->GetData(p).position;
+                const glm::vec3& worldPos = transformArray->GetData(p).position;
                 if (i < cloth.dynamicGeometry->VertexCount()) {
-                    cloth.dynamicGeometry->GetVertex(i).pos = pos;
+                    glm::vec4 localPos = invTransform * glm::vec4(worldPos, 1.0f);
+                    cloth.dynamicGeometry->GetVertex(i).pos = glm::vec3(localPos);
                     updated = true;
                 }
             }

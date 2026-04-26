@@ -107,7 +107,7 @@ std::unique_ptr<Geometry> GeometryGenerator::CreateDisk(VkDevice device, VkPhysi
 
     // Rim
     for (int i = 0; i <= slices; ++i) {
-        const float angle = (static_cast<float>(i) / slices) * 2.0f * PI;
+        const float angle = (static_cast<float>(i) / slices) * 2.0f * static_cast<float>(PI);
         const float x = radius * cos(angle);
         const float z = radius * sin(angle);
         const float u = 0.5f + 0.5f * cos(angle);
@@ -119,6 +119,80 @@ std::unique_ptr<Geometry> GeometryGenerator::CreateDisk(VkDevice device, VkPhysi
         geometry->AddIndex(0);
         geometry->AddIndex(i + 1);
         geometry->AddIndex(i);
+    }
+
+    geometry->CreateBuffers();
+    return geometry;
+}
+
+std::unique_ptr<Geometry> GeometryGenerator::CreateCylinder(VkDevice device, VkPhysicalDevice physicalDevice, float radius, float height, int slices, int stacks) {
+    auto geometry = std::make_unique<Geometry>(device, physicalDevice);
+    geometry->ReserveVertices((slices + 1) * (stacks + 1));
+    geometry->ReserveIndices(slices * stacks * 6);
+
+    for (int i = 0; i <= stacks; ++i) {
+        const float v = static_cast<float>(i) / stacks;
+        const float y = (v - 0.5f) * height; // Center at 0
+
+        for (int j = 0; j <= slices; ++j) {
+            const float u = static_cast<float>(j) / slices;
+            const float theta = 2.0f * static_cast<float>(PI) * u;
+
+            const float x = radius * cos(theta);
+            const float z = radius * sin(theta);
+
+            glm::vec3 pos(x, y, z);
+            glm::vec2 uv(u, v);
+            glm::vec3 color(0.6f, 0.6f, 0.6f);
+            glm::vec3 normal(cos(theta), 0.0f, sin(theta));
+
+            geometry->AddVertex({ pos, color, uv, normal });
+        }
+    }
+
+    for (int i = 0; i < stacks; ++i) {
+        for (int j = 0; j < slices; ++j) {
+            const uint32_t first = i * (slices + 1) + j;
+            const uint32_t second = first + (slices + 1);
+
+            geometry->AddIndex(first);
+            geometry->AddIndex(second);
+            geometry->AddIndex(first + 1);
+
+            geometry->AddIndex(first + 1);
+            geometry->AddIndex(second);
+            geometry->AddIndex(second + 1);
+        }
+    }
+
+    // Bottom Cap
+    uint32_t bottomCenterIndex = (uint32_t)geometry->VertexCount();
+    geometry->AddVertex({ {0.0f, -0.5f * height, 0.0f}, {0.6f, 0.6f, 0.6f}, {0.5f, 0.5f}, {0.0f, -1.0f, 0.0f} });
+    uint32_t bottomRimStart = (uint32_t)geometry->VertexCount();
+    for (int j = 0; j <= slices; ++j) {
+        float u = (float)j / slices;
+        float theta = 2.0f * (float)PI * u;
+        geometry->AddVertex({ {radius * cos(theta), -0.5f * height, radius * sin(theta)}, {0.6f, 0.6f, 0.6f}, {u, 0.0f}, {0.0f, -1.0f, 0.0f} });
+    }
+    for (int j = 0; j < slices; ++j) {
+        geometry->AddIndex(bottomCenterIndex);
+        geometry->AddIndex(bottomRimStart + j + 1);
+        geometry->AddIndex(bottomRimStart + j);
+    }
+
+    // Top Cap
+    uint32_t topCenterIndex = (uint32_t)geometry->VertexCount();
+    geometry->AddVertex({ {0.0f, 0.5f * height, 0.0f}, {0.6f, 0.6f, 0.6f}, {0.5f, 0.5f}, {0.0f, 1.0f, 0.0f} });
+    uint32_t topRimStart = (uint32_t)geometry->VertexCount();
+    for (int j = 0; j <= slices; ++j) {
+        float u = (float)j / slices;
+        float theta = 2.0f * (float)PI * u;
+        geometry->AddVertex({ {radius * cos(theta), 0.5f * height, radius * sin(theta)}, {0.6f, 0.6f, 0.6f}, {u, 1.0f}, {0.0f, 1.0f, 0.0f} });
+    }
+    for (int j = 0; j < slices; ++j) {
+        geometry->AddIndex(topCenterIndex);
+        geometry->AddIndex(topRimStart + j);
+        geometry->AddIndex(topRimStart + j + 1);
     }
 
     geometry->CreateBuffers();
@@ -399,6 +473,34 @@ std::unique_ptr<Geometry> GeometryGenerator::CreateSphere(VkDevice device, VkPhy
     }
 
     GenerateGridIndices(geometry.get(), slices, stacks);
+    geometry->CreateBuffers();
+    return geometry;
+}
+
+std::unique_ptr<Geometry> GeometryGenerator::CreatePlane(VkDevice device, VkPhysicalDevice physicalDevice, bool doubleSided) {
+    auto geometry = std::make_unique<Geometry>(device, physicalDevice);
+    glm::vec3 color(0.8f, 0.8f, 0.8f);
+
+    // Face 1 (Up)
+    geometry->AddVertex({ {-0.5f, 0.0f, -0.5f}, color, {0.0f, 0.0f}, {0, 1, 0} });
+    geometry->AddVertex({ { 0.5f, 0.0f, -0.5f}, color, {1.0f, 0.0f}, {0, 1, 0} });
+    geometry->AddVertex({ { 0.5f, 0.0f,  0.5f}, color, {1.0f, 1.0f}, {0, 1, 0} });
+    geometry->AddVertex({ {-0.5f, 0.0f,  0.5f}, color, {0.0f, 1.0f}, {0, 1, 0} });
+
+    geometry->AddIndex(0); geometry->AddIndex(1); geometry->AddIndex(2);
+    geometry->AddIndex(0); geometry->AddIndex(2); geometry->AddIndex(3);
+
+    if (doubleSided) {
+        // Face 2 (Down) - reverse winding
+        geometry->AddVertex({ {-0.5f, 0.0f, -0.5f}, color, {0.0f, 0.0f}, {0, -1, 0} });
+        geometry->AddVertex({ { 0.5f, 0.0f, -0.5f}, color, {1.0f, 0.0f}, {0, -1, 0} });
+        geometry->AddVertex({ { 0.5f, 0.0f,  0.5f}, color, {1.0f, 1.0f}, {0, -1, 0} });
+        geometry->AddVertex({ {-0.5f, 0.0f,  0.5f}, color, {0.0f, 1.0f}, {0, -1, 0} });
+
+        geometry->AddIndex(4); geometry->AddIndex(6); geometry->AddIndex(5);
+        geometry->AddIndex(4); geometry->AddIndex(7); geometry->AddIndex(6);
+    }
+
     geometry->CreateBuffers();
     return geometry;
 }

@@ -2,7 +2,7 @@
 #include "Components.h"
 #include "../geometry/Geometry.h"
 
-Entity ClothFactory::CreateClothGrid(Scene& scene, VkDevice device, VkPhysicalDevice physicalDevice, const glm::vec3& position, int width, int height, float spacing, float mass, float stiffness, float damping) {
+Entity ClothFactory::CreateClothGrid(Scene& scene, VkDevice device, VkPhysicalDevice physicalDevice, const glm::vec3& position, int width, int height, float spacing, float mass, float stiffness, float damping, const std::string& texturePath) {
     auto& registry = scene.GetRegistry();
     
     Entity clothEntity = registry.CreateEntity();
@@ -119,9 +119,7 @@ Entity ClothFactory::CreateClothGrid(Scene& scene, VkDevice device, VkPhysicalDe
                 sc.restingLengths.push_back(spacing * 2.0f);
             }
             
-            if (!sc.connectedEntities.empty()) {
-                registry.AddComponent(p, sc);
-            }
+            registry.AddComponent(p, sc);
         }
     }
     
@@ -130,7 +128,7 @@ Entity ClothFactory::CreateClothGrid(Scene& scene, VkDevice device, VkPhysicalDe
     RenderComponent rc;
     rc.geometry = clothComp.dynamicGeometry;
     rc.geometryName = "ClothMesh";
-    rc.texturePath = "tex_checker_floor";
+    rc.texturePath = texturePath;
     rc.visible = true;
     rc.castsShadow = true;
     rc.receiveShadows = true;

@@ -159,6 +159,9 @@ struct SceneObjectConfig {
     float spawnMass = 1.0f;
     float spawnLifespanSeconds = -1.0f;
 
+    bool spawnerAttachToTarget = false;
+    std::string spawnerTargetName = "";
+
     bool isDespawner = false;
 
     bool hasPathAnimation = false;

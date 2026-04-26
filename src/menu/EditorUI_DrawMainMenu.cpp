@@ -460,6 +460,18 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                     }
                 }
 
+                if (!registry.HasComponent<ObjectSpawnerComponent>(e)) {
+                    if (ImGui::MenuItem("+ Attach Spawner to this Camera")) {
+                        ObjectSpawnerComponent spawner;
+                        spawner.attachToTarget = true;
+                        spawner.attachTargetName = baseCamName;
+                        spawner.spawnVelocity = glm::vec3(0.0f, 0.0f, 20.0f); // Default forward speed
+                        spawner.alwaysOn = false; // Manual/Single fire mode
+                        spawner.isRunning = false; // Off by default
+                        registry.AddComponent<ObjectSpawnerComponent>(e, spawner);
+                    }
+                }
+
                 ImGui::Separator();
                 if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
                     m_PropertyWindows.push_back({ m_NextPropertyWindowId++, e, false, true, true });
@@ -600,7 +612,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                     groupChar = 'A';
                 }
                 int groupIndex = groupChar - 'A';
-                if (ImGui::Combo("Group", &groupIndex, groupOptions, IM_ARRAYSIZE(groupOptions))) {
+                if (ImGui::Combo("Group", &groupIndex, groupOptions, (int)IM_ARRAYSIZE(groupOptions))) {
                     spawner.group = static_cast<char>('A' + groupIndex);
                 }
 
@@ -662,12 +674,14 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 ImGui::DragFloat("Spawn Mass", &spawner.spawnMass, 0.1f, 0.01f, 1000.0f);
                 ImGui::DragFloat("Spawn Lifespan (s, -1 inf)", &spawner.spawnLifespanSeconds, 0.1f, -1.0f, 600.0f);
 
-                const char* geometryTypes[] = { "Sphere", "Cube", "Model" };
                 int geometryIndex = 0;
+                const char* geometryTypes[] = { "Sphere", "Cube", "Plane", "Model", "Smoke Grenade" };
                 if (spawner.spawnGeometryType == "Cube") geometryIndex = 1;
-                else if (spawner.spawnGeometryType == "Model") geometryIndex = 2;
+                else if (spawner.spawnGeometryType == "Plane") geometryIndex = 2;
+                else if (spawner.spawnGeometryType == "Model") geometryIndex = 3;
+                else if (spawner.spawnGeometryType == "Smoke Grenade") geometryIndex = 4;
 
-                if (ImGui::Combo("Spawn Geometry", &geometryIndex, geometryTypes, IM_ARRAYSIZE(geometryTypes))) {
+                if (ImGui::Combo("Spawn Geometry", &geometryIndex, geometryTypes, (int)IM_ARRAYSIZE(geometryTypes))) {
                     spawner.spawnGeometryType = geometryTypes[geometryIndex];
                     if (spawner.spawnGeometryType == "Sphere") {
                         spawner.spawnObjectScale = std::max(0.05f, std::max({ spawner.spawnScale.x, spawner.spawnScale.y, spawner.spawnScale.z }));
@@ -700,6 +714,42 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                     ImGui::EndCombo();
                 }
 
+                if (ImGui::TreeNode("Generate Procedural Texture##ProcSpawner")) {
+                    static char spawnerProcName[64] = "spawner_proc_tex";
+                    static int spawnerProcType = 1;
+                    static glm::vec4 spawnerColor1(1.0f, 1.0f, 1.0f, 1.0f);
+                    static glm::vec4 spawnerColor2(0.2f, 0.2f, 0.2f, 1.0f);
+                    static int spawnerCellSize = 32;
+
+                    auto queueSpawnerProcUpdate = [&]() {
+                        if (spawnerProcName[0] == '\0') return;
+                        ProceduralTextureRequest req;
+                        req.name = std::string(spawnerProcName);
+                        req.type = static_cast<ProcTexType>(spawnerProcType);
+                        req.color1 = spawnerColor1;
+                        req.color2 = spawnerColor2;
+                        req.cellSize = std::max(1, spawnerCellSize);
+                        m_TextureRequests.push_back(req);
+                        spawner.spawnTexturePath = req.name;
+                    };
+
+                    bool spSpawnerChanged = false;
+                    spSpawnerChanged |= ImGui::InputText("Name ID", spawnerProcName, sizeof(spawnerProcName));
+                    const char* procTypes[] = { "Solid Color", "Checkerboard", "Gradient (Vert)", "Gradient (Horiz)" };
+                    spSpawnerChanged |= ImGui::Combo("Type", &spawnerProcType, procTypes, (int)IM_ARRAYSIZE(procTypes));
+                    spSpawnerChanged |= ImGui::ColorEdit4("Color 1", &spawnerColor1.x);
+                    if (spawnerProcType > 0) spSpawnerChanged |= ImGui::ColorEdit4("Color 2", &spawnerColor2.x);
+                    if (spawnerProcType == 1) spSpawnerChanged |= ImGui::InputInt("Cell Size", &spawnerCellSize);
+
+                    if (ImGui::Button("Apply Procedural Texture")) {
+                        queueSpawnerProcUpdate();
+                    }
+                    if (spSpawnerChanged) {
+                        queueSpawnerProcUpdate();
+                    }
+                    ImGui::TreePop();
+                }
+
                 ImGui::Separator();
                 ImGui::DragFloat3("Base Velocity", &spawner.spawnVelocity.x, 0.1f);
                 ImGui::Checkbox("Randomise Velocity", &spawner.randomizeVelocity);
@@ -713,6 +763,20 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                     ImGui::DragFloat3("Random Spin Range", &spawner.randomAngularVelocityRange.x, 0.05f, 0.0f, 50.0f);
                 }
 
+                ImGui::Separator();
+                ImGui::TextDisabled("Entity Attachment");
+                ImGui::Checkbox("Attach to Target", &spawner.attachToTarget);
+                if (spawner.attachToTarget) {
+                    char targetBuf[64];
+                    strncpy_s(targetBuf, spawner.attachTargetName.c_str(), sizeof(targetBuf));
+                    targetBuf[sizeof(targetBuf) - 1] = '\0';
+                    if (ImGui::InputText("Target Name", targetBuf, sizeof(targetBuf))) {
+                        spawner.attachTargetName = std::string(targetBuf);
+                    }
+                    ImGui::TextDisabled("Empty = Active Camera");
+                }
+
+                ImGui::Separator();
                 ImGui::TextDisabled("Status: %s", spawner.isRunning ? "Running" : "Stopped");
                 ImGui::TextDisabled("Spawned This Run: %d", spawner.spawnedThisRun);
                 ImGui::TextDisabled("Total Spawned: %d", spawner.spawnedCount);
@@ -737,6 +801,10 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         }
         if (ImGui::MenuItem("Refresh Texture List")) {
             RefreshTextureList();
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("+ Create New Spawner")) {
+            scene.AddSpawner("New Spawner", glm::vec3(0.0f, 10.0f, 0.0f));
         }
 
         ImGui::EndMenu();
@@ -788,6 +856,12 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             const char* methods[] = { "Explicit Euler", "Semi-Implicit Euler", "RK4" };
             if (ImGui::Combo("Algorithm", &currentMethodIdx, methods, IM_ARRAYSIZE(methods))) {
                 PhysicsSystem::currentMethod = static_cast<IntegrationMethod>(currentMethodIdx);
+            }
+
+            ImGui::Spacing();
+            ImGui::SliderInt("Sub-steps", &PhysicsSystem::subSteps, 1, 32);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Higher values increase physics precision and reduce clipping of fast objects, but cost performance.");
             }
 
             ImGui::Spacing();
@@ -1432,7 +1506,7 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
                         for (size_t i = 0; i < attached.emitters.size(); ++i) {
                             auto& em = attached.emitters[i];
 
-                            ImGui::PushID(i);
+                            ImGui::PushID((int)i);
                             std::string label = "Remove Emitter ID: " + std::to_string(em.emitterId);
                             if (em.duration > 0.0f) {
                                 label += " (" + std::to_string((int)(em.duration - em.timer)) + "s left)";
@@ -1654,8 +1728,8 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
 
                         if (ImGui::BeginMenu(geometryMenuLabel.c_str())) {
                             static int geoTypeIdx = 0;
-                            const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Bowl", "Terrain" };
-                            ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
+                            const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Plane", "Cylinder", "Bowl", "Terrain", "Disk", "Grid" };
+                            ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, (int)IM_ARRAYSIZE(geoTypes));
 
                             static std::string selectedModel = "";
                             if (geoTypeIdx == 0) {

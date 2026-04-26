@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "../rendering/ParticleLibrary.h"
 #include "../systems/CameraSystem.h"
+#include "../systems/ObjectSpawnerSystem.h"
 #include <algorithm>
 #include <random>
 #include <unordered_set>
@@ -915,18 +916,59 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     auto& comp = registry.GetComponent<ColliderComponent>(e);
                     ImGui::Checkbox("Has Collision", &comp.hasCollision);
 
-                    const char* shapeTypes[] = { "Sphere", "Plane" };
-                    ImGui::Combo("Shape Type", &comp.type, shapeTypes, IM_ARRAYSIZE(shapeTypes));
+                    const char* shapeTypes[] = { "Sphere", "Plane", "Capsule", "Cylinder", "Cube" };
+                    if (ImGui::Combo("Shape Type", &comp.type, shapeTypes, (int)IM_ARRAYSIZE(shapeTypes))) {
+                        // Reset or adjust values if needed when type changes
+                    }
 
-                    if (comp.type == 0) {
+                    ImGui::SameLine();
+                    if (ImGui::Button("Sync to Visual")) {
+                        if (registry.HasComponent<TransformComponent>(e)) {
+                            auto& trans = registry.GetComponent<TransformComponent>(e);
+                            std::string name = registry.HasComponent<NameComponent>(e) ? registry.GetComponent<NameComponent>(e).name : "";
+                            
+                            // Detect type from name or just use current selected type
+                            if (name.find("Sphere") != std::string::npos || comp.type == 0) {
+                                comp.type = 0;
+                                comp.radius = std::max({trans.scale.x, trans.scale.y, trans.scale.z}) * 0.5f;
+                            }
+                            else if (name.find("Plane") != std::string::npos || comp.type == 1) {
+                                comp.type = 1;
+                                comp.normal = glm::vec3(0, 1, 0); // Default up
+                            }
+                            else if (name.find("Cube") != std::string::npos || comp.type == 4) {
+                                comp.type = 4;
+                                // Cube uses radius for extent/size in some parts of our physics
+                                comp.radius = std::max({trans.scale.x, trans.scale.y, trans.scale.z}) * 0.5f;
+                            }
+                            else if (name.find("Cylinder") != std::string::npos || name.find("Smoke") != std::string::npos || comp.type == 3) {
+                                comp.type = 3;
+                                comp.radius = std::max(trans.scale.x, trans.scale.z) * 0.5f;
+                                comp.height = trans.scale.y;
+                            }
+                            else if (name.find("Capsule") != std::string::npos || comp.type == 2) {
+                                comp.type = 2;
+                                comp.radius = std::max(trans.scale.x, trans.scale.z) * 0.5f;
+                                comp.height = trans.scale.y;
+                            }
+                        }
+                    }
+
+                    if (comp.type == 0) { // Sphere
                         ImGui::DragFloat("Radius", &comp.radius, 0.1f, 0.0f, 100.0f);
                     }
-                    else if (comp.type == 1) {
+                    else if (comp.type == 1) { // Plane
                         if (ImGui::DragFloat3("Normal", &comp.normal.x, 0.05f)) {
                             if (glm::length(comp.normal) > 0.001f) comp.normal = glm::normalize(comp.normal);
                         }
                     }
-                    ImGui::DragFloat("Height", &comp.height, 0.1f, 0.0f, 100.0f);
+                    else if (comp.type == 2 || comp.type == 3) { // Capsule / Cylinder
+                        ImGui::DragFloat("Radius", &comp.radius, 0.1f, 0.0f, 100.0f);
+                        ImGui::DragFloat("Height", &comp.height, 0.1f, 0.0f, 100.0f);
+                    }
+                    else if (comp.type == 4) { // Cube
+                        ImGui::DragFloat("Half Extent/Size", &comp.radius, 0.1f, 0.0f, 100.0f);
+                    }
                     ImGui::TreePop();
                 }
             }
@@ -1444,6 +1486,108 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 }
             }
 
+            // --- 14. Smoke Grenade Component ---
+            if (registry.HasComponent<SmokeGrenadeComponent>(e)) {
+                bool open = ImGui::TreeNodeEx("SmokeGrenadeComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                if (ImGui::Button("Remove##SmokeGrenade")) registry.RemoveComponent<SmokeGrenadeComponent>(e);
+
+                if (open && registry.HasComponent<SmokeGrenadeComponent>(e)) {
+                    auto& comp = registry.GetComponent<SmokeGrenadeComponent>(e);
+                    ImGui::DragFloat("Timer", &comp.timer, 0.01f);
+                    ImGui::DragFloat("Delay Before Smoke", &comp.delayBeforeSmoke, 0.1f);
+                    ImGui::DragFloat("Smoke Duration", &comp.smokeDuration, 0.1f);
+                    ImGui::Checkbox("Is Emitting", &comp.isEmitting);
+                    ImGui::Text("Smoke Emitter ID: %d", comp.smokeEmitterId);
+                    ImGui::TreePop();
+                }
+            }
+            
+            // --- 15. Object Spawner Component ---
+            if (registry.HasComponent<ObjectSpawnerComponent>(e)) {
+                bool open = ImGui::TreeNodeEx("ObjectSpawnerComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                if (ImGui::Button("Remove##Spawner")) registry.RemoveComponent<ObjectSpawnerComponent>(e);
+
+                if (open && registry.HasComponent<ObjectSpawnerComponent>(e)) {
+                    auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+                    
+                    ImGui::Checkbox("Always On", &spawner.alwaysOn);
+                    ImGui::Checkbox("Is Running", &spawner.isRunning);
+                    ImGui::Checkbox("Trigger On Startup", &spawner.triggerOnStartup);
+                    
+                    char groupBuf[2] = { spawner.group, '\0' };
+                    if (ImGui::InputText("Group (A-D)", groupBuf, 2)) {
+                        char g = static_cast<char>(std::toupper(static_cast<unsigned char>(groupBuf[0])));
+                        if (g >= 'A' && g <= 'D') spawner.group = g;
+                    }
+
+                    ImGui::DragFloat("Spawn Interval", &spawner.spawnInterval, 0.05f, 0.01f, 60.0f);
+                    
+                    ImGui::BeginDisabled(spawner.alwaysOn);
+                    ImGui::DragFloat("Run Duration", &spawner.runDurationSeconds, 0.1f, -1.0f, 3600.0f);
+                    ImGui::InputInt("Max Spawns Per Run", &spawner.maxSpawnsPerRun);
+                    ImGui::EndDisabled();
+
+                    const char* geoTypes[] = { "Sphere", "Cube", "Plane", "Model", "Smoke Grenade" };
+                    int geoIdx = 0;
+                    if (spawner.spawnGeometryType == "Cube") geoIdx = 1;
+                    else if (spawner.spawnGeometryType == "Plane") geoIdx = 2;
+                    else if (spawner.spawnGeometryType == "Model") geoIdx = 3;
+                    else if (spawner.spawnGeometryType == "Smoke Grenade") geoIdx = 4;
+                    
+                    if (ImGui::Combo("Spawn Geometry", &geoIdx, geoTypes, (int)IM_ARRAYSIZE(geoTypes))) {
+                        spawner.spawnGeometryType = geoTypes[geoIdx];
+                    }
+
+                    if (spawner.spawnGeometryType == "Model") {
+                        char modelBuf[256];
+                        strncpy_s(modelBuf, spawner.spawnModelPath.c_str(), sizeof(modelBuf));
+                        modelBuf[sizeof(modelBuf) - 1] = '\0';
+                        if (ImGui::InputText("Model Path", modelBuf, sizeof(modelBuf))) {
+                            spawner.spawnModelPath = std::string(modelBuf);
+                        }
+                    }
+
+                    ImGui::DragFloat3("Spawn Scale", &spawner.spawnScale.x, 0.05f, 0.01f, 100.0f);
+                    ImGui::DragFloat3("Spawn Velocity", &spawner.spawnVelocity.x, 0.1f);
+                    ImGui::Checkbox("Randomize Velocity", &spawner.randomizeVelocity);
+                    if (spawner.randomizeVelocity) {
+                        ImGui::DragFloat3("Velocity Range", &spawner.randomVelocityRange.x, 0.1f);
+                    }
+
+                    ImGui::DragFloat3("Spawn Spin", &spawner.spawnAngularVelocity.x, 0.05f);
+                    ImGui::Checkbox("Randomize Spin", &spawner.randomizeAngularVelocity);
+                    if (spawner.randomizeAngularVelocity) {
+                        ImGui::DragFloat3("Spin Range", &spawner.randomAngularVelocityRange.x, 0.05f);
+                    }
+
+                    ImGui::DragFloat("Spawn Mass", &spawner.spawnMass, 0.1f, 0.01f, 1000.0f);
+                    ImGui::DragFloat("Spawn Lifespan", &spawner.spawnLifespanSeconds, 0.1f, -1.0f, 600.0f);
+
+                    ImGui::Separator();
+                    ImGui::TextDisabled("Entity Attachment");
+                    ImGui::Checkbox("Attach to Target##Prop", &spawner.attachToTarget);
+                    if (spawner.attachToTarget) {
+                        char targetBuf[64];
+                        strncpy_s(targetBuf, spawner.attachTargetName.c_str(), sizeof(targetBuf));
+                        targetBuf[sizeof(targetBuf) - 1] = '\0';
+                        if (ImGui::InputText("Target Name##Prop", targetBuf, sizeof(targetBuf))) {
+                            spawner.attachTargetName = std::string(targetBuf);
+                        }
+                        ImGui::TextDisabled("Empty = Active Camera");
+                    }
+
+                    ImGui::Separator();
+                    ImGui::Text("Spawned Count: %d", spawner.spawnedCount);
+                    if (ImGui::Button("Fire Once")) {
+                        ObjectSpawnerSystem::FireOnce(scene, e);
+                    }
+                    
+                    ImGui::TreePop();
+                }
+            }
+
             // --- Component Assignment Menu ---
             if (ImGui::BeginMenu("Add Component...")) {
                 addMenuItem((NameComponent*)nullptr, "NameComponent", e);
@@ -1462,6 +1606,8 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 addMenuItem((DustCloudComponent*)nullptr, "DustCloudComponent", e);
                 addMenuItem((DespawnerComponent*)nullptr, "DespawnerComponent", e);
                 addMenuItem((LayerRegionComponent*)nullptr, "LayerRegionComponent", e);
+                addMenuItem((SmokeGrenadeComponent*)nullptr, "SmokeGrenadeComponent", e);
+                addMenuItem((ObjectSpawnerComponent*)nullptr, "ObjectSpawnerComponent", e);
                 ImGui::EndMenu();
             }
 

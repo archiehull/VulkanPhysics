@@ -89,6 +89,31 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
         }
 
         auto& spawner = spawnerArray->GetData(e);
+        auto& transform = transformArray->GetData(e);
+
+        if (spawner.attachToTarget) {
+            Entity targetEnt = MAX_ENTITIES;
+            if (spawner.attachTargetName.empty()) {
+                // If no name specified, default to active camera
+                for (Entity c = 0; c < count; ++c) {
+                    if (registry.HasComponent<CameraComponent>(c) && registry.GetComponent<CameraComponent>(c).isActive) {
+                        targetEnt = c;
+                        break;
+                    }
+                }
+            }
+            else {
+                targetEnt = scene.GetEntityByName(spawner.attachTargetName);
+            }
+
+            if (targetEnt != MAX_ENTITIES && registry.HasComponent<TransformComponent>(targetEnt)) {
+                auto& targetTransform = registry.GetComponent<TransformComponent>(targetEnt);
+                transform.position = targetTransform.position;
+                transform.rotation = targetTransform.rotation;
+                transform.UpdateMatrix();
+            }
+        }
+
         if (spawner.alwaysOn) {
             spawner.isRunning = true;
             spawner.runDurationSeconds = -1.0f;
@@ -239,11 +264,16 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
         }
     }
 
-    const std::string spawnedName = spawnerName + "_Spawned_" + std::to_string(spawner.spawnedCount++);
-    spawner.spawnedThisRun++;
-    const glm::vec3 spawnPos = transform.position;
-
     const std::string& geometryType = spawner.spawnGeometryType;
+    const std::string spawnedName = spawnerName + "_" + geometryType + "_Spawned_" + std::to_string(spawner.spawnedCount++);
+    spawner.spawnedThisRun++;
+    glm::vec3 spawnPos = transform.position;
+    if (spawner.attachToTarget) {
+        // Offset forward slightly so objects don't spawn exactly inside the camera/target
+        glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2]));
+        spawnPos += front * 2.5f; 
+    }
+    
     glm::vec3 effectiveSpawnScale = spawner.spawnScale;
     float sphereBaseRadius = 0.5f;
     if (geometryType == "Sphere") {
@@ -262,8 +292,29 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     if (geometryType == "Cube") {
         spawnedEntity = scene.AddCube(spawnedName, spawnPos, effectiveSpawnScale, spawner.spawnTexturePath);
     }
+    else if (geometryType == "Plane") {
+        spawnedEntity = scene.AddPlane(spawnedName, spawnPos, effectiveSpawnScale, spawner.spawnTexturePath);
+    }
     else if (geometryType == "Model" && !spawner.spawnModelPath.empty()) {
         spawnedEntity = scene.AddModel(spawnedName, spawnPos, glm::vec3(0.0f), effectiveSpawnScale, spawner.spawnModelPath, spawner.spawnTexturePath, false);
+    }
+    else if (geometryType == "Smoke Grenade") {
+        // Spawn a cylinder geometry, but we assign Capsule physics & SmokeGrenadeComponent
+        float cylinderRadius = 0.4f;
+        float cylinderHeight = 1.2f;
+        spawnedEntity = scene.AddCylinder(spawnedName, cylinderRadius, cylinderHeight, 32, spawnPos, spawner.spawnTexturePath);
+        if (spawnedEntity != MAX_ENTITIES && registry.HasComponent<TransformComponent>(spawnedEntity)) {
+            auto& spawnedTransform = registry.GetComponent<TransformComponent>(spawnedEntity);
+            spawnedTransform.position = spawnPos;
+            spawnedTransform.rotation = glm::vec3(0.0f);
+            // The cylinder geometry is already sized by the radius/height in AddCylinder,
+            // but we can apply additional scale if needed.
+            spawnedTransform.scale = spawner.spawnScale; 
+            spawnedTransform.UpdateMatrix();
+        }
+        if (spawnedEntity != MAX_ENTITIES) {
+            registry.AddComponent<SmokeGrenadeComponent>(spawnedEntity, SmokeGrenadeComponent{});
+        }
     }
     else {
         spawnedEntity = scene.AddSphere(spawnedName, 16, 32, sphereBaseRadius, spawnPos, spawner.spawnTexturePath);
@@ -303,8 +354,15 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
 
     auto& collider = registry.GetComponent<ColliderComponent>(spawnedEntity);
     collider.hasCollision = true;
-    collider.type = 0;
-    collider.radius = std::max(0.1f, std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f);
+    
+    if (geometryType == "Smoke Grenade") {
+        collider.type = 2; // Capsule
+        collider.radius = 0.4f * std::max(0.05f, spawner.spawnScale.x);
+        collider.height = 1.2f * std::max(0.05f, spawner.spawnScale.y);
+    } else {
+        collider.type = 0; // Sphere
+        collider.radius = std::max(0.1f, std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f);
+    }
     collider.normal = glm::vec3(0.0f, 1.0f, 0.0f);
 
     auto& phys = registry.GetComponent<PhysicsComponent>(spawnedEntity);
@@ -312,6 +370,15 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     phys.SetMass(std::max(0.01f, spawner.spawnMass));
 
     glm::vec3 velocity = spawner.spawnVelocity;
+    if (spawner.attachToTarget) {
+        // If attached to a target, spawn objects moving in the direction the target (spawner) is looking.
+        // We use the matrix's forward vector (-Z).
+        glm::vec3 front = -glm::normalize(glm::vec3(transform.matrix[2]));
+        float speed = glm::length(spawner.spawnVelocity);
+        if (speed < 0.001f) speed = 20.0f; // Default if speed was 0
+        velocity = front * speed;
+    }
+
     if (spawner.randomizeVelocity) {
         static std::mt19937 rng(std::random_device{}());
 

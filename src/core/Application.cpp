@@ -320,6 +320,19 @@ void Application::SetupScene() {
             // Params: x=Rows, y=Cols, z=CellSize
             scene->AddGrid(objCfg.name, (int)objCfg.params.x, (int)objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
         }
+        else if (objCfg.type == "Cloth") {
+            setupPhase = "Cloth Creation";
+            float stiffness = objCfg.hasSpringConfig ? objCfg.springStiffness : 15.0f;
+            float damping = objCfg.hasSpringConfig ? objCfg.springDamping : 0.5f;
+            
+            Entity clothEntity = ClothFactory::CreateClothGrid(
+                *scene, vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(),
+                objCfg.position, (int)objCfg.params.x, (int)objCfg.params.y, objCfg.params.z,
+                objCfg.mass, stiffness, damping, objCfg.texturePath
+            );
+            
+            scene->RegisterEntityName(objCfg.name, clothEntity);
+        }
         else if (objCfg.type == "Spawner") {
             setupPhase = "Spawner Initialization";
             Entity spawnerEntity = scene->CreateSpawnerEntity(objCfg.name, objCfg.position);
@@ -351,6 +364,8 @@ void Application::SetupScene() {
             spawner.randomAngularVelocityRange = objCfg.spawnAngularVelocityRandomRange;
             spawner.spawnMass = objCfg.spawnMass;
             spawner.spawnLifespanSeconds = objCfg.spawnLifespanSeconds;
+            spawner.attachToTarget = objCfg.spawnerAttachToTarget;
+            spawner.attachTargetName = objCfg.spawnerTargetName;
 
             if (spawner.alwaysOn) {
                 spawner.runDurationSeconds = -1.0f;
@@ -764,7 +779,7 @@ void Application::SetupScene() {
     }
     
     // Spawn Cloth Demo
-    ClothFactory::CreateClothGrid(*scene, vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), glm::vec3(0.0f, 30.0f, 0.0f), 15, 15, 1.0f, 0.5f, 15.0f, 0.5f);
+    // ClothFactory::CreateClothGrid(*scene, vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), glm::vec3(0.0f, 30.0f, 0.0f), 15, 15, 1.0f, 0.5f, 15.0f, 0.5f);
 
     // scene->PrintDebugInfo();
 }
@@ -1014,6 +1029,18 @@ void Application::MainLoop() {
                 else if (req.type == "Terrain") {
                     // Default to a small terrain patch
                     render.geometry = GeometryGenerator::CreateTerrain(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 10.0f, 40, 40, 1.5f, 0.1f);
+                }
+                else if (req.type == "Plane") {
+                    render.geometry = GeometryGenerator::CreatePlane(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice());
+                }
+                else if (req.type == "Cylinder") {
+                    render.geometry = GeometryGenerator::CreateCylinder(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 1.0f, 2.0f, 32);
+                }
+                else if (req.type == "Disk") {
+                    render.geometry = GeometryGenerator::CreateDisk(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 1.0f, 32);
+                }
+                else if (req.type == "Grid") {
+                    render.geometry = GeometryGenerator::CreateGrid(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 20, 20, 0.5f);
                 }
             }
         }
