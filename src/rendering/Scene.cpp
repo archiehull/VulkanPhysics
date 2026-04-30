@@ -444,6 +444,8 @@ void Scene::Initialize() {
     //m_Registry.AddComponent<DustCloudComponent>(dustEntity, DustCloudComponent{});
 
     m_SpringVisualGeometry = std::shared_ptr<Geometry>(GeometryGenerator::CreateCube(device, physicalDevice));
+    m_PathVisualGeometry = m_SpringVisualGeometry;
+    m_SpawnerVisualGeometry = m_SpringVisualGeometry;
 
 
     m_EnvironmentEntity = MAX_ENTITIES;
@@ -600,6 +602,12 @@ Entity Scene::AddSphere(const std::string& name, int stacks, int slices, float r
 Entity Scene::AddCylinder(const std::string& name, float radius, float height, int slices, const glm::vec3& position, const std::string& texturePath) {
     Entity entity = AddObjectInternal(name, GeometryGenerator::CreateCylinder(device, physicalDevice, radius, height, slices), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "cylinder";
+    return entity;
+}
+
+Entity Scene::AddDisk(const std::string& name, float radius, int slices, const glm::vec3& position, const std::string& texturePath) {
+    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateDisk(device, physicalDevice, radius, slices), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "disk";
     return entity;
 }
 
@@ -1212,6 +1220,9 @@ Entity Scene::CreatePathVisualEntity() {
     render.geometry = m_PathVisualGeometry;
     render.geometryName = "path_visual";
     render.shadingMode = 1;
+    render.castsShadow = false;
+    render.originalCastsShadow = false;
+    render.receiveShadows = false;
     render.layerMask = SceneLayers::ALL;
     render.useDebugOverlay = true;
     m_Registry.AddComponent<RenderComponent>(visualEntity, render);
@@ -1457,8 +1468,11 @@ void Scene::UpdateSpawnerVisuals() {
         rd.debugOverlayColor = color;
     };
 
-    for (Entity e : m_RenderableEntities) {
-        if (!registry.IsAlive(e) || !registry.HasComponent<ObjectSpawnerComponent>(e) || !registry.HasComponent<TransformComponent>(e)) continue;
+    const Entity entityCount = registry.GetEntityCount();
+    for (Entity e = 0; e < entityCount; ++e) {
+        if (!registry.IsAlive(e) || !registry.HasComponent<ObjectSpawnerComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
+            continue;
+        }
 
         const auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
         const auto& transform = registry.GetComponent<TransformComponent>(e);

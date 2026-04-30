@@ -305,12 +305,21 @@ void Application::SetupScene() {
             // Params: x=Radius
             scene->AddSphere(objCfg.name, 12, 24, objCfg.params.x, objCfg.position, objCfg.texturePath);
         }
+        else if (objCfg.type == "Cylinder") {
+            const float radius = std::max(0.01f, objCfg.params.x);
+            const float height = std::max(0.01f, objCfg.params.y > 0.0f ? objCfg.params.y : 1.0f);
+            const int slices = objCfg.params.z > 0.0f ? static_cast<int>(objCfg.params.z) : 32;
+            scene->AddCylinder(objCfg.name, radius, height, slices, objCfg.position, objCfg.texturePath);
+        }
         else if (objCfg.type == "Bowl") {
             // Params: x=Radius
             scene->AddBowl(objCfg.name, objCfg.params.x, 24, 12, objCfg.position, objCfg.texturePath);
         }
         else if (objCfg.type == "Cube") {
             scene->AddCube(objCfg.name, objCfg.position, objCfg.scale, objCfg.texturePath);
+        }
+        else if (objCfg.type == "Plane") {
+            scene->AddPlane(objCfg.name, objCfg.position, objCfg.scale, objCfg.texturePath);
         }
         else if (objCfg.type == "Model") {
             // Standard Model
@@ -319,6 +328,11 @@ void Application::SetupScene() {
         else if (objCfg.type == "Grid") {
             // Params: x=Rows, y=Cols, z=CellSize
             scene->AddGrid(objCfg.name, (int)objCfg.params.x, (int)objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
+        }
+        else if (objCfg.type == "Disk") {
+            const float radius = std::max(0.01f, objCfg.params.x);
+            const int slices = objCfg.params.y > 0.0f ? static_cast<int>(objCfg.params.y) : 32;
+            scene->AddDisk(objCfg.name, radius, slices, objCfg.position, objCfg.texturePath);
         }
         else if (objCfg.type == "Cloth") {
             setupPhase = "Cloth Creation";
@@ -601,6 +615,8 @@ void Application::SetupScene() {
             pathAnim.useLocalSpace = objCfg.pathUseLocalSpace;
             pathAnim.connectEndToStart = objCfg.pathConnectEndToStart;
             pathAnim.reversePath = (toUpper(objCfg.pathPlayMode) == "REVERSE");
+            pathAnim.applyConstantRotation = objCfg.pathApplyConstantRotation;
+            pathAnim.rotationSpinRate = objCfg.pathRotationSpinRate;
             pathAnim.initialized = false;
             pathAnim.currentTime = 0.0f;
             pathAnim.playbackDirection = 1;
@@ -1072,6 +1088,7 @@ void Application::MainLoop() {
 
 
         const auto updateStart = std::chrono::high_resolution_clock::now();
+        cameraController->SetReplayFreeRoam(editorUI->IsReplaying() && editorUI->GetReplayFreeRoam());
         cameraController->Update(simDeltaTime, *scene, *inputManager);
 
         // --- Replay Mode Override ---

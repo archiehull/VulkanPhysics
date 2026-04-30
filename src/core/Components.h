@@ -93,6 +93,10 @@ struct PathAnimationComponent {
     PathAnimationPlayMode playMode = PathAnimationPlayMode::Once;
     PathAnimationTimingMode timingMode = PathAnimationTimingMode::Absolute;
     PathAnimationEasing easing = PathAnimationEasing::Linear;
+    bool applyEasing = true;
+    bool perPointRotation = false;
+    glm::vec3 baseRotation = glm::vec3(0.0f);
+    bool hasBaseRotation = false;
     float totalDuration = 5.0f;
     float playbackSpeed = 1.0f;
     bool isPlaying = true;
@@ -105,7 +109,10 @@ struct PathAnimationComponent {
     bool useLocalSpace = false;
     bool rotateAlongPath = false;
     glm::vec3 rotationOffset = glm::vec3(0.0f);
+    bool applyConstantRotation = false;
+    glm::vec3 rotationSpinRate = glm::vec3(0.0f);
     float currentTime = 0.0f;
+    float rotationSpinTime = 0.0f;
     int playbackDirection = 1;
     bool lastReversePath = false;
     glm::vec3 lastEvaluatedPosition = glm::vec3(0.0f);

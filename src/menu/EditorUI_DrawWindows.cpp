@@ -636,7 +636,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
                     if (ImGui::TreeNode(geometryNodeLabel.c_str())) {
                         static int geoTypeIdx = 0;
-                        const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Bowl", "Terrain" };
+                        const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Plane", "Cylinder", "Bowl", "Terrain", "Disk", "Grid" };
                         ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
 
                         static std::string selectedModel = "";
@@ -1194,6 +1194,11 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         comp.easing = static_cast<PathAnimationEasing>(easing);
                         dirty = true;
                     }
+                    ImGui::SameLine();
+                    if (ImGui::Button(comp.applyEasing ? "Disable Easing##PathAnimationEasingToggle" : "Apply Easing##PathAnimationEasingToggle")) {
+                        comp.applyEasing = !comp.applyEasing;
+                        dirty = true;
+                    }
 
                     int timingMode = static_cast<int>(comp.timingMode);
                     const char* timingItems[] = { "Absolute Times", "Per Segment", "Overall Time" };
@@ -1229,25 +1234,28 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     ImGui::SameLine();
                     if (ImGui::Button("Restart##PathAnimationRestart")) {
                         comp.currentTime = 0.0f;
+                        comp.rotationSpinTime = 0.0f;
                         comp.isPlaying = false;
                     }
 
                     ImGui::Checkbox("Show Path", &comp.showPath);
-                    ImGui::Checkbox("Use Local Space", &comp.useLocalSpace);
+                    ImGui::Checkbox("Use Relative Positioning", &comp.useLocalSpace);
                     if (ImGui::Checkbox("Connect End to Start", &comp.connectEndToStart)) {
                         dirty = true;
                     }
                     if (ImGui::Checkbox("Reverse Path", &comp.reversePath)) {
                         dirty = true;
                     }
-                    if (ImGui::Checkbox("Rotate Along Path", &comp.rotateAlongPath)) {
+                    if (ImGui::Checkbox("Per Point Rotation", &comp.perPointRotation)) {
                         dirty = true;
                     }
-                    if (comp.rotateAlongPath) {
-                        if (ImGui::DragFloat3("Rotation Offset", &comp.rotationOffset.x, 0.1f)) {
+                    if (ImGui::Checkbox("Apply Constant Rotation", &comp.applyConstantRotation)) {
+                        dirty = true;
+                    }
+                    if (comp.applyConstantRotation) {
+                        if (ImGui::DragFloat3("Spin Rate (deg/s)", &comp.rotationSpinRate.x, 0.1f)) {
                             dirty = true;
                         }
-                        ImGui::TextDisabled("Waypoint orientation is hidden while rotate-along-path is enabled.");
                     }
                     if (ImGui::DragFloat("Playback Speed", &comp.playbackSpeed, 0.05f, 0.0f, 10.0f, "%.2fx")) {
                         comp.playbackSpeed = std::max(0.0f, comp.playbackSpeed);
@@ -1274,7 +1282,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
                         if (ImGui::TreeNode(nodeLabel.c_str())) {
                             if (ImGui::DragFloat3(("Position##PathWaypointPos" + std::to_string(i)).c_str(), &waypoint.position.x, 0.05f)) dirty = true;
-                            if (!comp.rotateAlongPath) {
+                            if (!comp.rotateAlongPath && comp.perPointRotation) {
                                 if (ImGui::DragFloat3(("Orientation##PathWaypointRot" + std::to_string(i)).c_str(), &waypoint.orientation.x, 0.1f)) dirty = true;
                             }
                             if (comp.timingMode == PathAnimationTimingMode::Absolute &&
@@ -1346,6 +1354,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         comp.initialized = false;
                         comp.hasLastEvaluatedPosition = false;
                         comp.hasLocalOrigin = false;
+                        comp.hasBaseRotation = false;
                     }
 
                     ImGui::TreePop();

@@ -492,6 +492,16 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 currentObject->hasPathAnimation = true;
                 currentObject->pathWaypoints.push_back(waypoint);
             }
+            else if (key == "PathConstantRotation") {
+                std::string value;
+                ss >> value;
+                currentObject->pathApplyConstantRotation = ParseBoolToken(value);
+            }
+            else if (key == "PathSpinRate") {
+                ss >> currentObject->pathRotationSpinRate.x
+                    >> currentObject->pathRotationSpinRate.y
+                    >> currentObject->pathRotationSpinRate.z;
+            }
             else if (key == "PathSegmentDef") {
                 PathSegmentConfig seg;
                 std::string curveType;

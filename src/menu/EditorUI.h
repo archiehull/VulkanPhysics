@@ -151,6 +151,8 @@ public:
         return false;
     }
 
+    bool GetReplayFreeRoam() const { return m_ReplayFreeRoam; }
+
     bool IsReplaying() const { return m_IsReplaying; }
     void SetIsReplaying(bool isReplaying) { m_IsReplaying = isReplaying; }
     int GetReplayFrame() const { return m_CurrentReplayFrame; }
@@ -232,6 +234,7 @@ private:
     int m_MaxReplayFrames = 0;
     bool m_GenerateLookaheadRequested = false;
     float m_LookaheadTimeframe = 5.0f;
+    bool m_ReplayFreeRoam = true;
 
     // Replay Playback State
     bool m_ReplayPlaying = false;

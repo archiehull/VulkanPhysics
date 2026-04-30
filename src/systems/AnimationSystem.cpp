@@ -63,14 +63,21 @@ void AnimationSystem::Update(Scene& scene, float deltaTime) {
             AdvancePlayback(path, delta, authoredEndTime);
         }
 
+        if (path.applyConstantRotation) {
+            path.rotationSpinTime += std::max(0.0f, deltaTime);
+        }
+
         const EvaluatedPathSegment evaluated = EvaluateSegmentAtTime(path);
-        const float easedT = ApplyEasing(path.easing, evaluated.t);
+        const float easedT = path.applyEasing ? ApplyEasing(path.easing, evaluated.t) : AnimationMath::Clamp01(evaluated.t);
 
         glm::vec3 localPosition = EvaluateSegmentPosition(evaluated, easedT);
-        glm::vec3 localRotation = AnimationMath::LerpEulerDegrees(
-            evaluated.from.orientation,
-            evaluated.to.orientation,
-            easedT);
+        glm::vec3 localRotation = path.baseRotation;
+        if (path.perPointRotation) {
+            localRotation = AnimationMath::LerpEulerDegrees(
+                evaluated.from.orientation,
+                evaluated.to.orientation,
+                easedT);
+        }
         glm::vec3 tangent = EvaluateSegmentTangent(evaluated, easedT);
 
         glm::vec3 worldPosition = localPosition;
@@ -78,15 +85,23 @@ void AnimationSystem::Update(Scene& scene, float deltaTime) {
             worldPosition += path.localOriginPosition;
         }
 
+        const glm::vec3 spinRotation = path.applyConstantRotation
+            ? (path.rotationSpinRate * path.rotationSpinTime)
+            : glm::vec3(0.0f);
+
         glm::vec3 worldRotation = localRotation;
         if (path.rotateAlongPath && glm::length(tangent) > 0.0001f) {
             const glm::vec3 direction = glm::normalize(tangent);
             const float yaw = std::atan2(direction.x, direction.z);
             const float pitch = -std::asin(glm::clamp(direction.y, -1.0f, 1.0f));
-            worldRotation = glm::degrees(glm::vec3(pitch, yaw, 0.0f)) + path.rotationOffset;
+            worldRotation = glm::degrees(glm::vec3(pitch, yaw, 0.0f)) + path.rotationOffset + spinRotation;
         }
         else if (path.useLocalSpace) {
             worldRotation += path.localOriginRotation;
+        }
+
+        if (!path.rotateAlongPath) {
+            worldRotation += spinRotation;
         }
 
         glm::vec3 velocity = glm::vec3(0.0f);
@@ -120,6 +135,11 @@ void AnimationSystem::InitializePath(PathAnimationComponent& path, const Transfo
         path.localOriginPosition = transform.position;
         path.localOriginRotation = transform.rotation;
         path.hasLocalOrigin = true;
+    }
+
+    if (!path.hasBaseRotation) {
+        path.baseRotation = transform.rotation;
+        path.hasBaseRotation = true;
     }
 
     if (path.initialized) {

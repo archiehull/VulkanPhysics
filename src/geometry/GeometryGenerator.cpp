@@ -100,7 +100,7 @@ float GeometryGenerator::GetTerrainHeight(float x, float z, float radius, float 
 std::unique_ptr<Geometry> GeometryGenerator::CreateDisk(VkDevice device, VkPhysicalDevice physicalDevice, float radius, int slices) {
     auto geometry = std::make_unique<Geometry>(device, physicalDevice);
     geometry->ReserveVertices(slices + 2);
-    geometry->ReserveIndices(slices * 3);
+    geometry->ReserveIndices(slices * 6);
 
     // Center
     geometry->AddVertex({ glm::vec3(0.0f), glm::vec3(0.0f), glm::vec2(0.5f), glm::vec3(0.0f, 1.0f, 0.0f) });
@@ -119,6 +119,12 @@ std::unique_ptr<Geometry> GeometryGenerator::CreateDisk(VkDevice device, VkPhysi
         geometry->AddIndex(0);
         geometry->AddIndex(i + 1);
         geometry->AddIndex(i);
+    }
+
+    for (int i = 1; i <= slices; ++i) {
+        geometry->AddIndex(0);
+        geometry->AddIndex(i);
+        geometry->AddIndex(i + 1);
     }
 
     geometry->CreateBuffers();
@@ -179,6 +185,11 @@ std::unique_ptr<Geometry> GeometryGenerator::CreateCylinder(VkDevice device, VkP
         geometry->AddIndex(bottomRimStart + j + 1);
         geometry->AddIndex(bottomRimStart + j);
     }
+    for (int j = 0; j < slices; ++j) {
+        geometry->AddIndex(bottomCenterIndex);
+        geometry->AddIndex(bottomRimStart + j);
+        geometry->AddIndex(bottomRimStart + j + 1);
+    }
 
     // Top Cap
     uint32_t topCenterIndex = (uint32_t)geometry->VertexCount();
@@ -193,6 +204,11 @@ std::unique_ptr<Geometry> GeometryGenerator::CreateCylinder(VkDevice device, VkP
         geometry->AddIndex(topCenterIndex);
         geometry->AddIndex(topRimStart + j);
         geometry->AddIndex(topRimStart + j + 1);
+    }
+    for (int j = 0; j < slices; ++j) {
+        geometry->AddIndex(topCenterIndex);
+        geometry->AddIndex(topRimStart + j + 1);
+        geometry->AddIndex(topRimStart + j);
     }
 
     geometry->CreateBuffers();

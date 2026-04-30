@@ -173,6 +173,9 @@ void EditorUI::DrawReplayEditor(Scene& scene) {
             m_ReplayPlaying = false;
         }
 
+        ImGui::SameLine();
+        ImGui::Checkbox("Free Roam", &m_ReplayFreeRoam);
+
         ImGui::Separator();
         ImGui::Spacing();
 

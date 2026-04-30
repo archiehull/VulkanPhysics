@@ -257,6 +257,11 @@ void CameraController::Update(float deltaTime, Scene& scene, const InputManager&
     auto& registry = scene.GetRegistry();
     const auto& meta = cameraMeta[activeCameraName];
 
+    if (m_ForceFreeRoam) {
+        UpdateFreeRoam(deltaTime, scene, input);
+        return;
+    }
+
     // No auto-cycling; only recover if target disappears
     if (meta.type == "RandomTarget") {
         const bool lostTarget =

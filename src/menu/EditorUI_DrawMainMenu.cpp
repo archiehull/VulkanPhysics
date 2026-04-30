@@ -981,6 +981,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             ImGui::Separator();
             if (ImGui::MenuItem("Generate Lookahead")) {
                 m_GenerateLookaheadRequested = true;
+                m_ReplayFreeRoam = true;
             }
         } else {
             ImGui::TextDisabled("Replay in Progress...");

@@ -30,6 +30,7 @@ public:
     // New: manual cycling support for RandomTarget cameras
     void CycleRandomTarget(Scene& scene);
     bool IsActiveCameraBoundTo(const std::string& actionBind) const;
+    void SetReplayFreeRoam(bool enabled) { m_ForceFreeRoam = enabled; }
 
 private:
     std::map<std::string, Entity> cameraEntities;
@@ -44,6 +45,7 @@ private:
     std::size_t randomTargetIndex = 0;
     float randomTargetSwitchTimer = 0.0f;
     float randomTargetSwitchInterval = 4.0f;
+    bool m_ForceFreeRoam = false;
 
     void SetupCameras(Scene& scene, const std::vector<CustomCameraConfig>& customConfigs);
     void BuildRandomTargetCycle(Scene& scene, const CustomCameraConfig& meta);

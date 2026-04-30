@@ -173,6 +173,8 @@ struct SceneObjectConfig {
     bool pathShowPath = false;
     bool pathUseLocalSpace = false;
     bool pathConnectEndToStart = true;
+    bool pathApplyConstantRotation = false;
+    glm::vec3 pathRotationSpinRate = glm::vec3(0.0f);
     std::vector<PathWaypointConfig> pathWaypoints;
     std::vector<PathSegmentConfig> pathSegments;
     std::vector<LegacyPathSegmentConfig> legacyPathSegments;
