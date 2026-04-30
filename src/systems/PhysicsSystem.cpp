@@ -38,6 +38,138 @@ void PhysicsSystem::SetQuadraticDrag(bool enabled, float coefficient) {
 }
 
 namespace {
+    glm::vec3 ClosestPointOnTriangle(const glm::vec3& p, const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+        glm::vec3 ab = b - a;
+        glm::vec3 ac = c - a;
+        glm::vec3 ap = p - a;
+
+        float d1 = glm::dot(ab, ap);
+        float d2 = glm::dot(ac, ap);
+        if (d1 <= 0.0f && d2 <= 0.0f) return a; // Vertex A
+
+        glm::vec3 bp = p - b;
+        float d3 = glm::dot(ab, bp);
+        float d4 = glm::dot(ac, bp);
+        if (d3 >= 0.0f && d4 <= d3) return b; // Vertex B
+
+        float vc = d1 * d4 - d3 * d2;
+        if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f) {
+            float v = d1 / (d1 - d3);
+            return a + v * ab; // Edge AB
+        }
+
+        glm::vec3 cp = p - c;
+        float d5 = glm::dot(ab, cp);
+        float d6 = glm::dot(ac, cp);
+        if (d6 >= 0.0f && d5 <= d6) return c; // Vertex C
+
+        float vb = d5 * d2 - d1 * d6;
+        if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f) {
+            float w = d2 / (d2 - d6);
+            return a + w * ac; // Edge AC
+        }
+
+        float va = d3 * d6 - d5 * d4;
+        if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f) {
+            float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+            return b + w * (c - b); // Edge BC
+        }
+
+        float denom = 1.0f / (va + vb + vc);
+        float v = vb * denom;
+        float w = vc * denom;
+        return a + ab * v + ac * w; // Face
+    }
+
+    void GetBarycentric(const glm::vec3& p, const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, float& u, float& v, float& w) {
+        glm::vec3 v0 = b - a, v1 = c - a, v2 = p - a;
+        float d00 = glm::dot(v0, v0);
+        float d01 = glm::dot(v0, v1);
+        float d11 = glm::dot(v1, v1);
+        float d20 = glm::dot(v2, v0);
+        float d21 = glm::dot(v2, v1);
+        float denom = d00 * d11 - d01 * d01;
+
+        if (std::abs(denom) < 1e-8f) { u = 0.333f; v = 0.333f; w = 0.333f; return; }
+
+        v = (d11 * d20 - d01 * d21) / denom;
+        w = (d00 * d21 - d01 * d20) / denom;
+        u = 1.0f - v - w;
+    }
+
+    void ResolveSphereClothTriangleCollision(
+        MovingSphere& sphere,
+        TransformComponent& tA, TransformComponent& tB, TransformComponent& tC,
+        PhysicsComponent& pA, PhysicsComponent& pB, PhysicsComponent& pC)
+    {
+        glm::vec3 minV = glm::min(tA.position, glm::min(tB.position, tC.position));
+        glm::vec3 maxV = glm::max(tA.position, glm::max(tB.position, tC.position));
+        glm::vec3 sPos = sphere.sphere.Position();
+        float r = sphere.sphere.m_radius;
+        if (sPos.x + r < minV.x || sPos.x - r > maxV.x ||
+            sPos.y + r < minV.y || sPos.y - r > maxV.y ||
+            sPos.z + r < minV.z || sPos.z - r > maxV.z) {
+            return;
+        }
+
+        glm::vec3 closest = ClosestPointOnTriangle(sphere.sphere.Position(), tA.position, tB.position, tC.position);
+        
+        glm::vec3 delta = sphere.sphere.Position() - closest;
+        float distSq = glm::dot(delta, delta);
+
+        if (distSq > 1e-8f && distSq <= (r * r)) {
+            float dist = std::sqrt(distSq);
+            glm::vec3 n = delta / dist; 
+            float penetration = r - dist;
+
+            float u, v, w;
+            GetBarycentric(closest, tA.position, tB.position, tC.position, u, v, w);
+
+            float clothInvMass = (u * u * pA.inverseMass) + (v * v * pB.inverseMass) + (w * w * pC.inverseMass);
+            float totalInvMass = sphere.invMass + clothInvMass;
+            
+            if (totalInvMass <= 0.0f) return;
+
+            if (sphere.invMass > 0.0f) {
+                glm::vec3 sphereCorrection = n * (penetration * (sphere.invMass / totalInvMass));
+                sphere.sphere.SetPosition(sphere.sphere.Position() + sphereCorrection);
+            }
+            
+            float clothCorrectionWeight = penetration / totalInvMass;
+            if (!pA.isStatic) tA.position -= n * (clothCorrectionWeight * u * pA.inverseMass);
+            if (!pB.isStatic) tB.position -= n * (clothCorrectionWeight * v * pB.inverseMass);
+            if (!pC.isStatic) tC.position -= n * (clothCorrectionWeight * w * pC.inverseMass);
+
+            glm::vec3 clothVel = (u * pA.velocity) + (v * pB.velocity) + (w * pC.velocity);
+            
+            glm::vec3 rS = -n * r; 
+            glm::vec3 sphereVel = sphere.velocity + glm::cross(sphere.angularVelocity, rS);
+
+            glm::vec3 relVel = sphereVel - clothVel;
+            float velAlongNormal = glm::dot(relVel, n);
+
+            if (velAlongNormal < 0.0f) {
+                float e = 0.1f; 
+                
+                glm::vec3 rCrossN = glm::cross(rS, n);
+                glm::vec3 angularEffect = glm::cross(sphere.inverseInertiaTensor * rCrossN, rS);
+                float sphereMassEffect = sphere.invMass + glm::dot(angularEffect, n);
+                
+                float j = -(1.0f + e) * velAlongNormal / (sphereMassEffect + clothInvMass);
+                glm::vec3 impulse = n * j;
+
+                if (sphere.invMass > 0.0f) {
+                    sphere.velocity += impulse * sphere.invMass;
+                    sphere.angularVelocity += sphere.inverseInertiaTensor * glm::cross(rS, impulse);
+                }
+
+                if (!pA.isStatic) pA.velocity -= impulse * (u * pA.inverseMass);
+                if (!pB.isStatic) pB.velocity -= impulse * (v * pB.inverseMass);
+                if (!pC.isStatic) pC.velocity -= impulse * (w * pC.inverseMass);
+            }
+        }
+    }
+
     inline void ApplySleepThreshold(PhysicsComponent& phys, const Plane& plane) {
         if (phys.isStatic) return;
 
@@ -378,6 +510,8 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
 
             // Sphere vs Sphere
             if (c1.type == 0 && c2.type == 0) { // Sphere vs Sphere
+                if (c1.isClothParticle != c2.isClothParticle) continue;
+
                 MovingSphere sphereA(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
                 sphereA.forceAccumulator = p1.forceAccumulator; // Load accumulator
                 sphereA.torqueAccumulator = p1.torqueAccumulator;
@@ -533,6 +667,67 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                         ApplySleepThreshold(p2, planeA);
                     }
                 }
+            }
+        }
+    }
+
+    auto clothArray = registry.GetComponentArray<ClothComponent>();
+    
+    std::vector<Entity> activeSpheres;
+    for (size_t iIdx = 0; iIdx < activeCount; ++iIdx) {
+        Entity i = activeColliders[iIdx];
+        if (colliderArray->GetData(i).type == 0) { // 0 = Sphere
+            activeSpheres.push_back(i);
+        }
+    }
+
+    for (Entity c = 0; c < entityCount; ++c) {
+        if (!clothArray->HasData(c)) continue;
+        
+        auto& cloth = clothArray->GetData(c);
+        if (!cloth.collisionsEnabled || !cloth.dynamicGeometry || !cloth.dynamicGeometry->HasIndices()) continue;
+
+        const auto& indices = cloth.dynamicGeometry->GetIndices();
+        
+        std::unordered_set<Entity> clothParticleSet(cloth.particles.begin(), cloth.particles.end());
+
+        for (Entity s : activeSpheres) {
+            if (clothParticleSet.find(s) != clothParticleSet.end()) continue;
+
+            auto& sphereTrans = transformArray->GetData(s);
+            auto& sphereCol = colliderArray->GetData(s);
+            auto& spherePhys = physicsArray->GetData(s);
+
+            MovingSphere helperSphere(sphereTrans.position, sphereCol.radius, spherePhys.velocity, spherePhys.inverseMass, spherePhys.restitution);
+            helperSphere.angularVelocity = spherePhys.angularVelocity;
+            helperSphere.inertiaTensor = spherePhys.inertiaTensor;
+            helperSphere.inverseInertiaTensor = spherePhys.inverseInertiaTensor;
+
+            for (size_t i = 0; i < indices.size(); i += 3) {
+                Entity pA_ent = cloth.particles[indices[i]];
+                Entity pB_ent = cloth.particles[indices[i+1]];
+                Entity pC_ent = cloth.particles[indices[i+2]];
+
+                if (pA_ent == MAX_ENTITIES || !transformArray->HasData(pA_ent) || !physicsArray->HasData(pA_ent)) continue;
+                if (pB_ent == MAX_ENTITIES || !transformArray->HasData(pB_ent) || !physicsArray->HasData(pB_ent)) continue;
+                if (pC_ent == MAX_ENTITIES || !transformArray->HasData(pC_ent) || !physicsArray->HasData(pC_ent)) continue;
+
+                auto& tA = transformArray->GetData(pA_ent);
+                auto& tB = transformArray->GetData(pB_ent);
+                auto& tC = transformArray->GetData(pC_ent);
+                
+                auto& pA = physicsArray->GetData(pA_ent);
+                auto& pB = physicsArray->GetData(pB_ent);
+                auto& pC = physicsArray->GetData(pC_ent);
+
+                ResolveSphereClothTriangleCollision(helperSphere, tA, tB, tC, pA, pB, pC);
+            }
+
+            if (!spherePhys.isStatic) {
+                sphereTrans.position = helperSphere.sphere.Position();
+                sphereTrans.UpdateMatrix();
+                spherePhys.velocity = helperSphere.velocity;
+                spherePhys.angularVelocity = helperSphere.angularVelocity;
             }
         }
     }

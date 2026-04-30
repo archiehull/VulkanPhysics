@@ -1,37 +1,12 @@
-﻿  AABB.cpp
+﻿  pch.cpp
+  AABB.cpp
   Collider.cpp
   Capsule.cpp
   Cylinder.cpp
   PhysicsHelper.cpp
-C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\PhysicsHelper.cpp(27,34): error C2248: 'Collider::m_position': cannot access protected member declared in class 'Collider'
-  (compiling source file '/PhysicsHelper.cpp')
-      C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\Collider.h(29,12):
-      see declaration of 'Collider::m_position'
-      C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\Collider.h(16,7):
-      see declaration of 'Collider'
-  
-C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\PhysicsHelper.cpp(198,28): error C2248: 'Collider::m_position': cannot access protected member declared in class 'Collider'
-  (compiling source file '/PhysicsHelper.cpp')
-      C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\Collider.h(29,12):
-      see declaration of 'Collider::m_position'
-      C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\Collider.h(16,7):
-      see declaration of 'Collider'
-  
-C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\PhysicsHelper.cpp(201,35): error C2248: 'Collider::m_position': cannot access protected member declared in class 'Collider'
-  (compiling source file '/PhysicsHelper.cpp')
-      C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\Collider.h(29,12):
-      see declaration of 'Collider::m_position'
-      C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\Collider.h(16,7):
-      see declaration of 'Collider'
-  
-C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\PhysicsHelper.cpp(311,34): error C2248: 'Collider::m_position': cannot access protected member declared in class 'Collider'
-  (compiling source file '/PhysicsHelper.cpp')
-      C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\Collider.h(29,12):
-      see declaration of 'Collider::m_position'
-      C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\Collider.h(16,7):
-      see declaration of 'Collider'
-  
   Plane.cpp
   Raycast.cpp
   SimulationStaticLib.cpp
+  Sphere.cpp
   Generating Code...
+  SimulationStaticLib.vcxproj -> C:\Users\663073\Workspace\VulkanPhysics\x64\Debug\SimulationStaticLib.lib

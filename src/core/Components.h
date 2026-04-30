@@ -230,10 +230,12 @@ struct ClothComponent {
     std::vector<Entity> particles; // 1D array of entities in the grid
     std::shared_ptr<Geometry> dynamicGeometry = nullptr;
     bool collisionsEnabled = true;
+    bool visualizeCollisionPolys = false;
 };
 
 struct ColliderComponent {
     bool hasCollision = true;
+    bool isClothParticle = false;
     int type = 0; // 0 = Sphere, 1 = Plane, 2 = Capsule, 3 = Cylinder, 4 = Cube
     float radius = 2.0f; 
     glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f); 

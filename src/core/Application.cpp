@@ -914,7 +914,10 @@ void Application::MainLoop() {
         lastFrameTime = currentTime;
 
         // Clamp simulation delta to avoid huge catch-up spikes when VSync/frame pacing misses a refresh interval.
-        const float simDeltaTime = std::min(deltaTime, 1.0f / 30.0f);
+        float simDeltaTime = std::min(deltaTime, 1.0f / 30.0f);
+        if (deltaTime > 0.1f) {
+            simDeltaTime = 0.0f; // Drop physics frame on huge hitch (e.g. window resize) to prevent explosion
+        }
 
         window->PollEvents();
         ProcessInput();

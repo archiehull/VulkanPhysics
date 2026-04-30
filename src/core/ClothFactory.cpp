@@ -38,6 +38,7 @@ Entity ClothFactory::CreateClothGrid(Scene& scene, VkDevice device, VkPhysicalDe
             cc.radius = spacing * 1.5f; // Overlap significantly to prevent tunneling
             cc.collisionLayer = 2; // Assign to cloth layer
             cc.collisionMask = ~2u; // Collide with everything EXCEPT other cloth particles
+            cc.isClothParticle = true;
             registry.AddComponent(p, cc);
             
             Vertex v;

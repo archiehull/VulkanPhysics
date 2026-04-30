@@ -1,49 +1,52 @@
-C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\backends\imgui_impl_glfw.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_impl_glfw.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\backends\imgui_impl_vulkan.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_impl_vulkan.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\imgui.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_demo.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_demo.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_draw.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_draw.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_tables.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_tables.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_widgets.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_widgets.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\Application.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\Application.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\Config.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\Config.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\InputManager.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\InputManager.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\Window.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\Window.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\Geometry.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\Geometry.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\GeometryGenerator.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\GeometryGenerator.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\OBJLoader.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\OBJLoader.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\SJGLoader.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\SJGLoader.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\main.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\main.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\EditorUI.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI_DrawMainMenu.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\EditorUI_DrawMainMenu.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI_DrawWindows.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\EditorUI_DrawWindows.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\CameraController.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\CameraController.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Cubemap.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\Cubemap.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\GraphicsPipeline.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\GraphicsPipeline.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\ParticleLibrary.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\ParticleLibrary.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\ParticleSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\ParticleSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Renderer.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\Renderer.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Scene.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\Scene.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\ShadowPass.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\ShadowPass.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\SkyboxPass.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\SkyboxPass.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Texture.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\Texture.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\AnimationSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\AnimationSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\CameraSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\CameraSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\ObjectSpawnerSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\ObjectSpawnerSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\OrbitSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\OrbitSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\ParticleUpdateSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\ParticleUpdateSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\PhysicsSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\PhysicsSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\SimpleShadowSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\SimpleShadowSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\ThermodynamicsSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\ThermodynamicsSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\TimeSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\TimeSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\WeatherSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\WeatherSystem.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanBuffer.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanBuffer.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanCommandBuffer.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanCommandBuffer.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanContext.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanContext.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanDescriptorSet.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanDescriptorSet.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanDevice.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanDevice.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanRenderPass.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanRenderPass.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanShader.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanShader.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanSwapChain.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanSwapChain.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanSyncObjects.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanSyncObjects.obj
-C:\Users\Ell\Documents\repos\VulkanPhysics\src\vulkan\VulkanUtils.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanUtils.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\backends\imgui_impl_glfw.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_impl_glfw.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\backends\imgui_impl_vulkan.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_impl_vulkan.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\imgui.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_demo.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_demo.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_draw.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_draw.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_tables.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_tables.obj
+C:\Users\663073\Workspace\VulkanPhysics\Additional Libraries\imgui-1.89.9\imgui_widgets.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\imgui_widgets.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\core\Application.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\Application.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\core\ClothFactory.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\ClothFactory.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\core\Config.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\Config.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\core\InputManager.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\InputManager.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\core\Window.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\Window.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\geometry\Geometry.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\Geometry.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\geometry\GeometryGenerator.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\GeometryGenerator.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\geometry\OBJLoader.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\OBJLoader.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\geometry\SJGLoader.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\SJGLoader.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\main.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\main.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\menu\EditorUI.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\EditorUI.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\menu\EditorUI_DrawMainMenu.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\EditorUI_DrawMainMenu.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\menu\EditorUI_DrawWindows.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\EditorUI_DrawWindows.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\CameraController.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\CameraController.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\Cubemap.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\Cubemap.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\GraphicsPipeline.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\GraphicsPipeline.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\ParticleLibrary.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\ParticleLibrary.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\ParticleSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\ParticleSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\Renderer.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\Renderer.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\Scene.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\Scene.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\ShadowPass.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\ShadowPass.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\SkyboxPass.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\SkyboxPass.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\rendering\Texture.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\Texture.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\AnimationSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\AnimationSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\CameraSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\CameraSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\ClothSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\ClothSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\ObjectSpawnerSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\ObjectSpawnerSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\OrbitSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\OrbitSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\ParticleUpdateSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\ParticleUpdateSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\PhysicsSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\PhysicsSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\SmokeGrenadeSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\SmokeGrenadeSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\SimpleShadowSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\SimpleShadowSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\ThermodynamicsSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\ThermodynamicsSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\TimeSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\TimeSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\systems\WeatherSystem.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\WeatherSystem.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanBuffer.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanBuffer.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanCommandBuffer.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanCommandBuffer.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanContext.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanContext.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanDescriptorSet.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanDescriptorSet.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanDevice.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanDevice.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanRenderPass.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanRenderPass.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanShader.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanShader.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanSwapChain.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanSwapChain.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanSyncObjects.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanSyncObjects.obj
+C:\Users\663073\Workspace\VulkanPhysics\src\vulkan\VulkanUtils.cpp;C:\Users\663073\Workspace\VulkanPhysics\VulkanPhysics\x64\Debug\VulkanUtils.obj

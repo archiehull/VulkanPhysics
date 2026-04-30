@@ -941,6 +941,12 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                             }
                         }
                     }
+                    if (ImGui::Checkbox("Visualize Collision Polys", &comp.visualizeCollisionPolys)) {
+                        if (registry.HasComponent<RenderComponent>(e)) {
+                            auto& render = registry.GetComponent<RenderComponent>(e);
+                            render.shadingMode = comp.visualizeCollisionPolys ? 4 : 1; // 4=Wireframe, 1=Phong
+                        }
+                    }
                     ImGui::TreePop();
                 }
             }
