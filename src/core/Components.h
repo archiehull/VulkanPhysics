@@ -234,6 +234,12 @@ struct ClothComponent {
     bool visualizeCollisionPolys = false;
 };
 
+enum class CollisionSide {
+    OUTSIDE,
+    INSIDE,
+    BOTH 
+};
+
 struct ColliderComponent {
     bool hasCollision = true;
     bool isClothParticle = false;
@@ -241,6 +247,9 @@ struct ColliderComponent {
     float radius = 2.0f; 
     glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f); 
     float height = 5.0f;
+    glm::vec3 halfExtents = glm::vec3(0.0f);
+    CollisionSide collisionSide = CollisionSide::OUTSIDE;
+    float wallThickness = 0.1f;
     uint32_t collisionLayer = 1; // Default layer
     uint32_t collisionMask = 0xFFFFFFFF; // Collide with all layers by default
 };

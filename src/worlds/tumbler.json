@@ -1,0 +1,130 @@
+{
+  "name": "Tumbler",
+  "description": "A rotating hollow container with balls tumbling inside, demonstrating CONTAINER collision type.",
+  "gravity_on": true,
+  "cameras": [
+    {
+      "name": "MainCamera",
+      "transform": {
+        "position": { "x": 0.0, "y": 0.0, "z": 25.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "camera_type_type": "PerspectiveCamera",
+      "camera_type": { "fov": 60.0, "near": 0.1, "far": 200.0 }
+    }
+  ],
+  "objects": [
+    {
+      "name": "TumblerContainer",
+      "transform": {
+        "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "material": "ContainerMat",
+      "shape_type": "Cuboid",
+      "shape": {
+        "size": { "x": 12.0, "y": 12.0, "z": 12.0 }
+      },
+      "behaviour_type": "AnimatedObject",
+      "behaviour": {
+        "waypoints": [
+          {
+            "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "rotation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+            "time": 0.0
+          },
+          {
+            "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "rotation": { "yaw": 180.0, "pitch": 0.0, "roll": 0.0 },
+            "time": 5.0
+          },
+          {
+            "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "rotation": { "yaw": 360.0, "pitch": 0.0, "roll": 0.0 },
+            "time": 10.0
+          }
+        ],
+        "total_duration": 10.0,
+        "easing": "LINEAR",
+        "path_mode": "LOOP"
+      },
+      "collision_type": "CONTAINER"
+    },
+    {
+      "name": "Ball_1",
+      "transform": {
+        "position": { "x": -2.0, "y": 0.0, "z": 0.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": { "radius": 1.0 },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
+          "angular_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 }
+        }
+      }
+    },
+    {
+      "name": "Ball_2",
+      "transform": {
+        "position": { "x": 2.0, "y": 1.0, "z": 0.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": { "radius": 1.0 },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
+          "angular_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 }
+        }
+      }
+    },
+    {
+      "name": "Ball_3",
+      "transform": {
+        "position": { "x": 0.0, "y": -2.0, "z": 1.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": { "radius": 1.0 },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
+          "angular_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 }
+        }
+      }
+    }
+  ],
+  "materials": [
+    { "name": "BallMat", "density": 1.0 },
+    { "name": "ContainerMat", "density": 2.0 }
+  ],
+  "interactions": [
+    {
+      "material_a": "BallMat",
+      "material_b": "ContainerMat",
+      "restitution": 0.6,
+      "static_friction": 0.3,
+      "dynamic_friction": 0.2
+    },
+    {
+      "material_a": "BallMat",
+      "material_b": "BallMat",
+      "restitution": 0.8,
+      "static_friction": 0.1,
+      "dynamic_friction": 0.05
+    }
+  ]
+}

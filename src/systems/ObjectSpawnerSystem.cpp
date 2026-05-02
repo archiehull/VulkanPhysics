@@ -300,34 +300,17 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     }
     else if (geometryType == "Smoke Grenade") {
         // Spawn a cylinder geometry, but we assign Capsule physics & SmokeGrenadeComponent
-        float cylinderRadius = 0.4f;
-        float cylinderHeight = 1.2f;
-        spawnedEntity = scene.AddCylinder(spawnedName, cylinderRadius, cylinderHeight, 32, spawnPos, spawner.spawnTexturePath);
-        if (spawnedEntity != MAX_ENTITIES && registry.HasComponent<TransformComponent>(spawnedEntity)) {
-            auto& spawnedTransform = registry.GetComponent<TransformComponent>(spawnedEntity);
-            spawnedTransform.position = spawnPos;
-            spawnedTransform.rotation = glm::vec3(0.0f);
-            // The cylinder geometry is already sized by the radius/height in AddCylinder,
-            // but we can apply additional scale if needed.
-            spawnedTransform.scale = spawner.spawnScale; 
-            spawnedTransform.UpdateMatrix();
-        }
+        // Base Unit Cylinder scale for Smoke Grenade (radius 0.4 -> scale 0.8, height 1.2 -> scale 1.2)
+        glm::vec3 baseScale(0.8f, 1.2f, 0.8f);
+        glm::vec3 finalScale = baseScale * spawner.spawnScale;
+        spawnedEntity = scene.AddCylinder(spawnedName, 32, spawnPos, finalScale, spawner.spawnTexturePath);
+        
         if (spawnedEntity != MAX_ENTITIES) {
             registry.AddComponent<SmokeGrenadeComponent>(spawnedEntity, SmokeGrenadeComponent{});
         }
     }
     else {
-        spawnedEntity = scene.AddSphere(spawnedName, 16, 32, sphereBaseRadius, spawnPos, spawner.spawnTexturePath);
-        if (spawnedEntity != MAX_ENTITIES && registry.HasComponent<TransformComponent>(spawnedEntity)) {
-            auto& spawnedTransform = registry.GetComponent<TransformComponent>(spawnedEntity);
-            spawnedTransform.position = spawnPos;
-            spawnedTransform.rotation = glm::vec3(0.0f);
-            spawnedTransform.scale = glm::vec3(
-                std::max(0.05f, spawner.spawnScale.x),
-                std::max(0.05f, spawner.spawnScale.y),
-                std::max(0.05f, spawner.spawnScale.z));
-            spawnedTransform.UpdateMatrix();
-        }
+        spawnedEntity = scene.AddSphere(spawnedName, 16, 32, spawnPos, effectiveSpawnScale, spawner.spawnTexturePath);
     }
 
     if (spawnedEntity == MAX_ENTITIES) return;

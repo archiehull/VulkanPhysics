@@ -344,13 +344,15 @@ void Application::SetupScene() {
         }
         else if (objCfg.type == "Sphere") {
             // Params: x=Radius
-            scene->AddSphere(objCfg.name, 12, 24, objCfg.params.x, objCfg.position, objCfg.texturePath);
+            scene->AddSphere(objCfg.name, 12, 24, objCfg.position, glm::vec3(objCfg.params.x * 2.0f), objCfg.texturePath);
         }
         else if (objCfg.type == "Cylinder") {
-            const float radius = std::max(0.01f, objCfg.params.x);
-            const float height = std::max(0.01f, objCfg.params.y > 0.0f ? objCfg.params.y : 1.0f);
+            const float r = std::max(0.01f, objCfg.params.x);
+            const float h = std::max(0.01f, objCfg.params.y > 0.0f ? objCfg.params.y : 1.0f);
             const int slices = objCfg.params.z > 0.0f ? static_cast<int>(objCfg.params.z) : 32;
-            scene->AddCylinder(objCfg.name, radius, height, slices, objCfg.position, objCfg.texturePath);
+            // Unit Cylinder scale based on radius and height
+            glm::vec3 cylinderScale(r * 2.0f, h, r * 2.0f);
+            scene->AddCylinder(objCfg.name, slices, objCfg.position, cylinderScale, objCfg.texturePath);
         }
         else if (objCfg.type == "Bowl") {
             // Params: x=Radius
@@ -371,9 +373,11 @@ void Application::SetupScene() {
             scene->AddGrid(objCfg.name, (int)objCfg.params.x, (int)objCfg.params.y, objCfg.params.z, objCfg.position, objCfg.texturePath);
         }
         else if (objCfg.type == "Disk") {
-            const float radius = std::max(0.01f, objCfg.params.x);
+            const float r = std::max(0.01f, objCfg.params.x);
             const int slices = objCfg.params.y > 0.0f ? static_cast<int>(objCfg.params.y) : 32;
-            scene->AddDisk(objCfg.name, radius, slices, objCfg.position, objCfg.texturePath);
+            // Unit Disk scale based on radius (X/Z = diameter)
+            glm::vec3 diskScale(r * 2.0f, 1.0f, r * 2.0f);
+            scene->AddDisk(objCfg.name, slices, objCfg.position, diskScale, objCfg.texturePath);
         }
         else if (objCfg.type == "Cloth") {
             setupPhase = "Cloth Creation";

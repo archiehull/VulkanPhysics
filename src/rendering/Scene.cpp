@@ -171,7 +171,7 @@ void Scene::SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity) {
     static int ballCount = 0;
     std::string name = "DynamicBall_" + std::to_string(ballCount++);
 
-    Entity e = AddSphere(name, 16, 16, 1.0f, pos, "textures/default.jpg");
+    Entity e = AddSphere(name, 16, 16, pos, glm::vec3(1.0f), "textures/default.jpg");
 
     if (!m_Registry.HasComponent<PhysicsComponent>(e)) {
         m_Registry.AddComponent<PhysicsComponent>(e, PhysicsComponent{});
@@ -593,21 +593,38 @@ void Scene::AddGrid(const std::string& name, int rows, int cols, float cellSize,
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "grid";
 }
 
-Entity Scene::AddSphere(const std::string& name, int stacks, int slices, float radius, const glm::vec3& position, const std::string& texturePath) {
-    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateSphere(device, physicalDevice, stacks, slices, radius), position, texturePath, false);
+Entity Scene::AddSphere(const std::string& name, int stacks, int slices, const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
+    // Generate a UNIT sphere (diameter = 1.0f, radius = 0.5f) so scale acts as the true size
+    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateSphere(device, physicalDevice, stacks, slices, 0.5f), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "sphere";
+    
+    // Apply the scale to the TransformComponent
+    auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
+    transform.scale = scale;
+    transform.UpdateMatrix();
+    
     return entity;
 }
 
-Entity Scene::AddCylinder(const std::string& name, float radius, float height, int slices, const glm::vec3& position, const std::string& texturePath) {
-    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateCylinder(device, physicalDevice, radius, height, slices), position, texturePath, false);
+Entity Scene::AddCylinder(const std::string& name, int slices, const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
+    // Generate a UNIT cylinder (diameter = 1.0f (radius 0.5f), height = 1.0f) so scale acts as the true size
+    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateCylinder(device, physicalDevice, 0.5f, 1.0f, slices), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "cylinder";
+
+    auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
+    transform.scale = scale;
+    transform.UpdateMatrix();
     return entity;
 }
 
-Entity Scene::AddDisk(const std::string& name, float radius, int slices, const glm::vec3& position, const std::string& texturePath) {
-    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateDisk(device, physicalDevice, radius, slices), position, texturePath, false);
+Entity Scene::AddDisk(const std::string& name, int slices, const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
+    // Generate a UNIT disk (diameter = 1.0f (radius 0.5f)) so scale acts as the true size
+    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateDisk(device, physicalDevice, 0.5f, slices), position, texturePath, false);
     m_Registry.GetComponent<RenderComponent>(entity).geometryName = "disk";
+
+    auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
+    transform.scale = scale;
+    transform.UpdateMatrix();
     return entity;
 }
 

@@ -232,24 +232,108 @@ namespace {
         return std::abs(u) <= (planeCollider.radius + sphereRadius) &&
             std::abs(v) <= (planeCollider.height + sphereRadius);
     }
+
+    void ResolveSphereInsideAABB(MovingSphere& sphere, const glm::vec3& boxCenter, const glm::vec3& boxHalfExtents, float restitution, float friction) {
+        glm::vec3 pos = sphere.sphere.Position();
+        float r = sphere.sphere.m_radius;
+        
+        glm::vec3 minBounds = boxCenter - boxHalfExtents;
+        glm::vec3 maxBounds = boxCenter + boxHalfExtents;
+
+        for (int i = 0; i < 3; ++i) {
+            glm::vec3 normal(0.0f);
+            float penetration = 0.0f;
+
+            if (pos[i] - r < minBounds[i]) {
+                normal[i] = 1.0f; 
+                penetration = minBounds[i] - (pos[i] - r);
+            } 
+            else if (pos[i] + r > maxBounds[i]) {
+                normal[i] = -1.0f;
+                penetration = (pos[i] + r) - maxBounds[i];
+            }
+
+            if (penetration > 0.0f) {
+                glm::vec3 wallPos = sphere.sphere.Position();
+                wallPos[i] = (normal[i] > 0.0f) ? minBounds[i] : maxBounds[i];
+                Plane p(wallPos, normal);
+                
+                ResolveSpherePlaneCollision(sphere, p, restitution, friction);
+                
+                glm::vec3 correctedPos = sphere.sphere.Position();
+                correctedPos[i] += normal[i] * penetration;
+                sphere.sphere.SetPosition(correctedPos);
+            }
+        }
+    }
+
+    void ResolveSphereInsideSphere(MovingSphere& smallSphere, const glm::vec3& hollowCenter, float hollowRadius, float restitution, float friction) {
+        glm::vec3 delta = smallSphere.sphere.Position() - hollowCenter;
+        float dist = glm::length(delta);
+        float maxAllowedDist = hollowRadius - smallSphere.sphere.m_radius;
+
+        if (dist > maxAllowedDist && dist > 0.0001f) {
+            float penetration = dist - maxAllowedDist;
+            glm::vec3 normal = -delta / dist; // Points towards center
+
+            glm::vec3 contactPoint = hollowCenter + (delta / dist) * hollowRadius;
+            Plane p(contactPoint, normal);
+            
+            ResolveSpherePlaneCollision(smallSphere, p, restitution, friction);
+            smallSphere.sphere.SetPosition(hollowCenter + (delta / dist) * maxAllowedDist);
+        }
+    }
 }
 
 void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
-    
+         
     if (simulationPaused) return;
+
+    // --- NEW: AUTO-SYNC COLLIDERS TO VISUAL SCALE ---
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto colliderArray = registry.GetComponentArray<ColliderComponent>();
+    const Entity entityCount = registry.GetEntityCount();
+
+    for (Entity i = 0; i < entityCount; ++i) {
+        if (transformArray->HasData(i) && colliderArray->HasData(i)) {
+            auto& transform = transformArray->GetData(i);
+            auto& collider = colliderArray->GetData(i);
+
+            // Extract absolute scales just in case of negative scaling
+            const float scaleX = std::abs(transform.scale.x);
+            const float scaleY = std::abs(transform.scale.y);
+            const float scaleZ = std::abs(transform.scale.z);
+            const float maxScale = std::max({ scaleX, scaleY, scaleZ });
+
+            // Sync based on collider type
+            if (collider.type == 0) { // Sphere
+                // If base geometry is diameter 1.0 (radius 0.5):
+                collider.radius = maxScale * 0.5f; 
+            }
+            else if (collider.type == 2) { // Capsule / Cylinder
+                // Assuming X/Z scaling changes thickness, and Y changes height
+                collider.radius = std::max(scaleX, scaleZ) * 0.5f;
+                collider.height = scaleY; 
+            }
+            else if (collider.type == 3) { // Box / AABB
+                collider.halfExtents = transform.scale * 0.5f;
+                // Update legacy radius for systems still using it
+                collider.radius = std::max({ scaleX, scaleY, scaleZ }) * 0.5f;
+            }
+        }
+    }
+    // ------------------------------------------------
 
     const float dt = deltaTime / static_cast<float>(subSteps);
 
     auto springArray = registry.GetComponentArray<SpringComponent>();
-    auto transformArray = registry.GetComponentArray<TransformComponent>();
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
 
     // 1. Move the sub-step loop to wrap ALL physics force applications
     for (int i = 0; i < subSteps; ++i) {
         
         // --- Spring forces: iterate entities with SpringComponent ---
-        const Entity entityCount = registry.GetEntityCount();
         for (Entity e = 0; e < entityCount; ++e) {
             if (!springArray->HasData(e) ||
                 !transformArray->HasData(e) ||
@@ -325,7 +409,6 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     }
 
     // 3. Update transforms once per frame after all sub-steps
-    const Entity entityCount = registry.GetEntityCount();
     for (Entity i = 0; i < entityCount; ++i) {
         if (transformArray->HasData(i) && physicsArray->HasData(i)) {
             auto& transform = transformArray->GetData(i);
@@ -574,6 +657,39 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                         // Only correct position immediately if we are using instantaneous impulses. 
                         // If using forces, resolving overlap here might interfere with the integration step.
                         ApplyPositionCorrection(t1, t2, c1.radius, c2.radius, p1.isStatic, p2.isStatic);
+                    }
+                }
+            }
+            // Sphere vs Sphere (Inside Check)
+            else if (c1.type == 0 && c2.type == 0 && c2.collisionSide == CollisionSide::INSIDE) {
+                MovingSphere sphereA(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
+                sphereA.angularVelocity = p1.angularVelocity;
+                sphereA.inertiaTensor = p1.inertiaTensor;
+                sphereA.inverseInertiaTensor = p1.inverseInertiaTensor;
+
+                ResolveSphereInsideSphere(sphereA, t2.position, c2.radius, p2.restitution, p1.friction);
+
+                if (!p1.isStatic) {
+                    p1.velocity = sphereA.velocity;
+                    p1.angularVelocity = sphereA.angularVelocity;
+                    t1.position = sphereA.sphere.Position();
+                    t1.UpdateMatrix();
+                }
+            }
+            // Sphere vs Box
+            else if (c1.type == 0 && c2.type == 3) {
+                MovingSphere sphereA(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
+                sphereA.angularVelocity = p1.angularVelocity;
+                sphereA.inertiaTensor = p1.inertiaTensor;
+                sphereA.inverseInertiaTensor = p1.inverseInertiaTensor;
+
+                if (c2.collisionSide == CollisionSide::INSIDE) {
+                    ResolveSphereInsideAABB(sphereA, t2.position, c2.halfExtents, p2.restitution, p1.friction);
+                    if (!p1.isStatic) {
+                        p1.velocity = sphereA.velocity;
+                        p1.angularVelocity = sphereA.angularVelocity;
+                        t1.position = sphereA.sphere.Position();
+                        t1.UpdateMatrix();
                     }
                 }
             }

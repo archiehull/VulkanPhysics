@@ -1,0 +1,110 @@
+{
+  "name": "Piston",
+  "description": "A mechanical piston assembly pushing dynamic objects, demonstrating AnimatedObject pathing.",
+  "gravity_on": true,
+  "cameras": [
+    {
+      "name": "MainCamera",
+      "transform": {
+        "position": { "x": 15.0, "y": 10.0, "z": 25.0 },
+        "orientation": { "yaw": -30.0, "pitch": -15.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "camera_type_type": "PerspectiveCamera",
+      "camera_type": { "fov": 60.0, "near": 0.1, "far": 500.0 }
+    }
+  ],
+  "objects": [
+    {
+      "name": "Floor",
+      "transform": {
+        "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 100.0, "y": 1.0, "z": 100.0 }
+      },
+      "material": "FloorMat",
+      "shape_type": "Plane",
+      "shape": { "normal": { "x": 0.0, "y": 1.0, "z": 0.0 } },
+      "behaviour_type": "StaticObject"
+    },
+    {
+      "name": "PistonSleeve",
+      "transform": {
+        "position": { "x": 0.0, "y": 2.5, "z": 0.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "material": "CylinderMat",
+      "shape_type": "Cylinder",
+      "shape": { "radius": 5.0, "height": 5.0 },
+      "behaviour_type": "StaticObject"
+    },
+    {
+      "name": "PistonHead",
+      "transform": {
+        "position": { "x": 0.0, "y": 5.0, "z": 0.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "material": "PistonMat",
+      "shape_type": "Cylinder",
+      "shape": { "radius": 4.5, "height": 2.0 },
+      "behaviour_type": "AnimatedObject",
+      "behaviour": {
+        "waypoints": [
+          {
+            "position": { "x": 0.0, "y": 2.0, "z": 0.0 },
+            "rotation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+            "time": 0.0
+          },
+          {
+            "position": { "x": 0.0, "y": 12.0, "z": 0.0 },
+            "rotation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+            "time": 1.0
+          }
+        ],
+        "total_duration": 1.0,
+        "easing": "SMOOTHSTEP",
+        "path_mode": "REVERSE"
+      }
+    },
+    {
+      "name": "ObjectToPush",
+      "transform": {
+        "position": { "x": 0.0, "y": 15.0, "z": 0.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": { "radius": 1.5 },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
+          "angular_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 }
+        }
+      }
+    }
+  ],
+  "materials": [
+    { "name": "BallMat", "density": 1.0 },
+    { "name": "PistonMat", "density": 10.0 },
+    { "name": "CylinderMat", "density": 5.0 },
+    { "name": "FloorMat", "density": 1.0 }
+  ],
+  "interactions": [
+    {
+      "material_a": "BallMat",
+      "material_b": "PistonMat",
+      "restitution": 0.2,
+      "static_friction": 0.8,
+      "dynamic_friction": 0.6
+    },
+    {
+      "material_a": "BallMat",
+      "material_b": "FloorMat",
+      "restitution": 0.5
+    }
+  ]
+}

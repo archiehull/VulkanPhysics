@@ -1,0 +1,91 @@
+{
+  "name": "Sphere Spawners",
+  "description": "Demonstrates repeating spawners dropping spheres into a static container.",
+  "gravity_on": true,
+  "cameras": [
+    {
+      "name": "MainCamera",
+      "transform": {
+        "position": { "x": 0.0, "y": 15.0, "z": 35.0 },
+        "orientation": { "yaw": 0.0, "pitch": -20.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "camera_type_type": "PerspectiveCamera",
+      "camera_type": { "fov": 60.0, "near": 0.1, "far": 500.0 }
+    }
+  ],
+  "objects": [
+    {
+      "name": "Floor",
+      "transform": {
+        "position": { "x": 0.0, "y": -1.0, "z": 0.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 50.0, "y": 1.0, "z": 50.0 }
+      },
+      "material": "FloorMat",
+      "shape_type": "Plane",
+      "shape": { "normal": { "x": 0.0, "y": 1.0, "z": 0.0 } },
+      "behaviour_type": "StaticObject"
+    },
+    {
+      "name": "CatchContainer",
+      "transform": {
+        "position": { "x": 0.0, "y": 5.0, "z": 0.0 },
+        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
+        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+      },
+      "material": "ContainerMat",
+      "shape_type": "Cuboid",
+      "shape": { "size": { "x": 15.0, "y": 10.0, "z": 15.0 } },
+      "behaviour_type": "StaticObject",
+      "collision_type": "CONTAINER"
+    }
+  ],
+  "spawners_type": [
+    "SphereSpawner"
+  ],
+  "spawners": [
+    {
+      "base": {
+        "name": "MainSpawner",
+        "start_time": 0.0,
+        "spawn_type_type": "RepeatingSpawn",
+        "spawn_type": { "interval": 0.5, "max_count": 100 },
+        "location_type": "RandomBox",
+        "location": {
+          "min": { "x": -4.0, "y": 25.0, "z": -4.0 },
+          "max": { "x": 4.0, "y": 30.0, "z": 4.0 }
+        },
+        "linear_velocity": {
+          "min": { "x": -2.0, "y": -5.0, "z": -2.0 },
+          "max": { "x": 2.0, "y": -2.0, "z": 2.0 }
+        },
+        "angular_velocity": {
+          "min": { "x": -180.0, "y": -180.0, "z": -180.0 },
+          "max": { "x": 180.0, "y": 180.0, "z": 180.0 }
+        },
+        "material": "BallMat"
+      },
+      "radius_range": { "min": 0.5, "max": 1.2 }
+    }
+  ],
+  "materials": [
+    { "name": "BallMat", "density": 1.0 },
+    { "name": "ContainerMat", "density": 5.0 },
+    { "name": "FloorMat", "density": 1.0 }
+  ],
+  "interactions": [
+    {
+      "material_a": "BallMat",
+      "material_b": "ContainerMat",
+      "restitution": 0.5,
+      "static_friction": 0.4,
+      "dynamic_friction": 0.3
+    },
+    {
+      "material_a": "BallMat",
+      "material_b": "BallMat",
+      "restitution": 0.7
+    }
+  ]
+}
