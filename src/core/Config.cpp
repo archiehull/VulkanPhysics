@@ -201,7 +201,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
         // --- Object Fields ---
         else if (currentObject) {
             if (key == "Material") ss >> currentObject->materialName;
-            if (key == "Type") ss >> currentObject->type;
+            else if (key == "Type") ss >> currentObject->type;
             else if (key == "Model") ss >> currentObject->modelPath;
             else if (key == "Texture") ss >> currentObject->texturePath;
             else if (key == "Position") ss >> currentObject->position.x >> currentObject->position.y >> currentObject->position.z;

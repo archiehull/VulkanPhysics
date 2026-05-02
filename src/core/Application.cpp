@@ -318,7 +318,7 @@ void Application::SetupScene() {
     float noiseFreq = 0.02f;
 
     // 3. Process Explicit Scene Objects
-    for (const auto& objCfg : config.sceneObjects) {
+    for (auto& objCfg : config.sceneObjects) {
         std::string setupPhase = "Begin";
         if (kSceneDebug) {
             std::cout << "[SetupScene] Object Start: '" << objCfg.name << "' type='" << objCfg.type << "'" << std::endl;
@@ -344,15 +344,17 @@ void Application::SetupScene() {
         }
         else if (objCfg.type == "Sphere") {
             // Params: x=Radius
-            scene->AddSphere(objCfg.name, 12, 24, objCfg.position, glm::vec3(objCfg.params.x * 2.0f), objCfg.texturePath);
+            const float r = objCfg.params.x > 0.0f ? objCfg.params.x : 1.0f;
+            objCfg.scale *= (r * 2.0f);
+            scene->AddSphere(objCfg.name, 12, 24, objCfg.position, objCfg.scale, objCfg.texturePath);
         }
         else if (objCfg.type == "Cylinder") {
             const float r = std::max(0.01f, objCfg.params.x);
             const float h = std::max(0.01f, objCfg.params.y > 0.0f ? objCfg.params.y : 1.0f);
             const int slices = objCfg.params.z > 0.0f ? static_cast<int>(objCfg.params.z) : 32;
             // Unit Cylinder scale based on radius and height
-            glm::vec3 cylinderScale(r * 2.0f, h, r * 2.0f);
-            scene->AddCylinder(objCfg.name, slices, objCfg.position, cylinderScale, objCfg.texturePath);
+            objCfg.scale *= glm::vec3(r * 2.0f, h, r * 2.0f);
+            scene->AddCylinder(objCfg.name, slices, objCfg.position, objCfg.scale, objCfg.texturePath);
         }
         else if (objCfg.type == "Bowl") {
             // Params: x=Radius
@@ -376,8 +378,8 @@ void Application::SetupScene() {
             const float r = std::max(0.01f, objCfg.params.x);
             const int slices = objCfg.params.y > 0.0f ? static_cast<int>(objCfg.params.y) : 32;
             // Unit Disk scale based on radius (X/Z = diameter)
-            glm::vec3 diskScale(r * 2.0f, 1.0f, r * 2.0f);
-            scene->AddDisk(objCfg.name, slices, objCfg.position, diskScale, objCfg.texturePath);
+            objCfg.scale *= glm::vec3(r * 2.0f, 1.0f, r * 2.0f);
+            scene->AddDisk(objCfg.name, slices, objCfg.position, objCfg.scale, objCfg.texturePath);
         }
         else if (objCfg.type == "Capsule") {
             const float r = std::max(0.01f, objCfg.params.x);
