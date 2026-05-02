@@ -208,7 +208,6 @@ private:
     std::vector<std::unique_ptr<class ISystem>> m_Systems;
     std::unordered_map<std::string, Entity> m_EntityMap;
     std::vector<Entity> m_RenderableEntities;
-    std::vector<Entity> m_LightEntities;
 
     Entity m_EnvironmentEntity = MAX_ENTITIES;
 

@@ -279,11 +279,6 @@ void Scene::DeleteEntity(Entity entity) {
         m_RenderableEntities.erase(itR);
     }
 
-    auto itL = std::find(m_LightEntities.begin(), m_LightEntities.end(), entity);
-    if (itL != m_LightEntities.end()) {
-        m_LightEntities.erase(itL);
-    }
-
     // Optimization: Spring visuals never have linked shadows, so skip the expensive O(N) scan
     if (!m_Registry.HasComponent<SpringVisualComponent>(entity)) {
         for (Entity e : m_RenderableEntities) {
@@ -793,7 +788,7 @@ void Scene::ToggleSimpleShadows() {
 }
 
 Entity Scene::AddLight(const std::string& name, const glm::vec3& position, const glm::vec3& color, float intensity, int type) {
-    if (m_LightEntities.size() >= MAX_LIGHTS) {
+    if (m_Registry.GetComponentArray<LightComponent>() && m_Registry.GetComponentArray<LightComponent>()->GetSize() >= MAX_LIGHTS) {
         std::cerr << "Warning: Maximum number of lights reached." << std::endl;
         return MAX_ENTITIES;
     }
@@ -818,8 +813,6 @@ Entity Scene::AddLight(const std::string& name, const glm::vec3& position, const
     light.type = type;
     light.flickerPhase = static_cast<float>(entity) * 0.137f;
     m_Registry.AddComponent<LightComponent>(entity, light);
-
-    m_LightEntities.push_back(entity);
 
     return entity;
 }
@@ -1577,33 +1570,45 @@ void Scene::Update(float deltaTime) {
 
 std::vector<Light> Scene::GetLights() const {
     std::vector<Light> lights;
-    lights.reserve(m_LightEntities.size());
+    
+    auto lightArray = m_Registry.GetComponentArray<LightComponent>();
+    auto transformArray = m_Registry.GetComponentArray<TransformComponent>();
+    
+    if (!lightArray || !transformArray) return lights;
 
-    for (Entity e : m_LightEntities) {
-        if (m_Registry.HasComponent<LightComponent>(e) && m_Registry.HasComponent<TransformComponent>(e)) {
-            auto& lightComp = m_Registry.GetComponent<LightComponent>(e);
-            auto& transComp = m_Registry.GetComponent<TransformComponent>(e);
+    size_t count = lightArray->GetSize();
+    lights.reserve(std::min(count, (size_t)MAX_LIGHTS));
 
-            Light vLight{};
-            vLight.position = glm::vec3(transComp.matrix[3]);
-            vLight.color = lightComp.color;
-            float finalIntensity = lightComp.intensity;
-            if (lightComp.flickerEnabled && lightComp.flickerAmount > 0.001f) {
-                const float pattern = ComputeFlickerPresetValue(lightComp.flickerPreset, m_ElapsedTime, lightComp.flickerPhase);
-                const float amount = glm::clamp(lightComp.flickerAmount, 0.0f, 1.0f);
-                finalIntensity *= (1.0f - amount) + (amount * pattern);
-            }
-            vLight.intensity = finalIntensity;
-            vLight.type = lightComp.type;
-            vLight.layerMask = lightComp.layerMask;
-
-            // --- NEW: Map Spotlight variables ---
-            vLight.direction = lightComp.direction;
-            // Precalculate cosine of the angle here for GPU performance!
-            vLight.cutoffAngle = glm::cos(glm::radians(lightComp.cutoffAngle));
-
-            lights.push_back(vLight);
+    for (size_t i = 0; i < count; ++i) {
+        Entity e = lightArray->GetEntityAtIndex(i);
+        if (e == MAX_ENTITIES || !m_Registry.IsAlive(e) || !transformArray->HasData(e)) {
+            continue;
         }
+
+        const auto& lightComp = lightArray->GetData(e);
+        const auto& transComp = transformArray->GetData(e);
+
+        Light vLight{};
+        vLight.position = glm::vec3(transComp.matrix[3]);
+        vLight.color = lightComp.color;
+        float finalIntensity = lightComp.intensity;
+        if (lightComp.flickerEnabled && lightComp.flickerAmount > 0.001f) {
+            const float pattern = ComputeFlickerPresetValue(lightComp.flickerPreset, m_ElapsedTime, lightComp.flickerPhase);
+            const float amount = glm::clamp(lightComp.flickerAmount, 0.0f, 1.0f);
+            finalIntensity *= (1.0f - amount) + (amount * pattern);
+        }
+        vLight.intensity = finalIntensity;
+        vLight.type = lightComp.type;
+        vLight.layerMask = lightComp.layerMask;
+
+        // --- NEW: Map Spotlight variables ---
+        vLight.direction = lightComp.direction;
+        // Precalculate cosine of the angle here for GPU performance!
+        vLight.cutoffAngle = glm::cos(glm::radians(lightComp.cutoffAngle));
+
+        lights.push_back(vLight);
+        
+        if (lights.size() >= MAX_LIGHTS) break;
     }
     return lights;
 }
@@ -1625,7 +1630,6 @@ void Scene::Clear() {
     // 3. Clear all scene-side tracking lists
     m_EntityMap.clear();
     m_RenderableEntities.clear();
-    m_LightEntities.clear();
     particleSystems.clear();
     m_SpringVisualEntitiesList.clear();
     m_PathVisualEntitiesList.clear();

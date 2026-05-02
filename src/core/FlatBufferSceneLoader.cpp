@@ -246,6 +246,9 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
             auto plane = fbObj->shape_as_Plane();
             glm::vec3 normal = plane ? SafeGetVec3(plane->normal(), glm::vec3(0.0f, 1.0f, 0.0f)) : glm::vec3(0.0f, 1.0f, 0.0f);
             
+            // To visually represent an infinite plane, we scale it massively
+            scale *= glm::vec3(250.0f, 1.0f, 250.0f);
+
             entity = scene.AddPlane(name, pos, scale, defaultTexture);
             
             if (!scene.GetRegistry().HasComponent<ColliderComponent>(entity)) {
@@ -270,7 +273,7 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
     // Set default opacity based on shape
     if (scene.GetRegistry().HasComponent<RenderComponent>(entity)) {
         auto& renderComp = scene.GetRegistry().GetComponent<RenderComponent>(entity);
-        if (fbObj->shape_type() != Simulation::Shape_Sphere) {
+        if (fbObj->shape_type() != Simulation::Shape_Sphere && fbObj->shape_type() != Simulation::Shape_Plane) {
             renderComp.opacity = 0.3f;
         } else {
             renderComp.opacity = 1.0f;
