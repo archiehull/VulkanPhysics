@@ -587,6 +587,12 @@ void Renderer::CreatePipeline() {
 
     graphicsPipeline = std::make_unique<GraphicsPipeline>(device->GetDevice(), pipelineConfig);
     graphicsPipeline->Create();
+
+    pipelineConfig.depthWriteEnable = false;
+    pipelineConfig.cullMode = VK_CULL_MODE_BACK_BIT;
+
+    transparentPipeline = std::make_unique<GraphicsPipeline>(device->GetDevice(), pipelineConfig);
+    transparentPipeline->Create();
 }
 
 void Renderer::CreateOffScreenResources() {
@@ -790,7 +796,7 @@ void Renderer::CreateSyncObjects() {
     syncObjects->CreateSyncObjects(imageCount);
 }
 
-void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int viewMask, int insideRegionMask) {
+void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int viewMask, int insideRegionMask, SceneDrawMode drawMode) {
     Registry& reg = scene.GetRegistry();
     for (Entity e : scene.GetRenderableEntities()) {
         if (!reg.HasComponent<RenderComponent>(e) || !reg.HasComponent<TransformComponent>(e)) continue;
@@ -800,6 +806,12 @@ void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLay
 
         if (!renderComp.visible || !renderComp.geometry) continue;
         if (skipIfNotCastingShadow && !renderComp.castsShadow) continue;
+
+        if (drawMode != SceneDrawMode::All) {
+            const bool isTransparent = renderComp.opacity < 1.0f;
+            if (drawMode == SceneDrawMode::Transparent && !isTransparent) continue;
+            if (drawMode == SceneDrawMode::Opaque && isTransparent) continue;
+        }
 
         const bool applyLayerFilter = (viewMask != SceneLayers::ALL);
         if (applyLayerFilter) {
@@ -971,7 +983,8 @@ void Renderer::RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene
         false, // bindTextures
         true,  // skipIfNotCastingShadow
         viewMask,
-		insideRegionMask
+        insideRegionMask,
+        SceneDrawMode::All
     );
 
     shadowPass->End(cmd);
@@ -1064,7 +1077,11 @@ void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& sc
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
 
     if (!regionsOnly) {
-        DrawSceneObjects(cmd, scene, graphicsPipeline->GetLayout(), true, false, viewMask, insideRegionMask);
+        DrawSceneObjects(cmd, scene, graphicsPipeline->GetLayout(), true, false, viewMask, insideRegionMask, SceneDrawMode::Opaque);
+
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline->GetPipeline());
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
+        DrawSceneObjects(cmd, scene, transparentPipeline->GetLayout(), true, false, viewMask, insideRegionMask, SceneDrawMode::Transparent);
 
         for (const auto& sys : scene.GetParticleSystems()) {
             sys->Draw(cmd, descriptorSet->GetDescriptorSets()[currentFrame], currentFrame);
@@ -1210,6 +1227,11 @@ void Renderer::Cleanup() {
     if (commandBuffer) {
         commandBuffer->Cleanup();
         commandBuffer.reset();
+    }
+
+    if (transparentPipeline) {
+        transparentPipeline->Cleanup();
+        transparentPipeline.reset();
     }
 
     if (graphicsPipeline) {

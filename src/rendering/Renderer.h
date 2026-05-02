@@ -69,6 +69,7 @@ private:
 
     std::unique_ptr<VulkanRenderPass> renderPass;
     std::unique_ptr<GraphicsPipeline> graphicsPipeline;
+    std::unique_ptr<GraphicsPipeline> transparentPipeline;
     std::unique_ptr<VulkanCommandBuffer> commandBuffer;
     std::unique_ptr<VulkanSyncObjects> syncObjects;
     std::unique_ptr<ShadowPass> shadowPass;
@@ -147,7 +148,13 @@ private:
 
     void RenderShadowMap(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
     bool ShouldRenderRefractionPass(Scene& scene, int viewMask, int insideRegionMask) const;
-    void DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int viewMask, int insideRegionMask);
+    enum class SceneDrawMode {
+        Opaque,
+        Transparent,
+        All
+    };
+
+    void DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int viewMask, int insideRegionMask, SceneDrawMode drawMode);
     void RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
     void RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
     void CreateLayerRegionDebugGeometries();

@@ -345,6 +345,58 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
         float volume = CalculateVolume(fbObj, scale);
         physComp.SetMass(density * volume);
     }
+
+    // 6. Support for Animated Objects (Path Animation)
+    if (fbObj->behaviour_type() == Simulation::Behaviour_AnimatedObject) {
+        auto animatedData = fbObj->behaviour_as_AnimatedObject();
+        if (animatedData) {
+            PathAnimationComponent pathComp{};
+            pathComp.totalDuration = animatedData->total_duration();
+            
+            // Map Easing
+            if (animatedData->easing() == Simulation::EasingType_SMOOTHSTEP) {
+                pathComp.easing = PathAnimationEasing::Smoothstep;
+            } else {
+                pathComp.easing = PathAnimationEasing::Linear;
+            }
+
+            // Map Path Mode
+            if (animatedData->path_mode() == Simulation::PathMode_LOOP) {
+                pathComp.playMode = PathAnimationPlayMode::Loop;
+            } else if (animatedData->path_mode() == Simulation::PathMode_REVERSE) {
+                pathComp.playMode = PathAnimationPlayMode::Bounce;
+            } else {
+                pathComp.playMode = PathAnimationPlayMode::Once;
+            }
+
+            // Map Waypoints
+            if (animatedData->waypoints()) {
+                for (const auto* wp : *animatedData->waypoints()) {
+                    PathWaypoint waypoint{};
+                    waypoint.position = SafeGetVec3(wp->position());
+                    waypoint.orientation = SafeGetEuler(wp->rotation());
+                    waypoint.timeFromStart = wp->time();
+                    pathComp.waypoints.push_back(waypoint);
+                }
+            }
+            
+            pathComp.timingMode = PathAnimationTimingMode::Absolute;
+            pathComp.initialized = false;
+            pathComp.isPlaying = true;
+            
+            scene.GetRegistry().AddComponent<PathAnimationComponent>(entity, pathComp);
+        }
+    }
+
+    // 7. Handle Container Collisions
+    if (scene.GetRegistry().HasComponent<ColliderComponent>(entity)) {
+        auto& col = scene.GetRegistry().GetComponent<ColliderComponent>(entity);
+        if (fbObj->collision_type() == Simulation::CollisionType_CONTAINER) {
+            col.collisionSide = CollisionSide::INSIDE;
+        } else {
+            col.collisionSide = CollisionSide::OUTSIDE;
+        }
+    }
 }
 
 bool FlatBufferSceneLoader::LoadScene(Scene& scene, AppConfig& config, const std::string& filepath) {
@@ -488,7 +540,7 @@ bool FlatBufferSceneLoader::LoadScene(Scene& scene, AppConfig& config, const std
                     camCfg.position = SafeGetVec3(fbCam->transform()->position());
                     glm::vec3 rot = SafeGetEuler(fbCam->transform()->orientation());
                     camCfg.pitch = rot.x;
-                    camCfg.yaw = rot.y;
+                    camCfg.yaw = -rot.y;
                 }
                 camCfg.type = "FreeRoam"; // Default fallback
                 config.customCameras.push_back(camCfg);
@@ -508,6 +560,114 @@ bool FlatBufferSceneLoader::LoadScene(Scene& scene, AppConfig& config, const std
                 float lIntensity = fbLight->intensity();
                 int lType = static_cast<int>(fbLight->type());
                 scene.AddLight(lName, lPos, lColor, lIntensity, lType);
+            }
+        }
+        
+        // 8. Spawners
+        if (fbScene->spawners() && fbScene->spawners_type()) {
+            for (flatbuffers::uoffset_t i = 0; i < fbScene->spawners()->size(); ++i) {
+                auto type = fbScene->spawners_type()->Get(i);
+                auto data = fbScene->spawners()->Get(i);
+                if (!data) continue;
+                
+                Entity spawnerEntity = scene.GetRegistry().CreateEntity();
+                ObjectSpawnerComponent spawnerComp{};
+                
+                const Simulation::BaseSpawner* base = nullptr;
+                std::string geometry = "Sphere";
+                
+                // Handle Union types manually since we're iterating parallel vectors
+                if (type == Simulation::SpawnerType_SphereSpawner) {
+                    auto s = static_cast<const Simulation::SphereSpawner*>(data);
+                    base = s->base();
+                    geometry = "Sphere";
+                    if (s->radius_range()) {
+                        spawnerComp.spawnObjectScale = (s->radius_range()->min() + s->radius_range()->max()) * 0.5f;
+                    }
+                } else if (type == Simulation::SpawnerType_CuboidSpawner) {
+                    auto s = static_cast<const Simulation::CuboidSpawner*>(data);
+                    base = s->base();
+                    geometry = "Cube";
+                    if (s->size_range()) {
+                        glm::vec3 minSize = SafeGetVec3(s->size_range()->min());
+                        glm::vec3 maxSize = SafeGetVec3(s->size_range()->max());
+                        spawnerComp.spawnScale = (minSize + maxSize) * 0.5f;
+                    }
+                } else if (type == Simulation::SpawnerType_CylinderSpawner) {
+                    auto s = static_cast<const Simulation::CylinderSpawner*>(data);
+                    base = s->base();
+                    geometry = "Cylinder";
+                } else if (type == Simulation::SpawnerType_CapsuleSpawner) {
+                    auto s = static_cast<const Simulation::CapsuleSpawner*>(data);
+                    base = s->base();
+                    geometry = "Capsule";
+                }
+                
+                if (base) {
+                    spawnerComp.spawnGeometryType = geometry;
+                    spawnerComp.spawnTexturePath = "textures/default.jpg";
+                    
+                    // Location
+                    TransformComponent trans{};
+                    if (base->location_type() == Simulation::SpawnLocation_FixedLocation) {
+                        auto loc = base->location_as_FixedLocation();
+                        if (loc && loc->transform()) {
+                            trans.position = SafeGetVec3(loc->transform()->position());
+                            trans.rotation = SafeGetEuler(loc->transform()->orientation());
+                        }
+                    } else if (base->location_type() == Simulation::SpawnLocation_RandomBox) {
+                        auto box = base->location_as_RandomBox();
+                        if (box) {
+                            glm::vec3 minLoc = SafeGetVec3(box->min());
+                            glm::vec3 maxLoc = SafeGetVec3(box->max());
+                            trans.position = (minLoc + maxLoc) * 0.5f;
+                        }
+                    } else if (base->location_type() == Simulation::SpawnLocation_RandomSphere) {
+                        auto sph = base->location_as_RandomSphere();
+                        if (sph) {
+                            trans.position = SafeGetVec3(sph->center());
+                        }
+                    }
+                    trans.UpdateMatrix();
+                    scene.GetRegistry().AddComponent<TransformComponent>(spawnerEntity, trans);
+                    
+                    // Velocity Ranges
+                    if (base->linear_velocity()) {
+                        spawnerComp.randomizeVelocity = true;
+                        glm::vec3 minVel = SafeGetVec3(base->linear_velocity()->min());
+                        glm::vec3 maxVel = SafeGetVec3(base->linear_velocity()->max());
+                        spawnerComp.spawnVelocity = (minVel + maxVel) * 0.5f;
+                        spawnerComp.randomVelocityRange = (maxVel - minVel) * 0.5f;
+                    }
+                    
+                    if (base->angular_velocity()) {
+                        spawnerComp.randomizeAngularVelocity = true;
+                        glm::vec3 minAng = SafeGetVec3(base->angular_velocity()->min());
+                        glm::vec3 maxAng = SafeGetVec3(base->angular_velocity()->max());
+                        spawnerComp.spawnAngularVelocity = (minAng + maxAng) * 0.5f;
+                        spawnerComp.randomAngularVelocityRange = (maxAng - minAng) * 0.5f;
+                    }
+                    
+                    // Spawn logic
+                    if (base->spawn_type_type() == Simulation::SpawnType_RepeatingSpawn) {
+                        auto rep = base->spawn_type_as_RepeatingSpawn();
+                        spawnerComp.spawnInterval = rep->interval();
+                        spawnerComp.maxSpawnsPerRun = (int)rep->max_count();
+                        spawnerComp.alwaysOn = (rep->max_count() <= 0);
+                    } else if (base->spawn_type_type() == Simulation::SpawnType_SingleBurstSpawn) {
+                        auto burst = base->spawn_type_as_SingleBurstSpawn();
+                        spawnerComp.maxSpawnsPerRun = (int)burst->count();
+                        spawnerComp.alwaysOn = false;
+                        spawnerComp.spawnInterval = 0.001f; // Burst
+                    }
+                    
+                    spawnerComp.isRunning = true;
+                    scene.GetRegistry().AddComponent<ObjectSpawnerComponent>(spawnerEntity, spawnerComp);
+                    
+                    if (base->name()) {
+                        scene.GetRegistry().AddComponent<NameComponent>(spawnerEntity, { base->name()->str() });
+                    }
+                }
             }
         }
 
