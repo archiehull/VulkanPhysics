@@ -7,6 +7,8 @@
 #include <memory>
 #include <stdexcept>
 #include <vector>
+#include <limits>
+#include <iostream>
 
 using Entity = uint32_t;
 const Entity MAX_ENTITIES = 30000;
@@ -24,16 +26,21 @@ private:
     std::vector<size_t> entityToIndex;
     std::vector<Entity> indexToEntity;
     size_t validSize = 0;
+    static constexpr size_t INVALID_INDEX = static_cast<size_t>(-1);
 
 public:
     ComponentArray() {
         componentData.resize(MAX_ENTITIES);
-        entityToIndex.resize(MAX_ENTITIES, -1);
-        indexToEntity.resize(MAX_ENTITIES, -1);
+        entityToIndex.resize(MAX_ENTITIES, INVALID_INDEX);
+        indexToEntity.resize(MAX_ENTITIES, static_cast<Entity>(-1));
     }
 
     void InsertData(Entity entity, T component) {
-        if (entityToIndex[entity] != static_cast<size_t>(-1)) {
+        if (entity >= MAX_ENTITIES) {
+            std::cerr << "[ComponentArray] InsertData: entity index out of range: " << entity << std::endl;
+            return;
+        }
+        if (entityToIndex[entity] != INVALID_INDEX) {
             componentData[entityToIndex[entity]] = component;
             return;
         }
@@ -45,7 +52,18 @@ public:
     }
 
     void RemoveData(Entity entity) {
-        if (entityToIndex[entity] == static_cast<size_t>(-1)) return;
+        if (entity >= entityToIndex.size()) {
+            std::cerr << "[ComponentArray] RemoveData: entity >= capacity: " << entity << std::endl;
+            return;
+        }
+        if (entityToIndex[entity] == INVALID_INDEX) return;
+
+        if (validSize == 0) {
+            // Corruption guard: shouldn't happen, but avoid underflow
+            std::cerr << "[ComponentArray] RemoveData: validSize==0 but entity had component. Resetting entry for entity " << entity << std::endl;
+            entityToIndex[entity] = INVALID_INDEX;
+            return;
+        }
 
         size_t indexOfRemovedEntity = entityToIndex[entity];
         size_t indexOfLastElement = validSize - 1;
@@ -53,18 +71,26 @@ public:
         if (indexOfRemovedEntity != indexOfLastElement) {
             componentData[indexOfRemovedEntity] = componentData[indexOfLastElement];
             Entity entityOfLastElement = indexToEntity[indexOfLastElement];
-            entityToIndex[entityOfLastElement] = indexOfRemovedEntity;
+            if (entityOfLastElement < entityToIndex.size()) {
+                entityToIndex[entityOfLastElement] = indexOfRemovedEntity;
+            }
+            else {
+                std::cerr << "[ComponentArray] RemoveData: entityOfLastElement out of range: " << entityOfLastElement << std::endl;
+            }
             indexToEntity[indexOfRemovedEntity] = entityOfLastElement;
         }
 
-        entityToIndex[entity] = -1;
-        indexToEntity[indexOfLastElement] = -1;
+        entityToIndex[entity] = INVALID_INDEX;
+        indexToEntity[indexOfLastElement] = static_cast<Entity>(-1);
         validSize--;
     }
 
     T& GetData(Entity entity) {
+        if (entity >= entityToIndex.size()) {
+            throw std::runtime_error("Retrieving non-existent component: entity out of range.");
+        }
         size_t index = entityToIndex[entity];
-        if (index == static_cast<size_t>(-1)) {
+        if (index == INVALID_INDEX) {
             throw std::runtime_error("Retrieving non-existent component.");
         }
         return componentData[index];
@@ -72,8 +98,11 @@ public:
 
     // --- ADD CONST OVERLOAD ---
     const T& GetData(Entity entity) const {
+        if (entity >= entityToIndex.size()) {
+            throw std::runtime_error("Retrieving non-existent component: entity out of range.");
+        }
         size_t index = entityToIndex[entity];
-        if (index == static_cast<size_t>(-1)) {
+        if (index == INVALID_INDEX) {
             throw std::runtime_error("Retrieving non-existent component.");
         }
         return componentData[index];
@@ -81,7 +110,7 @@ public:
 
     bool HasData(Entity entity) const {
         if (entity >= entityToIndex.size()) return false;
-        return entityToIndex[entity] != static_cast<size_t>(-1);
+        return entityToIndex[entity] != INVALID_INDEX;
     }
 
     void EntityDestroyed(Entity entity) override {

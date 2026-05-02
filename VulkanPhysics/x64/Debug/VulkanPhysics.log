@@ -1,2 +1,28 @@
-﻿LINK : warning LNK4098: defaultlib 'MSVCRT' conflicts with use of other libs; use /NODEFAULTLIB:library
-  VulkanPhysics.vcxproj -> C:\Users\663073\Workspace\VulkanPhysics\x64\Debug\VulkanPhysics.exe
+﻿  Application.cpp
+  ClothFactory.cpp
+  FlatBufferSceneLoader.cpp
+  main.cpp
+  EditorUI.cpp
+  EditorUI_DrawMainMenu.cpp
+  EditorUI_DrawWindows.cpp
+  CameraController.cpp
+  Renderer.cpp
+  Scene.cpp
+  SkyboxPass.cpp
+  AnimationSystem.cpp
+  CameraSystem.cpp
+  ClothSystem.cpp
+  ObjectSpawnerSystem.cpp
+  OrbitSystem.cpp
+  ParticleUpdateSystem.cpp
+  PhysicsSystem.cpp
+  SimpleShadowSystem.cpp
+  SmokeGrenadeSystem.cpp
+  Generating Code...
+  Compiling...
+  ThermodynamicsSystem.cpp
+  TimeSystem.cpp
+  WeatherSystem.cpp
+  Generating Code...
+LINK : warning LNK4098: defaultlib 'MSVCRT' conflicts with use of other libs; use /NODEFAULTLIB:library
+  VulkanPhysics.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Debug\VulkanPhysics.exe

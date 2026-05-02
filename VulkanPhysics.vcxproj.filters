@@ -198,6 +198,9 @@
     <ClCompile Include="src\systems\ClothSystem.cpp">
       <Filter>Source Files\src\systems</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\FlatBufferSceneLoader.cpp">
+      <Filter>Source Files\src\core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Window.h">
@@ -349,6 +352,12 @@
     </ClInclude>
     <ClInclude Include="src\systems\ClothSystem.h">
       <Filter>Source Files\src\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\FlatBufferSceneLoader.h">
+      <Filter>Source Files\src\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene_generated.h">
+      <Filter>Source Files\src\core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

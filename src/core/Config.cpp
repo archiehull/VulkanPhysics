@@ -20,7 +20,7 @@ std::vector<SceneOption> ConfigLoader::GetAvailableScenes(const std::string& roo
     try {
         if (fs::exists(rootDir) && fs::is_directory(rootDir)) {
             for (const auto& entry : fs::directory_iterator(rootDir)) {
-                if (entry.is_regular_file() && entry.path().extension() == ".world") {
+                if (entry.is_regular_file() && (entry.path().extension() == ".world" || entry.path().extension() == ".bin")) {
                     std::string name = entry.path().stem().string();
                     scenes.push_back({ name, entry.path().string() });
                 }

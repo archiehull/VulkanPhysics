@@ -20,10 +20,13 @@
 #include "ClothFactory.h"
 #include "../systems/PhysicsSystem.h"
 #include "../systems/ObjectSpawnerSystem.h"
+#include "FlatBufferSceneLoader.h"
 
 namespace {
     constexpr bool kSceneDebug = false;
     constexpr bool kPerfDebug = false;
+    constexpr bool kRuntimeDebug = false;
+    constexpr float kRuntimeLogIntervalSeconds = 1.0f;
     constexpr float kPerfLogIntervalSeconds = 1.0f;
     constexpr float kPerfHitchThresholdMs = 20.0f;
 }
@@ -123,6 +126,16 @@ void Application::InitVulkan() {
 
     renderer->SetupSceneParticles(*scene);
 
+    if (config.customCameras.empty()) {
+        CustomCameraConfig defCam;
+        defCam.name = "Default";
+        defCam.type = "FreeRoam";
+        defCam.actionBind = "Camera1";
+        defCam.position = glm::vec3(0.0f, 20.0f, 50.0f);
+        defCam.pitch = -15.0f;
+        config.customCameras.push_back(defCam);
+    }
+
     cameraController = std::make_unique<CameraController>(*scene, config.customCameras);
 
     std::vector<std::string> camNames;
@@ -152,8 +165,16 @@ void Application::LoadScene(const std::string& scenePath) {
     }
 
     // 3. Load new configuration
-    config = ConfigLoader::Load(scenePath);
-    currentScenePath = scenePath;
+    bool isFlatBuffer = scenePath.length() >= 4 && scenePath.substr(scenePath.length() - 4) == ".bin";
+
+    if (isFlatBuffer) {
+        config = AppConfig(); // Reset to default config for non-scene things
+        currentScenePath = scenePath;
+    } else {
+        config = ConfigLoader::Load(scenePath);
+        currentScenePath = scenePath;
+    }
+    
     editorUI->SetPerformanceSettings(config.vsync, config.maxFps);
 
     if (vulkanSwapChain && vulkanSwapChain->IsVSyncEnabled() != config.vsync) {
@@ -165,7 +186,18 @@ void Application::LoadScene(const std::string& scenePath) {
 
     // 4. Re-setup scene objects
     try {
-        SetupScene();
+        if (isFlatBuffer) {
+            renderer->RegisterProceduralTexture("grey_solid", [](Texture& tex) {
+                tex.GenerateSolidColor(glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
+            });
+            FlatBufferSceneLoader::LoadScene(*scene, scenePath);
+            
+            if (scene->GetLights().empty()) {
+                scene->AddLight("DefaultSun", glm::vec3(10.0f, 50.0f, 10.0f), glm::vec3(1.0f, 0.98f, 0.95f), 1.2f, 0);
+            }
+        } else {
+            SetupScene();
+        }
         ObjectSpawnerSystem::TriggerStartupSpawners(*scene);
     }
     catch (const std::exception& e) {
@@ -177,7 +209,16 @@ void Application::LoadScene(const std::string& scenePath) {
         throw;
     }
 
-    // 5. Re-initialize systems that depend on the new config
+    if (config.customCameras.empty()) {
+        CustomCameraConfig defCam;
+        defCam.name = "Default";
+        defCam.type = "FreeRoam";
+        defCam.actionBind = "Camera1";
+        defCam.position = glm::vec3(0.0f, 20.0f, 50.0f);
+        defCam.pitch = -15.0f;
+        config.customCameras.push_back(defCam);
+    }
+
     cameraController = std::make_unique<CameraController>(*scene, config.customCameras);
     std::vector<std::string> camNames;
     for (const auto& cam : config.customCameras) {
@@ -898,8 +939,13 @@ void Application::MainLoop() {
     double perfUpdateCpuMsAccum = 0.0;
     double perfDrawCpuMsAccum = 0.0;
     int perfHitchCount = 0;
+    float runtimeLogTimer = 0.0f;
+    uint64_t runtimeFrameCount = 0;
 
     while (!window->ShouldClose()) {
+        if (kRuntimeDebug && runtimeFrameCount == 0) {
+            std::cout << "[Runtime] Entered MainLoop." << std::endl;
+        }
         if (hasPendingVSyncApply && vulkanSwapChain) {
             config.vsync = pendingVSync;
             vulkanSwapChain->SetVSyncEnabled(config.vsync);
@@ -1158,22 +1204,25 @@ void Application::MainLoop() {
                 }
             }
             PhysicsSystem::simulationPaused = true;
-            scene->Update(deltaTime);
+            scene->Update(simDeltaTime);
         } else {
             m_IsReplaying = false;
             PhysicsSystem::simulationPaused = false;
             // 4. Update the scene with the calculated delta
-            scene->Update(deltaTime);
+            scene->Update(simDeltaTime);
         }
         
         const auto updateEnd = std::chrono::high_resolution_clock::now();
 
         Entity activeCamEntity = cameraController->GetActiveCameraEntity();
+        bool hadActiveCamera = false;
+        bool drewFrame = false;
 
         int currentViewMask = SceneLayers::ALL;
         int currentInsideRegionMask = 0;
 
         if (activeCamEntity != MAX_ENTITIES && registry.HasComponent<CameraComponent>(activeCamEntity)) {
+            hadActiveCamera = true;
             auto& camComp = registry.GetComponent<CameraComponent>(activeCamEntity);
 
             const glm::mat4 viewMatrix = camComp.viewMatrix;
@@ -1185,6 +1234,7 @@ void Application::MainLoop() {
             if (renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask, currentInsideRegionMask)) {
                 framebufferResized = true;
             }
+            drewFrame = true;
         }
         const auto drawEnd = std::chrono::high_resolution_clock::now();
 
@@ -1199,6 +1249,27 @@ void Application::MainLoop() {
             const auto frameElapsed = std::chrono::high_resolution_clock::now() - frameStart;
             if (frameElapsed < targetFrameDuration) {
                 std::this_thread::sleep_for(targetFrameDuration - frameElapsed);
+            }
+        }
+
+        if (kRuntimeDebug) {
+            runtimeLogTimer += deltaTime;
+            runtimeFrameCount++;
+            if (runtimeLogTimer >= kRuntimeLogIntervalSeconds) {
+                const double updateCpuMs = std::chrono::duration<double, std::milli>(updateEnd - updateStart).count();
+                const double drawCpuMs = std::chrono::duration<double, std::milli>(drawEnd - updateEnd).count();
+                std::cout << "[Runtime] frame=" << runtimeFrameCount
+                          << " dt=" << deltaTime
+                          << " update_ms=" << updateCpuMs
+                          << " draw_ms=" << drawCpuMs
+                          << " entities=" << registry.GetEntityCount()
+                          << " renderables=" << scene->GetRenderableEntities().size()
+                          << " camera=" << (hadActiveCamera ? "yes" : "no")
+                          << " drew=" << (drewFrame ? "yes" : "no")
+                          << " paused=" << (editorUI->IsPaused() ? "yes" : "no")
+                          << " replay=" << (editorUI->IsReplaying() ? "yes" : "no")
+                          << std::endl;
+                runtimeLogTimer = 0.0f;
             }
         }
 
