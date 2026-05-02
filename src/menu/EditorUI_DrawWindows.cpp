@@ -538,6 +538,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
                     const char* modes[] = { "None", "Phong", "Gouraud", "Flat", "Wireframe" };
                     ImGui::Combo("Shading Mode", &comp.shadingMode, modes, IM_ARRAYSIZE(modes));
+                    ImGui::SliderFloat("Opacity", &comp.opacity, 0.0f, 1.0f, "%.2f");
 
                     drawLayerCheckboxes("Layer Visibility Rules", comp.layerMask, comp.onlyInRegionMask);
 

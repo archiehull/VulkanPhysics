@@ -733,6 +733,7 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
         pco.burnFactor = 0.0f;
         pco.debugOverlay = renderComp.useDebugOverlay ? 1 : 0;
         pco.debugColor = renderComp.useDebugOverlay ? renderComp.debugOverlayColor : glm::vec4(0.0f);
+        pco.opacity = renderComp.opacity;
 
         vkCmdPushConstants(cmd, graphicsPipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
 
@@ -821,6 +822,7 @@ void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLay
         pco.burnFactor = burnFactor;
         pco.debugOverlay = renderComp.useDebugOverlay ? 1 : 0;
         pco.debugColor = renderComp.useDebugOverlay ? renderComp.debugOverlayColor : glm::vec4(0.0f);
+        pco.opacity = renderComp.opacity;
 
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
 

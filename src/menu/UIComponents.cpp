@@ -105,6 +105,7 @@ void DrawRenderEditor(Entity entity, Scene& scene, const std::vector<std::string
         }
 
         ImGui::SliderInt("Shading Mode", &render.shadingMode, 0, 4);
+        ImGui::SliderFloat("Opacity", &render.opacity, 0.0f, 1.0f, "%.2f");
         ImGui::Checkbox("Casts Shadow", &render.castsShadow);
         ImGui::Checkbox("Receive Shadows", &render.receiveShadows);
     }

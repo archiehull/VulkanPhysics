@@ -56,6 +56,7 @@ struct RenderComponent {
     bool receiveShadows = true;
     int layerMask = SceneLayers::ALL_USED;
     int onlyInRegionMask = 0;
+    float opacity = 1.0f;
 };
 
 // 4. Movement/Logic Data

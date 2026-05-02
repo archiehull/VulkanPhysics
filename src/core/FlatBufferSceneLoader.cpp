@@ -260,6 +260,16 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
     }
 
     if (entity == MAX_ENTITIES) return;
+    
+    // Set default opacity based on shape
+    if (scene.GetRegistry().HasComponent<RenderComponent>(entity)) {
+        auto& renderComp = scene.GetRegistry().GetComponent<RenderComponent>(entity);
+        if (fbObj->shape_type() != Simulation::Shape_Sphere) {
+            renderComp.opacity = 0.3f;
+        } else {
+            renderComp.opacity = 1.0f;
+        }
+    }
 
     if (s_debug_fb_loader) {
         std::cout << "[FlatBufferSceneLoader] Object '" << name << "' created entity=" << entity << std::endl;

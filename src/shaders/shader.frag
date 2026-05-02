@@ -39,6 +39,7 @@ layout(push_constant) uniform PushConstantObject {
     float burnFactor;
     int debugOverlay;
     vec4 debugColor;
+    float opacity;
 } pco;
 
 layout(set = 0, binding = 1) uniform sampler2D shadowMap;
@@ -222,5 +223,5 @@ for(int i = 0; i < ubo.numLights; i++) {
         finalColor = mix(finalColor, sootColor, pco.burnFactor * 0.9);
     }
 
-    outColor = vec4(finalColor, texColor.a);
+    outColor = vec4(finalColor, texColor.a * pco.opacity);
 }
