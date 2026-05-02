@@ -281,9 +281,14 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
         std::cout << "[FlatBufferSceneLoader] Object '" << name << "' created entity=" << entity << std::endl;
     }
 
-    // Support for Container/Inverted rendering could be handled here if engine supports it.
+    // Support for Container/Inverted rendering
     if (fbObj->collision_type() == Simulation::CollisionType_CONTAINER) {
-        // Depending on RenderComponent properties...
+        if (scene.GetRegistry().HasComponent<ColliderComponent>(entity)) {
+            auto& col = scene.GetRegistry().GetComponent<ColliderComponent>(entity);
+            col.collisionSide = CollisionSide::INSIDE;
+            // Default wall thickness for containers if not specified in FB
+            col.wallThickness = 0.2f; 
+        }
     }
 
     // 4. Update ECS Transform Component
@@ -578,25 +583,51 @@ bool FlatBufferSceneLoader::LoadScene(Scene& scene, AppConfig& config, const std
                     base = s->base();
                     geometry = "Sphere";
                     if (s->radius_range()) {
-                        spawnerComp.spawnObjectScale = (s->radius_range()->min() + s->radius_range()->max()) * 0.5f;
+                        spawnerComp.randomizeScale = true;
+                        spawnerComp.scaleMin = glm::vec3(s->radius_range()->min() * 2.0f);
+                        spawnerComp.scaleMax = glm::vec3(s->radius_range()->max() * 2.0f);
+                        spawnerComp.spawnObjectScale = 1.0f;
                     }
                 } else if (type == Simulation::SpawnerType_CuboidSpawner) {
                     auto s = static_cast<const Simulation::CuboidSpawner*>(data);
                     base = s->base();
                     geometry = "Cube";
                     if (s->size_range()) {
-                        glm::vec3 minSize = SafeGetVec3(s->size_range()->min());
-                        glm::vec3 maxSize = SafeGetVec3(s->size_range()->max());
-                        spawnerComp.spawnScale = (minSize + maxSize) * 0.5f;
+                        spawnerComp.randomizeScale = true;
+                        spawnerComp.scaleMin = SafeGetVec3(s->size_range()->min());
+                        spawnerComp.scaleMax = SafeGetVec3(s->size_range()->max());
+                        spawnerComp.spawnScale = glm::vec3(1.0f);
                     }
                 } else if (type == Simulation::SpawnerType_CylinderSpawner) {
                     auto s = static_cast<const Simulation::CylinderSpawner*>(data);
                     base = s->base();
                     geometry = "Cylinder";
+                    if (s->radius_range() || s->height_range()) {
+                        spawnerComp.randomizeScale = true;
+                        float minR = s->radius_range() ? s->radius_range()->min() : 0.5f;
+                        float maxR = s->radius_range() ? s->radius_range()->max() : 0.5f;
+                        float minH = s->height_range() ? s->height_range()->min() : 1.0f;
+                        float maxH = s->height_range() ? s->height_range()->max() : 1.0f;
+                        spawnerComp.scaleMin = glm::vec3(minR * 2.0f, minH, minR * 2.0f);
+                        spawnerComp.scaleMax = glm::vec3(maxR * 2.0f, maxH, maxR * 2.0f);
+                        spawnerComp.spawnScale = glm::vec3(1.0f);
+                    }
                 } else if (type == Simulation::SpawnerType_CapsuleSpawner) {
                     auto s = static_cast<const Simulation::CapsuleSpawner*>(data);
                     base = s->base();
                     geometry = "Capsule";
+                    if (s->radius_range() || s->height_range()) {
+                        spawnerComp.randomizeScale = true;
+                        float minR = s->radius_range() ? s->radius_range()->min() : 0.2f;
+                        float maxR = s->radius_range() ? s->radius_range()->max() : 0.2f;
+                        float minH = s->height_range() ? s->height_range()->min() : 1.6f;
+                        float maxH = s->height_range() ? s->height_range()->max() : 1.6f;
+                        // For capsules, base proportions are radius 0.2, height 1.0.
+                        // We map the absolute radius/height to these multipliers.
+                        spawnerComp.scaleMin = glm::vec3(minR / 0.2f, minH, minR / 0.2f);
+                        spawnerComp.scaleMax = glm::vec3(maxR / 0.2f, maxH, maxR / 0.2f);
+                        spawnerComp.spawnScale = glm::vec3(1.0f);
+                    }
                 }
                 
                 if (base) {
@@ -614,9 +645,10 @@ bool FlatBufferSceneLoader::LoadScene(Scene& scene, AppConfig& config, const std
                     } else if (base->location_type() == Simulation::SpawnLocation_RandomBox) {
                         auto box = base->location_as_RandomBox();
                         if (box) {
-                            glm::vec3 minLoc = SafeGetVec3(box->min());
-                            glm::vec3 maxLoc = SafeGetVec3(box->max());
-                            trans.position = (minLoc + maxLoc) * 0.5f;
+                            spawnerComp.randomizePosition = true;
+                            spawnerComp.randomPosMin = SafeGetVec3(box->min());
+                            spawnerComp.randomPosMax = SafeGetVec3(box->max());
+                            trans.position = glm::vec3(0.0f);
                         }
                     } else if (base->location_type() == Simulation::SpawnLocation_RandomSphere) {
                         auto sph = base->location_as_RandomSphere();
@@ -630,18 +662,16 @@ bool FlatBufferSceneLoader::LoadScene(Scene& scene, AppConfig& config, const std
                     // Velocity Ranges
                     if (base->linear_velocity()) {
                         spawnerComp.randomizeVelocity = true;
-                        glm::vec3 minVel = SafeGetVec3(base->linear_velocity()->min());
-                        glm::vec3 maxVel = SafeGetVec3(base->linear_velocity()->max());
-                        spawnerComp.spawnVelocity = (minVel + maxVel) * 0.5f;
-                        spawnerComp.randomVelocityRange = (maxVel - minVel) * 0.5f;
+                        spawnerComp.velocityMin = SafeGetVec3(base->linear_velocity()->min());
+                        spawnerComp.velocityMax = SafeGetVec3(base->linear_velocity()->max());
+                        spawnerComp.spawnVelocity = glm::vec3(0.0f);
                     }
                     
                     if (base->angular_velocity()) {
                         spawnerComp.randomizeAngularVelocity = true;
-                        glm::vec3 minAng = SafeGetVec3(base->angular_velocity()->min());
-                        glm::vec3 maxAng = SafeGetVec3(base->angular_velocity()->max());
-                        spawnerComp.spawnAngularVelocity = (minAng + maxAng) * 0.5f;
-                        spawnerComp.randomAngularVelocityRange = (maxAng - minAng) * 0.5f;
+                        spawnerComp.angularVelocityMin = SafeGetVec3(base->angular_velocity()->min());
+                        spawnerComp.angularVelocityMax = SafeGetVec3(base->angular_velocity()->max());
+                        spawnerComp.spawnAngularVelocity = glm::vec3(0.0f);
                     }
                     
                     // Spawn logic

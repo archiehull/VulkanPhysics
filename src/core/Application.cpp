@@ -379,6 +379,11 @@ void Application::SetupScene() {
             glm::vec3 diskScale(r * 2.0f, 1.0f, r * 2.0f);
             scene->AddDisk(objCfg.name, slices, objCfg.position, diskScale, objCfg.texturePath);
         }
+        else if (objCfg.type == "Capsule") {
+            const float r = std::max(0.01f, objCfg.params.x);
+            const float h = std::max(0.01f, objCfg.params.y);
+            scene->AddCapsule(objCfg.name, r, h, 32, 16, objCfg.position, objCfg.scale, objCfg.texturePath);
+        }
         else if (objCfg.type == "Cloth") {
             setupPhase = "Cloth Creation";
             float stiffness = objCfg.hasSpringConfig ? objCfg.springStiffness : 15.0f;
@@ -416,11 +421,13 @@ void Application::SetupScene() {
             spawner.spawnObjectScale = std::max(0.05f, std::max({ objCfg.spawnScale.x, objCfg.spawnScale.y, objCfg.spawnScale.z }));
             spawner.spawnVelocity = objCfg.spawnVelocity;
             spawner.randomizeVelocity = objCfg.randomizeSpawnVelocity;
-            spawner.randomVelocityRange = objCfg.spawnVelocityRandomRange;
+            spawner.velocityMin = -objCfg.spawnVelocityRandomRange;
+            spawner.velocityMax = objCfg.spawnVelocityRandomRange;
             // NEW: angular velocity config
             spawner.spawnAngularVelocity = objCfg.spawnAngularVelocity;
             spawner.randomizeAngularVelocity = objCfg.randomizeSpawnAngularVelocity;
-            spawner.randomAngularVelocityRange = objCfg.spawnAngularVelocityRandomRange;
+            spawner.angularVelocityMin = -objCfg.spawnAngularVelocityRandomRange;
+            spawner.angularVelocityMax = objCfg.spawnAngularVelocityRandomRange;
             spawner.spawnMass = objCfg.spawnMass;
             spawner.spawnLifespanSeconds = objCfg.spawnLifespanSeconds;
             spawner.attachToTarget = objCfg.spawnerAttachToTarget;

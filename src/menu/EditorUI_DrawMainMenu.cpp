@@ -762,13 +762,15 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 ImGui::DragFloat3("Base Velocity", &spawner.spawnVelocity.x, 0.1f);
                 ImGui::Checkbox("Randomise Velocity", &spawner.randomizeVelocity);
                 if (spawner.randomizeVelocity) {
-                    ImGui::DragFloat3("Random Velocity Range", &spawner.randomVelocityRange.x, 0.1f, 0.0f, 200.0f);
+                    ImGui::DragFloat3("Velocity Min Offset", &spawner.velocityMin.x, 0.1f);
+                    ImGui::DragFloat3("Velocity Max Offset", &spawner.velocityMax.x, 0.1f);
                 }
 
                 ImGui::DragFloat3("Base Spin", &spawner.spawnAngularVelocity.x, 0.05f);
                 ImGui::Checkbox("Randomise Spin", &spawner.randomizeAngularVelocity);
                 if (spawner.randomizeAngularVelocity) {
-                    ImGui::DragFloat3("Random Spin Range", &spawner.randomAngularVelocityRange.x, 0.05f, 0.0f, 50.0f);
+                    ImGui::DragFloat3("Spin Min Offset", &spawner.angularVelocityMin.x, 0.05f);
+                    ImGui::DragFloat3("Spin Max Offset", &spawner.angularVelocityMax.x, 0.05f);
                 }
 
                 ImGui::Separator();

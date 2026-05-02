@@ -274,14 +274,44 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
         spawnPos += front * 2.5f; 
     }
     
+    // --- NEW: Apply Random Area Spawning ---
+    if (spawner.randomizePosition) {
+        static std::mt19937 rng_pos(std::random_device{}());
+        std::uniform_real_distribution<float> distX(spawner.randomPosMin.x, spawner.randomPosMax.x);
+        std::uniform_real_distribution<float> distY(spawner.randomPosMin.y, spawner.randomPosMax.y);
+        std::uniform_real_distribution<float> distZ(spawner.randomPosMin.z, spawner.randomPosMax.z);
+
+        // Treat min and max as local offsets from the spawner's base position
+        spawnPos.x += distX(rng_pos);
+        spawnPos.y += distY(rng_pos);
+        spawnPos.z += distZ(rng_pos);
+    }
+    
     glm::vec3 effectiveSpawnScale = spawner.spawnScale;
+    if (spawner.randomizeScale) {
+        static std::mt19937 rng_scale(std::random_device{}());
+        std::uniform_real_distribution<float> sX(spawner.scaleMin.x, spawner.scaleMax.x);
+        
+        if (geometryType == "Sphere") {
+            // For spheres, we force uniform scaling by using the same random value for all axes
+            float uniformScale = sX(rng_scale);
+            effectiveSpawnScale = glm::vec3(uniformScale);
+        } else {
+            std::uniform_real_distribution<float> sY(spawner.scaleMin.y, spawner.scaleMax.y);
+            std::uniform_real_distribution<float> sZ(spawner.scaleMin.z, spawner.scaleMax.z);
+            effectiveSpawnScale.x = sX(rng_scale);
+            effectiveSpawnScale.y = sY(rng_scale);
+            effectiveSpawnScale.z = sZ(rng_scale);
+        }
+    }
+
     float sphereBaseRadius = 0.5f;
     if (geometryType == "Sphere") {
         const float uniform = std::max(0.05f, spawner.spawnObjectScale);
         const glm::vec3 axisScale(
-            std::max(0.05f, spawner.spawnScale.x),
-            std::max(0.05f, spawner.spawnScale.y),
-            std::max(0.05f, spawner.spawnScale.z));
+            std::max(0.05f, effectiveSpawnScale.x),
+            std::max(0.05f, effectiveSpawnScale.y),
+            std::max(0.05f, effectiveSpawnScale.z));
 
         sphereBaseRadius = std::max(0.1f, 0.5f * uniform);
         // Final sphere world extents = base radius (uniform) * axis scale (XYZ)
@@ -372,24 +402,23 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     }
 
     if (spawner.randomizeVelocity) {
-        static std::mt19937 rng(std::random_device{}());
+        static std::mt19937 rng_vel(std::random_device{}());
+        std::uniform_real_distribution<float> distX(spawner.velocityMin.x, spawner.velocityMax.x);
+        std::uniform_real_distribution<float> distY(spawner.velocityMin.y, spawner.velocityMax.y);
+        std::uniform_real_distribution<float> distZ(spawner.velocityMin.z, spawner.velocityMax.z);
 
-        std::uniform_real_distribution<float> distX(-spawner.randomVelocityRange.x, spawner.randomVelocityRange.x);
-        std::uniform_real_distribution<float> distY(-spawner.randomVelocityRange.y, spawner.randomVelocityRange.y);
-        std::uniform_real_distribution<float> distZ(-spawner.randomVelocityRange.z, spawner.randomVelocityRange.z);
-
-        velocity.x += distX(rng);
-        velocity.y += distY(rng);
-        velocity.z += distZ(rng);
+        velocity.x += distX(rng_vel);
+        velocity.y += distY(rng_vel);
+        velocity.z += distZ(rng_vel);
     }
 
     // Prepare angular velocity
     glm::vec3 angVel = spawner.spawnAngularVelocity;
     if (spawner.randomizeAngularVelocity) {
         static std::mt19937 rng_ang(std::random_device{}());
-        std::uniform_real_distribution<float> aX(-spawner.randomAngularVelocityRange.x, spawner.randomAngularVelocityRange.x);
-        std::uniform_real_distribution<float> aY(-spawner.randomAngularVelocityRange.y, spawner.randomAngularVelocityRange.y);
-        std::uniform_real_distribution<float> aZ(-spawner.randomAngularVelocityRange.z, spawner.randomAngularVelocityRange.z);
+        std::uniform_real_distribution<float> aX(spawner.angularVelocityMin.x, spawner.angularVelocityMax.x);
+        std::uniform_real_distribution<float> aY(spawner.angularVelocityMin.y, spawner.angularVelocityMax.y);
+        std::uniform_real_distribution<float> aZ(spawner.angularVelocityMin.z, spawner.angularVelocityMax.z);
         angVel.x += aX(rng_ang);
         angVel.y += aY(rng_ang);
         angVel.z += aZ(rng_ang);

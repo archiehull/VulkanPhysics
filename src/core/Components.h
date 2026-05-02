@@ -352,16 +352,27 @@ struct ObjectSpawnerComponent {
 
     glm::vec3 spawnVelocity = glm::vec3(0.0f, 10.0f, 0.0f);
     bool randomizeVelocity = false;
-    glm::vec3 randomVelocityRange = glm::vec3(0.0f);
+    glm::vec3 velocityMin = glm::vec3(0.0f);
+    glm::vec3 velocityMax = glm::vec3(0.0f);
 
     // === NEW: Angular Velocity (radians/sec). Direction = axis, magnitude = speed ===
     glm::vec3 spawnAngularVelocity = glm::vec3(0.0f);
     bool randomizeAngularVelocity = false;
-    glm::vec3 randomAngularVelocityRange = glm::vec3(0.0f);
+    glm::vec3 angularVelocityMin = glm::vec3(0.0f);
+    glm::vec3 angularVelocityMax = glm::vec3(0.0f);
+
+    bool randomizeScale = false;
+    glm::vec3 scaleMin = glm::vec3(1.0f);
+    glm::vec3 scaleMax = glm::vec3(1.0f);
 
     float spawnMass = 1.0f;
     float spawnLifespanSeconds = -1.0f; // -1 = no auto-despawn timer
     int spawnedCount = 0;
+
+    // New fields for area spawning
+    bool randomizePosition = false;
+    glm::vec3 randomPosMin = glm::vec3(0.0f);
+    glm::vec3 randomPosMax = glm::vec3(0.0f);
 
     // Attachment
     bool attachToTarget = false;

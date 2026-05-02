@@ -1605,16 +1605,30 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     }
 
                     ImGui::DragFloat3("Spawn Scale", &spawner.spawnScale.x, 0.05f, 0.01f, 100.0f);
+                    ImGui::Checkbox("Randomize Scale", &spawner.randomizeScale);
+                    if (spawner.randomizeScale) {
+                        ImGui::DragFloat3("Scale Min", &spawner.scaleMin.x, 0.05f);
+                        ImGui::DragFloat3("Scale Max", &spawner.scaleMax.x, 0.05f);
+                    }
+
                     ImGui::DragFloat3("Spawn Velocity", &spawner.spawnVelocity.x, 0.1f);
                     ImGui::Checkbox("Randomize Velocity", &spawner.randomizeVelocity);
                     if (spawner.randomizeVelocity) {
-                        ImGui::DragFloat3("Velocity Range", &spawner.randomVelocityRange.x, 0.1f);
+                        ImGui::DragFloat3("Velocity Min", &spawner.velocityMin.x, 0.1f);
+                        ImGui::DragFloat3("Velocity Max", &spawner.velocityMax.x, 0.1f);
+                    }
+
+                    ImGui::Checkbox("Randomize Position", &spawner.randomizePosition);
+                    if (spawner.randomizePosition) {
+                        ImGui::DragFloat3("Pos Min Offset", &spawner.randomPosMin.x, 0.1f);
+                        ImGui::DragFloat3("Pos Max Offset", &spawner.randomPosMax.x, 0.1f);
                     }
 
                     ImGui::DragFloat3("Spawn Spin", &spawner.spawnAngularVelocity.x, 0.05f);
                     ImGui::Checkbox("Randomize Spin", &spawner.randomizeAngularVelocity);
                     if (spawner.randomizeAngularVelocity) {
-                        ImGui::DragFloat3("Spin Range", &spawner.randomAngularVelocityRange.x, 0.05f);
+                        ImGui::DragFloat3("Spin Min", &spawner.angularVelocityMin.x, 0.05f);
+                        ImGui::DragFloat3("Spin Max", &spawner.angularVelocityMax.x, 0.05f);
                     }
 
                     ImGui::DragFloat("Spawn Mass", &spawner.spawnMass, 0.1f, 0.01f, 1000.0f);
