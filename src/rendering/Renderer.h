@@ -79,6 +79,7 @@ private:
     std::unique_ptr<VulkanRenderPass> renderPass;
     std::unique_ptr<GraphicsPipeline> graphicsPipeline;
     std::unique_ptr<GraphicsPipeline> transparentPipeline;
+    std::unique_ptr<GraphicsPipeline> transparentBackfacePipeline;
     std::unique_ptr<GraphicsPipeline> wireframePipeline;
     std::unique_ptr<VulkanCommandBuffer> commandBuffer;
     std::unique_ptr<VulkanSyncObjects> syncObjects;

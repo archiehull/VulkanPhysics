@@ -589,8 +589,14 @@ void Renderer::CreatePipeline() {
     graphicsPipeline->Create();
 
     pipelineConfig.depthWriteEnable = false;
-    pipelineConfig.cullMode = VK_CULL_MODE_BACK_BIT;
 
+    // 1. Create the Backface (Inside) Pipeline
+    pipelineConfig.cullMode = VK_CULL_MODE_FRONT_BIT; // Cull front, keep back
+    transparentBackfacePipeline = std::make_unique<GraphicsPipeline>(device->GetDevice(), pipelineConfig);
+    transparentBackfacePipeline->Create();
+
+    // 2. Create the Frontface (Outside) Pipeline
+    pipelineConfig.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back, keep front
     transparentPipeline = std::make_unique<GraphicsPipeline>(device->GetDevice(), pipelineConfig);
     transparentPipeline->Create();
 
@@ -1162,6 +1168,12 @@ void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& sc
         if (colliderVisMode != ColliderVisMode::HitboxesOnly) {
             DrawSceneObjects(cmd, scene, graphicsPipeline->GetLayout(), true, false, viewMask, insideRegionMask, SceneDrawMode::Opaque);
 
+            // --- PASS 1: Inside Faces ---
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentBackfacePipeline->GetPipeline());
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentBackfacePipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
+            DrawSceneObjects(cmd, scene, transparentBackfacePipeline->GetLayout(), true, false, viewMask, insideRegionMask, SceneDrawMode::Transparent);
+
+            // --- PASS 2: Outside Faces ---
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline->GetPipeline());
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
             DrawSceneObjects(cmd, scene, transparentPipeline->GetLayout(), true, false, viewMask, insideRegionMask, SceneDrawMode::Transparent);
@@ -1322,6 +1334,11 @@ void Renderer::Cleanup() {
     if (transparentPipeline) {
         transparentPipeline->Cleanup();
         transparentPipeline.reset();
+    }
+
+    if (transparentBackfacePipeline) {
+        transparentBackfacePipeline->Cleanup();
+        transparentBackfacePipeline.reset();
     }
 
     if (graphicsPipeline) {
