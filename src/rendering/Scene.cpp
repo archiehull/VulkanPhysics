@@ -617,6 +617,18 @@ Entity Scene::AddCylinder(const std::string& name, int slices, const glm::vec3& 
     return entity;
 }
 
+Entity Scene::AddCapsule(const std::string& name, float radius, float height, int radialSegments, int rings, 
+                         const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
+    // Generate a UNIT capsule (radius 0.5f, total height 1.0f) so scale acts as the true size
+    Entity entity = AddObjectInternal(name, GeometryGenerator::CreateCapsule(device, physicalDevice, 0.5f, 1.0f, radialSegments, rings), position, texturePath, false);
+    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "capsule";
+
+    auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
+    transform.scale = scale;
+    transform.UpdateMatrix();
+    return entity;
+}
+
 Entity Scene::AddDisk(const std::string& name, int slices, const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
     // Generate a UNIT disk (diameter = 1.0f (radius 0.5f)) so scale acts as the true size
     Entity entity = AddObjectInternal(name, GeometryGenerator::CreateDisk(device, physicalDevice, 0.5f, slices), position, texturePath, false);

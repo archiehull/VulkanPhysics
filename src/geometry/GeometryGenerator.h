@@ -33,6 +33,7 @@ public:
 
     static std::unique_ptr<Geometry> CreateDisk(VkDevice device, VkPhysicalDevice physicalDevice, float radius, int slices);
     static std::unique_ptr<Geometry> CreateCylinder(VkDevice device, VkPhysicalDevice physicalDevice, float radius, float height, int slices, int stacks = 1);
+    static std::unique_ptr<Geometry> CreateCapsule(VkDevice device, VkPhysicalDevice physicalDevice, float radius, float height, int radialSegments = 32, int rings = 16);
     static std::unique_ptr<Geometry> CreatePlane(VkDevice device, VkPhysicalDevice physicalDevice, bool doubleSided = true);
 
 private:

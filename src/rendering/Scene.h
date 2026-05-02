@@ -61,6 +61,8 @@ public:
     Entity AddCylinder(const std::string& name, int slices = 32, const glm::vec3& position = glm::vec3(0.0f), const glm::vec3& scale = glm::vec3(1.0f), const std::string& texturePath = "");
     Entity AddDisk(const std::string& name, int slices = 32, const glm::vec3& position = glm::vec3(0.0f), const glm::vec3& scale = glm::vec3(1.0f), const std::string& texturePath = "");
     void AddGeometry(const std::string& name, std::unique_ptr<Geometry> geometry, const glm::vec3& position = glm::vec3(0.0f));
+    Entity AddCapsule(const std::string& name, float radius, float height, int radialSegments, int rings, 
+                      const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath = "");
 
     Entity AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable = false);
 
@@ -199,10 +201,8 @@ private:
     glm::vec4 ComputeSpringVisualColor(float currentLength, float restLength) const;
     void UpdatePathVisuals();
     void ClearPathVisuals();
-    Entity GetOrCreatePathVisualEntity(const std::string& key);
     void UpdateSpawnerVisuals();
     void ClearSpawnerVisuals();
-    Entity GetOrCreateSpawnerVisualEntity(const std::string& key);
 
     Registry m_Registry;
     std::vector<std::unique_ptr<class ISystem>> m_Systems;

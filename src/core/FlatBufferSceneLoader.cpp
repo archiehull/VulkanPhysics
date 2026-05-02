@@ -46,7 +46,7 @@ static glm::vec3 SafeGetVec3(const Simulation::Vec3& vec) {
 // Helper to safely extract RotationEuler with a default fallback
 static glm::vec3 SafeGetEuler(const Simulation::RotationEuler* rot, const glm::vec3& defaultValue = glm::vec3(0.0f)) {
     if (!rot) return defaultValue;
-    // The engine uses pitch (x), yaw (y), roll (z) in degrees
+    // Engine order: pitch (x), yaw (y), roll (z)
     return glm::vec3(rot->pitch(), rot->yaw(), rot->roll());
 }
 
@@ -73,38 +73,24 @@ static const char* BehaviourTypeToString(Simulation::Behaviour behaviour) {
     }
 }
 
-static float CalculateVolume(const Simulation::Object* fbObj, const glm::vec3& scale) {
+static float CalculateVolume(const Simulation::Object* fbObj, const glm::vec3& finalScale) {
     if (!fbObj) return 1.0f;
     float volume = 1.0f;
     
     switch (fbObj->shape_type()) {
         case Simulation::Shape_Sphere: {
-            auto sphere = fbObj->shape_as_Sphere();
-            float r = sphere ? sphere->radius() : 1.0f;
-            r *= std::max({scale.x, scale.y, scale.z});
+            float r = std::max({finalScale.x, finalScale.y, finalScale.z}) * 0.5f;
             volume = (4.0f / 3.0f) * glm::pi<float>() * r * r * r;
             break;
         }
         case Simulation::Shape_Cuboid: {
-            auto cube = fbObj->shape_as_Cuboid();
-            glm::vec3 size = cube ? SafeGetVec3(cube->size(), glm::vec3(1.0f)) : glm::vec3(1.0f);
-            size *= scale;
-            volume = size.x * size.y * size.z;
+            volume = finalScale.x * finalScale.y * finalScale.z;
             break;
         }
         case Simulation::Shape_Cylinder:
         case Simulation::Shape_Capsule: {
-            float r = 1.0f;
-            float h = 2.0f;
-            if (fbObj->shape_type() == Simulation::Shape_Cylinder) {
-                auto cyl = fbObj->shape_as_Cylinder();
-                if (cyl) { r = cyl->radius(); h = cyl->height(); }
-            } else {
-                auto cap = fbObj->shape_as_Capsule();
-                if (cap) { r = cap->radius(); h = cap->height(); }
-            }
-            r *= std::max(scale.x, scale.z);
-            h *= scale.y;
+            float r = std::max(finalScale.x, finalScale.z) * 0.5f;
+            float h = finalScale.y;
             volume = glm::pi<float>() * r * r * h;
             if (fbObj->shape_type() == Simulation::Shape_Capsule) {
                 volume += (4.0f / 3.0f) * glm::pi<float>() * r * r * r;
@@ -112,7 +98,7 @@ static float CalculateVolume(const Simulation::Object* fbObj, const glm::vec3& s
             break;
         }
         case Simulation::Shape_Plane:
-            volume = 0.0f; // Planes typically have infinite or zero mass
+            volume = 0.0f; 
             break;
         default:
             break;
@@ -181,16 +167,16 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
             auto sphere = fbObj->shape_as_Sphere();
             float r = sphere ? sphere->radius() : 1.0f;
             
-            // Set Visuals (Unit Sphere scaled by radius*2 * transform scale)
-            glm::vec3 finalScale = scale * glm::vec3(r * 2.0f);
-            entity = scene.AddSphere(name, 16, 16, pos, finalScale, defaultTexture);
+            // Apply shape's radius to the transform scale
+            scale *= (r * 2.0f);
+            entity = scene.AddSphere(name, 16, 16, pos, scale, defaultTexture);
             
             if (!scene.GetRegistry().HasComponent<ColliderComponent>(entity)) {
                 scene.GetRegistry().AddComponent<ColliderComponent>(entity, ColliderComponent{});
             }
             auto& col = scene.GetRegistry().GetComponent<ColliderComponent>(entity);
             col.type = 0; // Sphere
-            col.radius = r * std::max({scale.x, scale.y, scale.z}); 
+            col.radius = std::max({scale.x, scale.y, scale.z}) * 0.5f; 
             col.collisionSide = CollisionSide::OUTSIDE; 
             col.hasCollision = true;
             break;
@@ -199,17 +185,17 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
             auto cube = fbObj->shape_as_Cuboid();
             glm::vec3 size = cube ? SafeGetVec3(cube->size(), glm::vec3(1.0f)) : glm::vec3(1.0f);
             
-            // Set Visuals (Unit Cube scaled to size * transform scale)
-            glm::vec3 finalScale = scale * size;
-            entity = scene.AddCube(name, pos, finalScale, defaultTexture);
+            // Apply shape's size to the transform scale
+            scale *= size;
+            entity = scene.AddCube(name, pos, scale, defaultTexture);
             
             if (!scene.GetRegistry().HasComponent<ColliderComponent>(entity)) {
                 scene.GetRegistry().AddComponent<ColliderComponent>(entity, ColliderComponent{});
             }
             auto& col = scene.GetRegistry().GetComponent<ColliderComponent>(entity);
             col.type = 3; // Box/AABB
-            col.halfExtents = finalScale * 0.5f; // Physics needs half-extents
-            col.radius = std::max({finalScale.x, finalScale.y, finalScale.z}) * 0.5f; // Fallback for radius-based checks
+            col.halfExtents = scale * 0.5f; // Physics needs half-extents
+            col.radius = std::max({scale.x, scale.y, scale.z}) * 0.5f; 
             col.collisionSide = CollisionSide::INSIDE; 
             col.hasCollision = true;
             break;
@@ -219,32 +205,36 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
             float r = cylinder ? cylinder->radius() : 1.0f;
             float h = cylinder ? cylinder->height() : 2.0f;
             
-            // Set Visuals (Unit Cylinder scaled by radius*2 and height)
-            glm::vec3 finalScale = scale * glm::vec3(r * 2.0f, h, r * 2.0f);
-            entity = scene.AddCylinder(name, 16, pos, finalScale, defaultTexture);
+            // Apply shape dimensions to the transform scale
+            scale *= glm::vec3(r * 2.0f, h, r * 2.0f);
+            entity = scene.AddCylinder(name, 32, pos, scale, defaultTexture);
             
             if (!scene.GetRegistry().HasComponent<ColliderComponent>(entity)) {
                 scene.GetRegistry().AddComponent<ColliderComponent>(entity, ColliderComponent{});
             }
             auto& col = scene.GetRegistry().GetComponent<ColliderComponent>(entity);
-            col.type = 2; // Capsule/Cylinder
+            col.type = 2; // Cylinder (using 2 for Capsule/Cylinder parity)
+            col.radius = std::max(scale.x, scale.z) * 0.5f;
+            col.height = scale.y;
             col.hasCollision = true;
             break;
         }
         case Simulation::Shape_Capsule: {
             auto capsule = fbObj->shape_as_Capsule();
             float r = capsule ? capsule->radius() : 0.5f;
-            float h = capsule ? capsule->height() : 2.0f;
+            float h = capsule ? capsule->height() : 1.0f;
             
-            // The engine might not have AddCapsule, using AddCylinder as fallback
-            glm::vec3 finalScale = scale * glm::vec3(r * 2.0f, h, r * 2.0f);
-            entity = scene.AddCylinder(name, 16, pos, finalScale, defaultTexture);
+            // Apply shape dimensions to the transform scale
+            scale *= glm::vec3(r * 2.0f, h, r * 2.0f);
+            entity = scene.AddCapsule(name, 0.5f, 1.0f, 32, 16, pos, scale, defaultTexture);
             
             if (!scene.GetRegistry().HasComponent<ColliderComponent>(entity)) {
                 scene.GetRegistry().AddComponent<ColliderComponent>(entity, ColliderComponent{});
             }
             auto& col = scene.GetRegistry().GetComponent<ColliderComponent>(entity);
             col.type = 2; // Capsule
+            col.radius = std::max(scale.x, scale.z) * 0.5f;
+            col.height = scale.y;
             col.hasCollision = true;
             break;
         }
@@ -297,7 +287,7 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
         auto& transComp = scene.GetRegistry().GetComponent<TransformComponent>(entity);
         transComp.position = pos;
         transComp.rotation = rotEuler;
-        // Scale is already set by AddSphere/AddCube/AddCylinder/AddPlane logic above
+        transComp.scale = scale;
         transComp.UpdateMatrix();
     } catch (...) {
         if (s_verbose_fb_loader) {
@@ -380,6 +370,7 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
                 }
             }
             
+            pathComp.perPointRotation = true;
             pathComp.timingMode = PathAnimationTimingMode::Absolute;
             pathComp.initialized = false;
             pathComp.isPlaying = true;
@@ -539,8 +530,8 @@ bool FlatBufferSceneLoader::LoadScene(Scene& scene, AppConfig& config, const std
                 if (fbCam->transform()) {
                     camCfg.position = SafeGetVec3(fbCam->transform()->position());
                     glm::vec3 rot = SafeGetEuler(fbCam->transform()->orientation());
-                    camCfg.pitch = rot.x;
-                    camCfg.yaw = -rot.y;
+                    camCfg.yaw = rot.y; // Map yaw directly (matching JSON loader parity)
+                    camCfg.pitch = rot.x;        // Map pitch directly
                 }
                 camCfg.type = "FreeRoam"; // Default fallback
                 config.customCameras.push_back(camCfg);

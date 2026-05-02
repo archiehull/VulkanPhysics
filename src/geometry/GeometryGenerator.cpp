@@ -1,6 +1,7 @@
 #include "GeometryGenerator.h"
 #include <cmath>
 #include <glm/gtc/noise.hpp>
+#include <glm/gtc/constants.hpp>
 #include <algorithm>
 
 constexpr double PI = 3.14159265358979323846;
@@ -489,6 +490,92 @@ std::unique_ptr<Geometry> GeometryGenerator::CreateSphere(VkDevice device, VkPhy
     }
 
     GenerateGridIndices(geometry.get(), slices, stacks);
+    geometry->CreateBuffers();
+    return geometry;
+}
+
+std::unique_ptr<Geometry> GeometryGenerator::CreateCapsule(VkDevice device, VkPhysicalDevice physicalDevice, float radius, float height, int radialSegments, int rings) {
+    auto geometry = std::make_unique<Geometry>(device, physicalDevice);
+
+    if (rings % 2 != 0) rings++;
+    int halfRings = rings / 2;
+
+    // Cylinder body height (distance between hemisphere centers)
+    float cylHeight = std::max(0.0f, height - 2.0f * radius);
+    float cylHalfHeight = cylHeight * 0.5f;
+
+    // Total distance along the surface for UV mapping (V coordinate)
+    float totalArc = glm::pi<float>() * radius + cylHeight;
+
+    // --- Top Hemisphere ---
+    for (int i = 0; i <= halfRings; ++i) {
+        float v_ratio = static_cast<float>(i) / halfRings; // 0.0 to 1.0
+        float phi = v_ratio * glm::half_pi<float>();       // 0 to pi/2 (North pole down to equator)
+        
+        float currentDist = phi * radius;            // Distance along the curve from the top
+        
+        for (int j = 0; j <= radialSegments; ++j) {
+            float u = static_cast<float>(j) / radialSegments;
+            float theta = u * glm::two_pi<float>();
+            
+            float x = std::sin(phi) * std::cos(theta);
+            float y = std::cos(phi);
+            float z = std::sin(phi) * std::sin(theta);
+            
+            Vertex vertex{};
+            vertex.pos = glm::vec3(x * radius, y * radius + cylHalfHeight, z * radius);
+            vertex.normal = glm::vec3(x, y, z);
+            vertex.texCoord = glm::vec2(u, currentDist / totalArc);
+            vertex.color = glm::vec3(1.0f);
+            
+            geometry->AddVertex(vertex);
+        }
+    }
+
+    // --- Bottom Hemisphere ---
+    for (int i = 0; i <= halfRings; ++i) {
+        float v_ratio = static_cast<float>(i) / halfRings; 
+        float phi = glm::half_pi<float>() + v_ratio * glm::half_pi<float>(); // pi/2 to pi (Equator down to South pole)
+        
+        float currentDist = (glm::half_pi<float>() * radius) + cylHeight + (v_ratio * glm::half_pi<float>() * radius);
+        
+        for (int j = 0; j <= radialSegments; ++j) {
+            float u = static_cast<float>(j) / radialSegments;
+            float theta = u * glm::two_pi<float>();
+            
+            float x = std::sin(phi) * std::cos(theta);
+            float y = std::cos(phi);
+            float z = std::sin(phi) * std::sin(theta);
+            
+            Vertex vertex{};
+            vertex.pos = glm::vec3(x * radius, y * radius - cylHalfHeight, z * radius);
+            vertex.normal = glm::vec3(x, y, z);
+            vertex.texCoord = glm::vec2(u, currentDist / totalArc);
+            vertex.color = glm::vec3(1.0f);
+            
+            geometry->AddVertex(vertex);
+        }
+    }
+
+    // --- Generate Indices ---
+    int totalRows = (halfRings + 1) * 2; 
+    for (int r = 0; r < totalRows - 1; ++r) {
+        for (int s = 0; s < radialSegments; ++s) {
+            uint32_t i0 = r * (radialSegments + 1) + s;
+            uint32_t i1 = i0 + 1;
+            uint32_t i2 = (r + 1) * (radialSegments + 1) + s;
+            uint32_t i3 = i2 + 1;
+
+            geometry->AddIndex(i0);
+            geometry->AddIndex(i2);
+            geometry->AddIndex(i1);
+
+            geometry->AddIndex(i1);
+            geometry->AddIndex(i2);
+            geometry->AddIndex(i3);
+        }
+    }
+
     geometry->CreateBuffers();
     return geometry;
 }

@@ -267,6 +267,45 @@ namespace {
         }
     }
 
+    void ResolveSphereInsideCylinder(MovingSphere& sphere, const glm::vec3& cylCenter, float cylRadius, float cylHeight, float restitution, float friction) {
+        glm::vec3 pos = sphere.sphere.Position();
+        float r = sphere.sphere.m_radius;
+        float halfHeight = cylHeight * 0.5f;
+
+        // 1. Resolve Floor and Ceiling (Y-axis)
+        if (pos.y - r < cylCenter.y - halfHeight) {
+            Plane floor(glm::vec3(0.0f, cylCenter.y - halfHeight, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            ResolveSpherePlaneCollision(sphere, floor, restitution, friction);
+            pos = sphere.sphere.Position(); // Update pos after correction
+        }
+        else if (pos.y + r > cylCenter.y + halfHeight) {
+            Plane ceiling(glm::vec3(0.0f, cylCenter.y + halfHeight, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
+            ResolveSpherePlaneCollision(sphere, ceiling, restitution, friction);
+            pos = sphere.sphere.Position();
+        }
+
+        // 2. Resolve the curved walls (XZ plane)
+        glm::vec2 flatPos = glm::vec2(pos.x - cylCenter.x, pos.z - cylCenter.z);
+        float dist = glm::length(flatPos);
+        float maxAllowedDist = cylRadius - r;
+
+        if (dist > maxAllowedDist && dist > 0.0001f) {
+            glm::vec3 normal = glm::vec3(-flatPos.x / dist, 0.0f, -flatPos.y / dist); // Pointing inward
+            glm::vec3 contactPoint = glm::vec3(cylCenter.x + (flatPos.x / dist) * cylRadius, pos.y, cylCenter.z + (flatPos.y / dist) * cylRadius);
+            Plane wallPlane(contactPoint, normal);
+
+            ResolveSpherePlaneCollision(sphere, wallPlane, restitution, friction);
+
+            // Correct position
+            glm::vec3 correctedPos = sphere.sphere.Position();
+            glm::vec2 correctedFlat = glm::vec2(correctedPos.x - cylCenter.x, correctedPos.z - cylCenter.z);
+            if (glm::length(correctedFlat) > maxAllowedDist) {
+                glm::vec2 clampedFlat = glm::normalize(correctedFlat) * maxAllowedDist;
+                sphere.sphere.SetPosition(glm::vec3(cylCenter.x + clampedFlat.x, correctedPos.y, cylCenter.z + clampedFlat.y));
+            }
+        }
+    }
+
     void ResolveSphereInsideSphere(MovingSphere& smallSphere, const glm::vec3& hollowCenter, float hollowRadius, float restitution, float friction) {
         glm::vec3 delta = smallSphere.sphere.Position() - hollowCenter;
         float dist = glm::length(delta);
@@ -676,6 +715,54 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                     t1.UpdateMatrix();
                 }
             }
+            // Sphere vs Sphere (Inside Check - Symmetric)
+            else if (c1.type == 0 && c2.type == 0 && c1.collisionSide == CollisionSide::INSIDE) {
+                MovingSphere sphereB(t2.position, c2.radius, p2.velocity, p2.inverseMass, p2.restitution);
+                sphereB.angularVelocity = p2.angularVelocity;
+                sphereB.inertiaTensor = p2.inertiaTensor;
+                sphereB.inverseInertiaTensor = p2.inverseInertiaTensor;
+
+                ResolveSphereInsideSphere(sphereB, t1.position, c1.radius, p1.restitution, p2.friction);
+
+                if (!p2.isStatic) {
+                    p2.velocity = sphereB.velocity;
+                    p2.angularVelocity = sphereB.angularVelocity;
+                    t2.position = sphereB.sphere.Position();
+                    t2.UpdateMatrix();
+                }
+            }
+            // Cylinder/Capsule vs Sphere (Inside Check)
+            else if (c1.type == 2 && c2.type == 0 && c1.collisionSide == CollisionSide::INSIDE) {
+                MovingSphere sphereB(t2.position, c2.radius, p2.velocity, p2.inverseMass, p2.restitution);
+                sphereB.angularVelocity = p2.angularVelocity;
+                sphereB.inertiaTensor = p2.inertiaTensor;
+                sphereB.inverseInertiaTensor = p2.inverseInertiaTensor;
+
+                ResolveSphereInsideCylinder(sphereB, t1.position, c1.radius, c1.height, p1.restitution, p2.friction);
+
+                if (!p2.isStatic) {
+                    p2.velocity = sphereB.velocity;
+                    p2.angularVelocity = sphereB.angularVelocity;
+                    t2.position = sphereB.sphere.Position();
+                    t2.UpdateMatrix();
+                }
+            }
+            // Sphere vs Cylinder/Capsule (Inside Check)
+            else if (c1.type == 0 && c2.type == 2 && c2.collisionSide == CollisionSide::INSIDE) {
+                MovingSphere sphereA(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
+                sphereA.angularVelocity = p1.angularVelocity;
+                sphereA.inertiaTensor = p1.inertiaTensor;
+                sphereA.inverseInertiaTensor = p1.inverseInertiaTensor;
+
+                ResolveSphereInsideCylinder(sphereA, t2.position, c2.radius, c2.height, p2.restitution, p1.friction);
+
+                if (!p1.isStatic) {
+                    p1.velocity = sphereA.velocity;
+                    p1.angularVelocity = sphereA.angularVelocity;
+                    t1.position = sphereA.sphere.Position();
+                    t1.UpdateMatrix();
+                }
+            }
             // Sphere vs Box
             else if (c1.type == 0 && c2.type == 3) {
                 MovingSphere sphereA(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
@@ -691,6 +778,21 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                         t1.position = sphereA.sphere.Position();
                         t1.UpdateMatrix();
                     }
+                }
+            }
+            // Box vs Sphere (Inside Check)
+            else if (c1.type == 3 && c2.type == 0 && c1.collisionSide == CollisionSide::INSIDE) {
+                MovingSphere sphereB(t2.position, c2.radius, p2.velocity, p2.inverseMass, p2.restitution);
+                sphereB.angularVelocity = p2.angularVelocity;
+                sphereB.inertiaTensor = p2.inertiaTensor;
+                sphereB.inverseInertiaTensor = p2.inverseInertiaTensor;
+
+                ResolveSphereInsideAABB(sphereB, t1.position, c1.halfExtents, p1.restitution, p2.friction);
+                if (!p2.isStatic) {
+                    p2.velocity = sphereB.velocity;
+                    p2.angularVelocity = sphereB.angularVelocity;
+                    t2.position = sphereB.sphere.Position();
+                    t2.UpdateMatrix();
                 }
             }
             // Sphere vs Plane
