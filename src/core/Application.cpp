@@ -190,7 +190,7 @@ void Application::LoadScene(const std::string& scenePath) {
             renderer->RegisterProceduralTexture("grey_solid", [](Texture& tex) {
                 tex.GenerateSolidColor(glm::vec4(0.5f, 0.5f, 0.5f, 1.0f));
             });
-            FlatBufferSceneLoader::LoadScene(*scene, scenePath);
+            FlatBufferSceneLoader::LoadScene(*scene, config, scenePath);
             
             if (scene->GetLights().empty()) {
                 scene->AddLight("DefaultSun", glm::vec3(10.0f, 50.0f, 10.0f), glm::vec3(1.0f, 0.98f, 0.95f), 1.2f, 0);
@@ -1007,9 +1007,26 @@ void Application::MainLoop() {
         float linearDampingFactor;
         bool quadraticDragEnabled;
         float quadraticDragCoeff;
-        if (editorUI->ConsumePhysicsSettingsRequest(linearDampingEnabled, linearDampingFactor, quadraticDragEnabled, quadraticDragCoeff)) {
+        bool sleepNormalThresholdEnabled;
+        float sleepNormalThreshold;
+        bool sleepTangentialThresholdEnabled;
+        float sleepTangentialThreshold;
+        if (editorUI->ConsumePhysicsSettingsRequest(
+            linearDampingEnabled,
+            linearDampingFactor,
+            quadraticDragEnabled,
+            quadraticDragCoeff,
+            sleepNormalThresholdEnabled,
+            sleepNormalThreshold,
+            sleepTangentialThresholdEnabled,
+            sleepTangentialThreshold)) {
             PhysicsSystem::SetLinearDamping(linearDampingEnabled, linearDampingFactor);
             PhysicsSystem::SetQuadraticDrag(quadraticDragEnabled, quadraticDragCoeff);
+            PhysicsSystem::SetSleepThresholds(
+                sleepNormalThresholdEnabled,
+                sleepNormalThreshold,
+                sleepTangentialThresholdEnabled,
+                sleepTangentialThreshold);
         }
 
         bool showSpringVisuals = false;

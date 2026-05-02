@@ -19,6 +19,8 @@ float PhysicsSystem::gravityDirection = -1.0f;
 float PhysicsSystem::contactFrictionScale = 1.0f;
 float PhysicsSystem::sleepNormalThreshold = 0.08f;
 float PhysicsSystem::sleepTangentialThreshold = 0.12f;
+bool PhysicsSystem::applySleepNormalThreshold = true;
+bool PhysicsSystem::applySleepTangentialThreshold = true;
 
 // Drag / damping defaults (disabled by default for behavior stability)
 bool PhysicsSystem::applyLinearDamping = true;
@@ -35,6 +37,13 @@ void PhysicsSystem::SetLinearDamping(bool enabled, float factor) {
 void PhysicsSystem::SetQuadraticDrag(bool enabled, float coefficient) {
     applyQuadraticDrag = enabled;
     quadraticDragCoefficient = glm::clamp(coefficient, 0.0f, 10.0f);
+}
+
+void PhysicsSystem::SetSleepThresholds(bool normalEnabled, float normalThreshold, bool tangentialEnabled, float tangentialThreshold) {
+    applySleepNormalThreshold = normalEnabled;
+    sleepNormalThreshold = glm::clamp(normalThreshold, 0.0f, 10.0f);
+    applySleepTangentialThreshold = tangentialEnabled;
+    sleepTangentialThreshold = glm::clamp(tangentialThreshold, 0.0f, 10.0f);
 }
 
 namespace {
@@ -174,12 +183,32 @@ namespace {
         if (phys.isStatic) return;
 
         const glm::vec3 n = plane.GetNormal();
-        const float vN = std::abs(glm::dot(phys.velocity, n));
-        const glm::vec3 vT = phys.velocity - glm::dot(phys.velocity, n) * n;
+        const float vNRaw = glm::dot(phys.velocity, n);
+        const float vN = std::abs(vNRaw);
+        const glm::vec3 vNVec = vNRaw * n;
+        const glm::vec3 vT = phys.velocity - vNVec;
         const float vTLen = glm::length(vT);
 
-        if (vN < PhysicsSystem::sleepNormalThreshold &&
-            vTLen < PhysicsSystem::sleepTangentialThreshold) {
+        const bool normalAtRest = PhysicsSystem::applySleepNormalThreshold &&
+            (vN < PhysicsSystem::sleepNormalThreshold);
+        const bool tangentialAtRest = PhysicsSystem::applySleepTangentialThreshold &&
+            (vTLen < PhysicsSystem::sleepTangentialThreshold);
+
+        if (!normalAtRest && !tangentialAtRest) {
+            return;
+        }
+
+        glm::vec3 newVelocity = phys.velocity;
+        if (normalAtRest) {
+            newVelocity -= vNVec;
+        }
+        if (tangentialAtRest) {
+            newVelocity -= vT;
+        }
+
+        phys.velocity = newVelocity;
+
+        if (glm::dot(phys.velocity, phys.velocity) < 1e-8f) {
             phys.velocity = glm::vec3(0.0f);
             phys.forceAccumulator = glm::vec3(0.0f);
         }

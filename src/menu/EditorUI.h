@@ -103,14 +103,34 @@ public:
     }
 
     // Physics settings
-    void SetPhysicsSettings(bool linearDampingEnabled, float linearDampingFactor, bool quadraticDragEnabled, float quadraticDragCoeff) {
+    void SetPhysicsSettings(
+        bool linearDampingEnabled,
+        float linearDampingFactor,
+        bool quadraticDragEnabled,
+        float quadraticDragCoeff,
+        bool sleepNormalThresholdEnabled,
+        float sleepNormalThreshold,
+        bool sleepTangentialThresholdEnabled,
+        float sleepTangentialThreshold) {
         m_LinearDampingEnabled = linearDampingEnabled;
         m_LinearDampingFactor = linearDampingFactor;
         m_QuadraticDragEnabled = quadraticDragEnabled;
         m_QuadraticDragCoeff = quadraticDragCoeff;
+        m_SleepNormalThresholdEnabled = sleepNormalThresholdEnabled;
+        m_SleepNormalThreshold = sleepNormalThreshold;
+        m_SleepTangentialThresholdEnabled = sleepTangentialThresholdEnabled;
+        m_SleepTangentialThreshold = sleepTangentialThreshold;
     }   
 
-    bool ConsumePhysicsSettingsRequest(bool& linearDampingEnabled, float& linearDampingFactor, bool& quadraticDragEnabled, float& quadraticDragCoeff) {
+    bool ConsumePhysicsSettingsRequest(
+        bool& linearDampingEnabled,
+        float& linearDampingFactor,
+        bool& quadraticDragEnabled,
+        float& quadraticDragCoeff,
+        bool& sleepNormalThresholdEnabled,
+        float& sleepNormalThreshold,
+        bool& sleepTangentialThresholdEnabled,
+        float& sleepTangentialThreshold) {
         if (!m_PhysicsSettingsChanged) {
             return false;
         }
@@ -120,6 +140,10 @@ public:
         linearDampingFactor = m_LinearDampingFactor;
         quadraticDragEnabled = m_QuadraticDragEnabled;
         quadraticDragCoeff = m_QuadraticDragCoeff;
+        sleepNormalThresholdEnabled = m_SleepNormalThresholdEnabled;
+        sleepNormalThreshold = m_SleepNormalThreshold;
+        sleepTangentialThresholdEnabled = m_SleepTangentialThresholdEnabled;
+        sleepTangentialThreshold = m_SleepTangentialThreshold;
         return true;
     }   
 
@@ -221,6 +245,10 @@ private:
     float m_LinearDampingFactor = 0.98f;
     bool m_QuadraticDragEnabled = true;
     float m_QuadraticDragCoeff = 0.01f;
+    bool m_SleepNormalThresholdEnabled = true;
+    float m_SleepNormalThreshold = 0.08f;
+    bool m_SleepTangentialThresholdEnabled = true;
+    float m_SleepTangentialThreshold = 0.12f;
     bool m_PhysicsSettingsChanged = false;
 
     bool m_ShowSpringVisuals = false;

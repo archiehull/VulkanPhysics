@@ -933,6 +933,29 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             }
 
             ImGui::Spacing();
+            ImGui::Text("Sleep Thresholds");
+
+            if (ImGui::Checkbox("Normal Sleep Threshold", &m_SleepNormalThresholdEnabled)) {
+                m_PhysicsSettingsChanged = true;
+            }
+
+            if (m_SleepNormalThresholdEnabled) {
+                if (ImGui::SliderFloat("Normal Threshold (m/s)", &m_SleepNormalThreshold, 0.0f, 1.0f, "%.3f")) {
+                    m_PhysicsSettingsChanged = true;
+                }
+            }
+
+            if (ImGui::Checkbox("Tangential Sleep Threshold", &m_SleepTangentialThresholdEnabled)) {
+                m_PhysicsSettingsChanged = true;
+            }
+
+            if (m_SleepTangentialThresholdEnabled) {
+                if (ImGui::SliderFloat("Tangential Threshold (m/s)", &m_SleepTangentialThreshold, 0.0f, 1.0f, "%.3f")) {
+                    m_PhysicsSettingsChanged = true;
+                }
+            }
+
+            ImGui::Spacing();
             if (ImGui::Checkbox("Visualize Springs", &m_ShowSpringVisuals)) {
                 m_SpringVisualizationChanged = true;
             }

@@ -101,6 +101,7 @@ struct SceneObjectConfig {
     float mass = 1.0f;
     float restitution = 1.0f;
     float friction = 0.98f;
+    std::string materialName; // optional named material reference
 
     int colliderType = 0;
     float colliderRadius = 2.0f;
@@ -247,6 +248,23 @@ struct AppConfig {
     std::vector<ProceduralTextureConfig> proceduralTextures;
     std::vector<CustomParticleConfig> customParticles;
     std::vector<LayerRegionConfig> layerRegions;
+    // Materials and interactions parsed from .world files (parity with FlatBuffers)
+    struct MaterialConfig {
+        std::string name;
+        float density = 1.0f;
+        float restitution = 0.5f;
+        float friction = 0.5f;
+    };
+
+    struct InteractionConfig {
+        std::string materialA;
+        std::string materialB;
+        float restitution = 0.5f;
+        float dynamicFriction = 0.5f;
+    };
+
+    std::vector<MaterialConfig> materials;
+    std::vector<InteractionConfig> interactions;
     std::unordered_map<std::string, std::string> inputBindings;
 };
 

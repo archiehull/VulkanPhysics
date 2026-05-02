@@ -102,6 +102,9 @@ struct CapsuleSpawnerBuilder;
 struct CuboidSpawner;
 struct CuboidSpawnerBuilder;
 
+struct Light;
+struct LightBuilder;
+
 struct Scene;
 struct SceneBuilder;
 
@@ -621,6 +624,39 @@ template <bool B = false>
 bool VerifySpawnerType(::flatbuffers::VerifierTemplate<B> &verifier, const void *obj, SpawnerType type);
 template <bool B = false>
 bool VerifySpawnerTypeVector(::flatbuffers::VerifierTemplate<B> &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types);
+
+enum LightType : int8_t {
+  LightType_POINT = 0,
+  LightType_DIRECTIONAL = 1,
+  LightType_SPOT = 2,
+  LightType_MIN = LightType_POINT,
+  LightType_MAX = LightType_SPOT
+};
+
+inline const LightType (&EnumValuesLightType())[3] {
+  static const LightType values[] = {
+    LightType_POINT,
+    LightType_DIRECTIONAL,
+    LightType_SPOT
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesLightType() {
+  static const char * const names[4] = {
+    "POINT",
+    "DIRECTIONAL",
+    "SPOT",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameLightType(LightType e) {
+  if (::flatbuffers::IsOutRange(e, LightType_POINT, LightType_SPOT)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesLightType()[index];
+}
 
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) Vec3 FLATBUFFERS_FINAL_CLASS {
  private:
@@ -2506,6 +2542,106 @@ inline ::flatbuffers::Offset<CuboidSpawner> CreateCuboidSpawner(
   return builder_.Finish();
 }
 
+struct Light FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef LightBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_NAME = 4,
+    VT_POSITION = 6,
+    VT_COLOR = 8,
+    VT_INTENSITY = 10,
+    VT_TYPE = 12
+  };
+  const ::flatbuffers::String *name() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_NAME);
+  }
+  const Simulation::Vec3 *position() const {
+    return GetStruct<const Simulation::Vec3 *>(VT_POSITION);
+  }
+  const Simulation::Vec3 *color() const {
+    return GetStruct<const Simulation::Vec3 *>(VT_COLOR);
+  }
+  float intensity() const {
+    return GetField<float>(VT_INTENSITY, 0.0f);
+  }
+  Simulation::LightType type() const {
+    return static_cast<Simulation::LightType>(GetField<int8_t>(VT_TYPE, 0));
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_NAME) &&
+           verifier.VerifyString(name()) &&
+           VerifyField<Simulation::Vec3>(verifier, VT_POSITION, 4) &&
+           VerifyField<Simulation::Vec3>(verifier, VT_COLOR, 4) &&
+           VerifyField<float>(verifier, VT_INTENSITY, 4) &&
+           VerifyField<int8_t>(verifier, VT_TYPE, 1) &&
+           verifier.EndTable();
+  }
+};
+
+struct LightBuilder {
+  typedef Light Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_name(::flatbuffers::Offset<::flatbuffers::String> name) {
+    fbb_.AddOffset(Light::VT_NAME, name);
+  }
+  void add_position(const Simulation::Vec3 *position) {
+    fbb_.AddStruct(Light::VT_POSITION, position);
+  }
+  void add_color(const Simulation::Vec3 *color) {
+    fbb_.AddStruct(Light::VT_COLOR, color);
+  }
+  void add_intensity(float intensity) {
+    fbb_.AddElement<float>(Light::VT_INTENSITY, intensity, 0.0f);
+  }
+  void add_type(Simulation::LightType type) {
+    fbb_.AddElement<int8_t>(Light::VT_TYPE, static_cast<int8_t>(type), 0);
+  }
+  explicit LightBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Light> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Light>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Light> CreateLight(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::String> name = 0,
+    const Simulation::Vec3 *position = nullptr,
+    const Simulation::Vec3 *color = nullptr,
+    float intensity = 0.0f,
+    Simulation::LightType type = Simulation::LightType_POINT) {
+  LightBuilder builder_(_fbb);
+  builder_.add_intensity(intensity);
+  builder_.add_color(color);
+  builder_.add_position(position);
+  builder_.add_name(name);
+  builder_.add_type(type);
+  return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<Light> CreateLightDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *name = nullptr,
+    const Simulation::Vec3 *position = nullptr,
+    const Simulation::Vec3 *color = nullptr,
+    float intensity = 0.0f,
+    Simulation::LightType type = Simulation::LightType_POINT) {
+  auto name__ = name ? _fbb.CreateString(name) : 0;
+  return Simulation::CreateLight(
+      _fbb,
+      name__,
+      position,
+      color,
+      intensity,
+      type);
+}
+
 struct Scene FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef SceneBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
@@ -2517,7 +2653,8 @@ struct Scene FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_SPAWNERS_TYPE = 14,
     VT_SPAWNERS = 16,
     VT_MATERIALS = 18,
-    VT_INTERACTIONS = 20
+    VT_INTERACTIONS = 20,
+    VT_LIGHTS = 22
   };
   const ::flatbuffers::String *name() const {
     return GetPointer<const ::flatbuffers::String *>(VT_NAME);
@@ -2546,6 +2683,9 @@ struct Scene FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const ::flatbuffers::Vector<::flatbuffers::Offset<Simulation::MaterialInteraction>> *interactions() const {
     return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<Simulation::MaterialInteraction>> *>(VT_INTERACTIONS);
   }
+  const ::flatbuffers::Vector<::flatbuffers::Offset<Simulation::Light>> *lights() const {
+    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<Simulation::Light>> *>(VT_LIGHTS);
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -2571,6 +2711,9 @@ struct Scene FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyOffset(verifier, VT_INTERACTIONS) &&
            verifier.VerifyVector(interactions()) &&
            verifier.VerifyVectorOfTables(interactions()) &&
+           VerifyOffset(verifier, VT_LIGHTS) &&
+           verifier.VerifyVector(lights()) &&
+           verifier.VerifyVectorOfTables(lights()) &&
            verifier.EndTable();
   }
 };
@@ -2606,6 +2749,9 @@ struct SceneBuilder {
   void add_interactions(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<Simulation::MaterialInteraction>>> interactions) {
     fbb_.AddOffset(Scene::VT_INTERACTIONS, interactions);
   }
+  void add_lights(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<Simulation::Light>>> lights) {
+    fbb_.AddOffset(Scene::VT_LIGHTS, lights);
+  }
   explicit SceneBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -2627,8 +2773,10 @@ inline ::flatbuffers::Offset<Scene> CreateScene(
     ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> spawners_type = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<void>>> spawners = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<Simulation::Material>>> materials = 0,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<Simulation::MaterialInteraction>>> interactions = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<Simulation::MaterialInteraction>>> interactions = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<Simulation::Light>>> lights = 0) {
   SceneBuilder builder_(_fbb);
+  builder_.add_lights(lights);
   builder_.add_interactions(interactions);
   builder_.add_materials(materials);
   builder_.add_spawners(spawners);
@@ -2651,7 +2799,8 @@ inline ::flatbuffers::Offset<Scene> CreateSceneDirect(
     const std::vector<uint8_t> *spawners_type = nullptr,
     const std::vector<::flatbuffers::Offset<void>> *spawners = nullptr,
     const std::vector<::flatbuffers::Offset<Simulation::Material>> *materials = nullptr,
-    const std::vector<::flatbuffers::Offset<Simulation::MaterialInteraction>> *interactions = nullptr) {
+    const std::vector<::flatbuffers::Offset<Simulation::MaterialInteraction>> *interactions = nullptr,
+    const std::vector<::flatbuffers::Offset<Simulation::Light>> *lights = nullptr) {
   auto name__ = name ? _fbb.CreateString(name) : 0;
   auto description__ = description ? _fbb.CreateString(description) : 0;
   auto cameras__ = cameras ? _fbb.CreateVector<::flatbuffers::Offset<Simulation::Camera>>(*cameras) : 0;
@@ -2660,6 +2809,7 @@ inline ::flatbuffers::Offset<Scene> CreateSceneDirect(
   auto spawners__ = spawners ? _fbb.CreateVector<::flatbuffers::Offset<void>>(*spawners) : 0;
   auto materials__ = materials ? _fbb.CreateVector<::flatbuffers::Offset<Simulation::Material>>(*materials) : 0;
   auto interactions__ = interactions ? _fbb.CreateVector<::flatbuffers::Offset<Simulation::MaterialInteraction>>(*interactions) : 0;
+  auto lights__ = lights ? _fbb.CreateVector<::flatbuffers::Offset<Simulation::Light>>(*lights) : 0;
   return Simulation::CreateScene(
       _fbb,
       name__,
@@ -2670,7 +2820,8 @@ inline ::flatbuffers::Offset<Scene> CreateSceneDirect(
       spawners_type__,
       spawners__,
       materials__,
-      interactions__);
+      interactions__,
+      lights__);
 }
 
 template <bool B>

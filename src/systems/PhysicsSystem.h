@@ -27,6 +27,8 @@ public:
     static float contactFrictionScale;     // Multiplies per-object friction
     static float sleepNormalThreshold;     // m/s along contact normal
     static float sleepTangentialThreshold; // m/s tangent to contact plane
+    static bool applySleepNormalThreshold;
+    static bool applySleepTangentialThreshold;
 
     // Drag / damping controls (opt-in)
     static bool applyLinearDamping;
@@ -39,6 +41,7 @@ public:
     // Setters for runtime adjustment
     static void SetLinearDamping(bool enabled, float factor);
     static void SetQuadraticDrag(bool enabled, float coefficient);
+    static void SetSleepThresholds(bool normalEnabled, float normalThreshold, bool tangentialEnabled, float tangentialThreshold);
 
     void Update(Scene& scene, float deltaTime) override;
 

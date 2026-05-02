@@ -1,0 +1,146 @@
+[Settings]
+WindowSize 800 600
+TimeParams 60.0 3
+SeasonTemps 20.0 5.0 10.0
+
+[Scene]
+# --- PROCEDURAL TEXTURES ---
+ProceduralTexture tex_grey_gradient
+    Type Gradient
+    Color1 0.8 0.8 0.8 1.0
+    Color2 0.2 0.2 0.2 1.0
+    Size 512
+    Vertical true
+EndTexture
+
+# --- CAMERAS ---
+# Format: Camera <Name> <Type> <Bind> <X> <Y> <Z> <Pitch> <Yaw>
+Camera MainCamera FreeRoam Camera1 0.0 8.0 28.0 0.0 0.0
+Camera TopView FreeRoam Camera2 0.0 30.0 0.0 -90.0 0.0
+Camera FrontView FreeRoam Camera3 0.0 4.0 35.0 0.0 0.0
+Camera SideView FreeRoam Camera4 30.0 4.0 0.0 0.0 -90.0
+
+# --- LIGHTING ---
+Object MainSun
+    Type Sphere
+    Params 0.5
+    Position 0.0 50.0 40.0
+    Light true 1.0 0.98 0.95 1.4 0
+    RenderProps 1 false false false 3
+    PhysicsProps false false true
+EndObject
+
+# --- STATIC ENVIRONMENT ---
+Object GroundPlane
+    Type Grid
+    Params 10 10 1.0
+    Texture tex_grey_gradient
+    Position 0.0 0.0 0.0
+    Rotation 0.0 0.0 0.0 
+    Scale 5.0 5.0 5.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true true
+    ColliderProps 1 0.0 1.0 0.0 50.0 50.0
+EndObject
+
+# --- DYNAMIC BALLS ---
+# PhysicsProps format inferred: <isKinematic> <hasCollision> <isStatic> <Mass> <Restitution> <Friction>
+Object Ball_0
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position -9.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 1.0 0.05
+    ColliderProps 0 0.4
+EndObject
+
+Object Ball_1
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position -7.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 0.888889 0.05
+    ColliderProps 0 0.4
+EndObject
+
+Object Ball_2
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position -5.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 0.777778 0.05
+    ColliderProps 0 0.4
+EndObject
+
+Object Ball_3
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position -3.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 0.666667 0.05
+    ColliderProps 0 0.4
+EndObject
+
+Object Ball_4
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position -1.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 0.555556 0.05
+    ColliderProps 0 0.4
+EndObject
+
+Object Ball_5
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position 1.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 0.444444 0.05
+    ColliderProps 0 0.4
+EndObject
+
+Object Ball_6
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position 3.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 0.333333 0.05
+    ColliderProps 0 0.4
+EndObject
+
+Object Ball_7
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position 5.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 0.222222 0.05
+    ColliderProps 0 0.4
+EndObject
+
+Object Ball_8
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position 7.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 0.111111 0.05
+    ColliderProps 0 0.4
+EndObject
+
+Object Ball_9
+    Type Sphere
+    Params 0.4
+    Texture tex_grey_gradient
+    Position 9.0 5.0 0.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 0.256 0.0 0.05
+    ColliderProps 0 0.4
+EndObject

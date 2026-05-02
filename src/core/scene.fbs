@@ -236,6 +236,20 @@ union SpawnerType {
 }
 
 // =======================
+// Lights
+// =======================
+
+enum LightType : byte { POINT, DIRECTIONAL, SPOT }
+
+table Light {
+  name: string;
+  position: Vec3;
+  color: Vec3;
+  intensity: float;
+  type: LightType = POINT;
+}
+
+// =======================
 // Scene
 // =======================
 
@@ -248,6 +262,7 @@ table Scene {
   spawners: [SpawnerType];
   materials: [Material];
   interactions: [MaterialInteraction];
+  lights: [Light];
 }
 
 root_type Scene;

@@ -3,22 +3,34 @@
 #include "Components.h"
 #include "../systems/PhysicsSystem.h"
 #include "../core/scene_generated.h"
+#include "Config.h"
 #include <fstream>
 #include <iostream>
 #include <vector>
 #include <glm/glm.hpp>
 #include <algorithm>
+#include <cmath>
+#include <unordered_map>
 #include <exception>
 
-static bool s_verbose_fb_loader = true;
-static bool s_debug_fb_loader = true;
+static bool s_verbose_fb_loader = false;
+static bool s_debug_fb_loader = false;
 
 void FlatBufferSceneLoader::SetVerbose(bool v) {
     s_verbose_fb_loader = v;
 }
 
 struct MaterialData {
-    float density;
+    float density = 1.0f;
+    float restitution = 1.0f;
+float friction = 0.05f; 
+};
+
+struct MaterialInteractionData {
+    std::string materialA;
+    std::string materialB;
+    float restitution = 0.0f;
+    float dynamicFriction = 0.0f;
 };
 
 // Helper to safely extract Vec3 with a default fallback
@@ -106,6 +118,36 @@ static float CalculateVolume(const Simulation::Object* fbObj, const glm::vec3& s
             break;
     }
     return volume;
+}
+
+static MaterialData ResolveMaterialData(
+    const std::string& materialName,
+    const std::unordered_map<std::string, MaterialData>& materials)
+{
+    auto it = materials.find(materialName);
+    if (it != materials.end()) {
+        return it->second;
+    }
+    return MaterialData{};
+}
+
+static void ApplyMaterialToPhysicsComponent(
+    PhysicsComponent& physComp,
+    const Simulation::Object* fbObj,
+    const std::unordered_map<std::string, MaterialData>& materials)
+{
+    physComp.restitution = 1.0f;
+    physComp.friction = 0.05f;
+
+    if (!fbObj || !fbObj->material()) {
+        return;
+    }
+
+    const std::string materialName = fbObj->material()->str();
+    const MaterialData material = ResolveMaterialData(materialName, materials);
+
+    physComp.restitution = material.restitution;
+    physComp.friction = material.friction;
 }
 
 static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std::unordered_map<std::string, MaterialData>& materials) {
@@ -206,6 +248,8 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
             auto& col = scene.GetRegistry().GetComponent<ColliderComponent>(entity);
             col.type = 1; // Plane
             col.normal = glm::normalize(normal);
+            col.radius = 0.0f; // 0.0f flags it as infinite for the physics engine
+            col.height = 0.0f;
             break;
         }
         default:
@@ -245,11 +289,17 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
     }
     auto& physComp = scene.GetRegistry().GetComponent<PhysicsComponent>(entity);
     
-    // Default physics properties if material interactions are missing
-    physComp.restitution = 0.5f; 
-    physComp.friction = 0.5f;
+    float density = 1.0f;
+    if (fbObj->material()) {
+        const auto materialIt = materials.find(fbObj->material()->str());
+        if (materialIt != materials.end()) {
+            density = materialIt->second.density;
+        }
+    }
 
-    if (fbObj->behaviour_type() == Simulation::Behaviour_StaticObject) {
+    ApplyMaterialToPhysicsComponent(physComp, fbObj, materials);
+
+    if (fbObj->behaviour_type() == Simulation::Behaviour_StaticObject || fbObj->shape_type() == Simulation::Shape_Plane) {
         physComp.isStatic = true;
         physComp.SetMass(0.0f);
         physComp.velocity = glm::vec3(0.0f);
@@ -270,17 +320,12 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
         }
 
         // Calculate Mass = Density * Volume
-        float density = 1.0f; // Default density for water/generic matter
-        if (fbObj->material() && materials.count(fbObj->material()->str())) {
-            density = materials.at(fbObj->material()->str()).density;
-        }
-        
         float volume = CalculateVolume(fbObj, scale);
         physComp.SetMass(density * volume);
     }
 }
 
-bool FlatBufferSceneLoader::LoadScene(Scene& scene, const std::string& filepath) {
+bool FlatBufferSceneLoader::LoadScene(Scene& scene, AppConfig& config, const std::string& filepath) {
     try {
         if (s_debug_fb_loader) {
             std::cout << "[FlatBufferSceneLoader] Begin loading: " << filepath << std::endl;
@@ -348,11 +393,35 @@ bool FlatBufferSceneLoader::LoadScene(Scene& scene, const std::string& filepath)
         if (fbScene->materials()) {
             for (const auto* mat : *fbScene->materials()) {
                 if (mat && mat->name()) {
-                    materials[mat->name()->str()] = MaterialData{ mat->density() };
+                    // Default density to 1.0f if not specified or zero
+                    float density = mat->density() != 0.0f ? mat->density() : 1.0f;
+                    materials[mat->name()->str()] = MaterialData{ density, 1.0f, 0.05f };
                     materialCount++;
                 }
             }
         }
+        
+        // 4b. Parse Interactions to "bake" restitution and friction into materials
+        // We focus on interactions with "PlaneMat" as the baseline for objects
+        if (fbScene->interactions()) {
+            for (const auto* inter : *fbScene->interactions()) {
+                if (!inter) continue;
+                std::string matA = inter->material_a() ? inter->material_a()->str() : "";
+                std::string matB = inter->material_b() ? inter->material_b()->str() : "";
+                
+                float res = inter->restitution();
+                float fric = inter->dynamic_friction();
+
+                if (matB == "PlaneMat" && materials.count(matA)) {
+                    materials[matA].restitution = res;
+                    materials[matA].friction = fric;
+                } else if (matA == "PlaneMat" && materials.count(matB)) {
+                    materials[matB].restitution = res;
+                    materials[matB].friction = fric;
+                }
+            }
+        }
+
         if (s_verbose_fb_loader) {
             std::cout << "[FlatBufferSceneLoader] Materials: " << materialCount << std::endl;
         }
@@ -384,13 +453,39 @@ bool FlatBufferSceneLoader::LoadScene(Scene& scene, const std::string& filepath)
             }
         }
 
-        // 6. Cameras could be processed here
+        // 6. Cameras
         if (s_debug_fb_loader) {
             std::cout << "[FlatBufferSceneLoader] Parsing cameras..." << std::endl;
         }
         if (fbScene->cameras()) {
             for (const auto* fbCam : *fbScene->cameras()) {
-                // Can be mapped to scene.AddCamera or similar later
+                if (!fbCam) continue;
+                CustomCameraConfig camCfg;
+                camCfg.name = fbCam->name() ? fbCam->name()->str() : "UnnamedCamera";
+                if (fbCam->transform()) {
+                    camCfg.position = SafeGetVec3(fbCam->transform()->position());
+                    glm::vec3 rot = SafeGetEuler(fbCam->transform()->orientation());
+                    camCfg.pitch = rot.x;
+                    camCfg.yaw = rot.y;
+                }
+                camCfg.type = "FreeRoam"; // Default fallback
+                config.customCameras.push_back(camCfg);
+            }
+        }
+
+        // 7. Lights
+        if (s_debug_fb_loader) {
+            std::cout << "[FlatBufferSceneLoader] Parsing lights..." << std::endl;
+        }
+        if (fbScene->lights()) {
+            for (const auto* fbLight : *fbScene->lights()) {
+                if (!fbLight) continue;
+                std::string lName = fbLight->name() ? fbLight->name()->str() : "UnnamedLight";
+                glm::vec3 lPos = SafeGetVec3(fbLight->position());
+                glm::vec3 lColor = SafeGetVec3(fbLight->color(), glm::vec3(1.0f));
+                float lIntensity = fbLight->intensity();
+                int lType = static_cast<int>(fbLight->type());
+                scene.AddLight(lName, lPos, lColor, lIntensity, lType);
             }
         }
 

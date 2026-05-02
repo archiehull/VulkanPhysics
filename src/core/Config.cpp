@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <cctype>
 
@@ -66,6 +67,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
     ProceduralTextureConfig* currentTexture = nullptr;
     CustomParticleConfig* currentParticle = nullptr;
     LayerRegionConfig* currentLayerRegion = nullptr;
+    AppConfig::MaterialConfig* currentMaterial = nullptr;
     ConfigSection currentSection = ConfigSection::None;
 
     while (std::getline(file, line)) {
@@ -146,6 +148,26 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             currentTexture = nullptr;
             currentParticle = nullptr;
         }
+        else if (key == "Material") {
+            AppConfig::MaterialConfig newMat;
+            ss >> newMat.name;
+            config.materials.push_back(newMat);
+            currentMaterial = &config.materials.back();
+            currentObject = nullptr;
+            currentTexture = nullptr;
+            currentParticle = nullptr;
+            currentLayerRegion = nullptr;
+        }
+        else if (key == "EndMaterial") {
+            currentMaterial = nullptr;
+        }
+        else if (key == "Interaction") {
+            AppConfig::InteractionConfig ic;
+            ss >> ic.materialA >> ic.materialB >> ic.restitution >> ic.dynamicFriction;
+            if (!ic.materialA.empty() && !ic.materialB.empty()) {
+                config.interactions.push_back(ic);
+            }
+        }
         else if (key == "EndLayerRegion") {
             currentLayerRegion = nullptr;
         }
@@ -178,6 +200,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
         }
         // --- Object Fields ---
         else if (currentObject) {
+            if (key == "Material") ss >> currentObject->materialName;
             if (key == "Type") ss >> currentObject->type;
             else if (key == "Model") ss >> currentObject->modelPath;
             else if (key == "Texture") ss >> currentObject->texturePath;
@@ -554,6 +577,11 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 currentObject->legacyPathSegments.push_back(seg);
             }
         }
+        else if (currentMaterial) {
+            if (key == "Density") ss >> currentMaterial->density;
+            else if (key == "Restitution") ss >> currentMaterial->restitution;
+            else if (key == "Friction") ss >> currentMaterial->friction;
+        }
         // --- Global Settings ---
         else if (key == "WindowSize") ss >> config.windowWidth >> config.windowHeight;
         else if (key == "VSync") {
@@ -610,5 +638,47 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             else if (key == "HalfExtents") ss >> currentLayerRegion->halfExtents.x >> currentLayerRegion->halfExtents.y >> currentLayerRegion->halfExtents.z;
             else if (key == "Position") ss >> currentLayerRegion->position.x >> currentLayerRegion->position.y >> currentLayerRegion->position.z;
         }
+    }
+
+    // Post-process: compute effective material restitution/friction from interactions
+    try {
+        struct MatData { float density = 1.0f; float restitution = 0.5f; float friction = 0.5f; };
+        std::unordered_map<std::string, MatData> matMap;
+
+        for (const auto& m : config.materials) {
+            if (!m.name.empty()) matMap[m.name] = MatData{ m.density, m.restitution, m.friction };
+        }
+
+        for (const auto& ic : config.interactions) {
+            const std::string& a = ic.materialA;
+            const std::string& b = ic.materialB;
+            if (b == "PlaneMat" && matMap.count(a)) {
+                matMap[a].restitution = ic.restitution;
+                matMap[a].friction = ic.dynamicFriction;
+            } else if (a == "PlaneMat" && matMap.count(b)) {
+                matMap[b].restitution = ic.restitution;
+                matMap[b].friction = ic.dynamicFriction;
+            } else {
+                if (matMap.count(a)) {
+                    matMap[a].restitution = std::sqrt(std::max(0.0f, ic.restitution));
+                    matMap[a].friction = std::sqrt(std::max(0.0f, ic.dynamicFriction));
+                }
+                if (matMap.count(b)) {
+                    matMap[b].restitution = std::sqrt(std::max(0.0f, ic.restitution));
+                    matMap[b].friction = std::sqrt(std::max(0.0f, ic.dynamicFriction));
+                }
+            }
+        }
+
+        // Apply computed material properties to scene objects that reference materials
+        for (auto& obj : config.sceneObjects) {
+            if (!obj.materialName.empty() && matMap.count(obj.materialName)) {
+                obj.restitution = matMap[obj.materialName].restitution;
+                obj.friction = matMap[obj.materialName].friction;
+                // Leave mass as-is; mass calculation (density * volume) happens in FlatBuffer loader
+            }
+        }
+    } catch (...) {
+        std::cerr << "ConfigLoader: Error post-processing materials/interactions" << std::endl;
     }
 }
