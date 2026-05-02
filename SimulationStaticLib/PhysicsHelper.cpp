@@ -465,3 +465,52 @@ void IntegrateAngularVelocity(MovingCapsule& body, float dt)
 
 	body.torqueAccumulator = glm::vec3(0.0f);
 }
+
+void ResolveSphereInsideCylinder(MovingSphere& sphere, const glm::vec3& cylCenter, float cylRadius, float cylHeight, float restitution, float friction, const glm::vec3& cylAngularVelocity)
+{
+    glm::vec3 pos = sphere.sphere.Position();
+    float r = sphere.sphere.m_radius;
+    float halfHeight = cylHeight * 0.5f;
+
+    // 1. Resolve Floor and Ceiling (Y-axis)
+    if (pos.y - r < cylCenter.y - halfHeight) {
+        // Use contact X,Z from sphere to compute proper contact point for wall velocity
+        glm::vec3 contactPoint = glm::vec3(pos.x, cylCenter.y - halfHeight, pos.z);
+        Plane floor(contactPoint, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::vec3 planePointVelocity = glm::cross(cylAngularVelocity, contactPoint - cylCenter);
+        ResolveSpherePlaneCollision(sphere, floor, restitution, friction, planePointVelocity);
+        pos = sphere.sphere.Position(); // Update pos after correction
+    }
+    else if (pos.y + r > cylCenter.y + halfHeight) {
+        glm::vec3 contactPoint = glm::vec3(pos.x, cylCenter.y + halfHeight, pos.z);
+        Plane ceiling(contactPoint, glm::vec3(0.0f, -1.0f, 0.0f));
+        glm::vec3 planePointVelocity = glm::cross(cylAngularVelocity, contactPoint - cylCenter);
+        ResolveSpherePlaneCollision(sphere, ceiling, restitution, friction, planePointVelocity);
+        pos = sphere.sphere.Position();
+    }
+
+    // 2. Resolve the curved walls (XZ plane)
+    glm::vec2 flatPos = glm::vec2(pos.x - cylCenter.x, pos.z - cylCenter.z);
+    float dist = glm::length(flatPos);
+    float maxAllowedDist = cylRadius - r;
+
+    if (dist > maxAllowedDist && dist > 0.0001f) {
+        glm::vec3 normal = glm::vec3(-flatPos.x / dist, 0.0f, -flatPos.y / dist); // Pointing inward
+        glm::vec3 contactPoint = glm::vec3(cylCenter.x + (flatPos.x / dist) * cylRadius, pos.y, cylCenter.z + (flatPos.y / dist) * cylRadius);
+        Plane wallPlane(contactPoint, normal);
+
+        // include cylinder's angular surface velocity at contact:
+        glm::vec3 planePointOffset = contactPoint - cylCenter;
+        glm::vec3 planePointVelocity = glm::cross(cylAngularVelocity, planePointOffset);
+
+        ResolveSpherePlaneCollision(sphere, wallPlane, restitution, friction, planePointVelocity);
+
+        // Correct position
+        glm::vec3 correctedPos = sphere.sphere.Position();
+        glm::vec2 correctedFlat = glm::vec2(correctedPos.x - cylCenter.x, correctedPos.z - cylCenter.z);
+        if (glm::length(correctedFlat) > maxAllowedDist) {
+            glm::vec2 clampedFlat = glm::normalize(correctedFlat) * maxAllowedDist;
+            sphere.sphere.SetPosition(glm::vec3(cylCenter.x + clampedFlat.x, correctedPos.y, cylCenter.z + clampedFlat.y));
+        }
+    }
+}

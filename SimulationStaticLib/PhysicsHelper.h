@@ -94,3 +94,13 @@ void ApplyAngularDisplacement(MovingCapsule& body, const glm::vec3& axis, float 
 
 void IntegrateAngularVelocity(MovingSphere& body, float dt);
 void IntegrateAngularVelocity(MovingCapsule& body, float dt);
+
+// ResolveSphereInsideCylinder now accepts the cylinder angular velocity (default zero)
+void ResolveSphereInsideCylinder(
+    MovingSphere& sphere,
+    const glm::vec3& cylCenter,
+    float cylRadius,
+    float cylHeight,
+    float restitution,
+    float friction,
+    const glm::vec3& cylAngularVelocity = glm::vec3(0.0f));

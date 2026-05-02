@@ -217,6 +217,7 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
             col.radius = std::max(scale.x, scale.z) * 0.5f;
             col.height = scale.y;
             col.hasCollision = true;
+            col.autoScale = false;
             break;
         }
         case Simulation::Shape_Capsule: {
@@ -238,6 +239,7 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
             col.radius = r * std::max(scale.x, scale.z);
             col.height = totalHeight * scale.y;
             col.hasCollision = true;
+            col.autoScale = false;
             break;
         }
         case Simulation::Shape_Plane: {

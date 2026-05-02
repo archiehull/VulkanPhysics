@@ -1,129 +1,600 @@
 {
-  "name": "Tumbler",
-  "description": "A rotating hollow container with balls tumbling inside, demonstrating CONTAINER collision type.",
-  "gravity_on": true,
+  "name": "Tumbling Capsule",
   "cameras": [
     {
       "name": "MainCamera",
       "transform": {
-        "position": { "x": 0.0, "y": 0.0, "z": 25.0 },
-        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
-        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+        "position": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 12.0
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
       },
       "camera_type_type": "PerspectiveCamera",
-      "camera_type": { "fov": 60.0, "near": 0.1, "far": 200.0 }
+      "camera_type": {
+        "fov": 60.0,
+        "near": 0.1,
+        "far": 100.0
+      }
+    },
+    {
+      "name": "TopView",
+      "transform": {
+        "position": {
+          "x": 0.0,
+          "y": 20.0,
+          "z": 0.0
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": -90.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "camera_type_type": "OrthographicCamera",
+      "camera_type": {
+        "size": 7.0,
+        "near": 0.1,
+        "far": 30.0
+      }
+    },
+    {
+      "name": "FrontView",
+      "transform": {
+        "position": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 20.0
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "camera_type_type": "OrthographicCamera",
+      "camera_type": {
+        "size": 7.0,
+        "near": 0.1,
+        "far": 30.0
+      }
+    },
+    {
+      "name": "SideView",
+      "transform": {
+        "position": {
+          "x": 20.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "orientation": {
+          "yaw": -90.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "camera_type_type": "OrthographicCamera",
+      "camera_type": {
+        "size": 7.0,
+        "near": 0.1,
+        "far": 30.0
+      }
     }
   ],
   "objects": [
     {
-      "name": "TumblerContainer",
+      "name": "TumblingCapsule",
       "transform": {
-        "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
-        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
-        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+        "position": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
       },
-      "material": "ContainerMat",
-      "shape_type": "Cuboid",
+      "material": "CapsuleMat",
+      "shape_type": "Capsule",
       "shape": {
-        "size": { "x": 12.0, "y": 12.0, "z": 12.0 }
+        "radius": 2.0,
+        "height": 5.0
       },
       "behaviour_type": "AnimatedObject",
       "behaviour": {
         "waypoints": [
           {
-            "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
-            "rotation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
-            "time": 0.0
+            "position": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "yaw": 0.0,
+              "pitch": 0.0,
+              "roll": 0.0
+            }
           },
           {
-            "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
-            "rotation": { "yaw": 180.0, "pitch": 0.0, "roll": 0.0 },
-            "time": 5.0
-          },
-          {
-            "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
-            "rotation": { "yaw": 360.0, "pitch": 0.0, "roll": 0.0 },
-            "time": 10.0
+            "position": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "yaw": 0.0,
+              "pitch": 0.0,
+              "roll": 180.0
+            },
+            "time": 4.0
           }
         ],
-        "total_duration": 10.0,
-        "easing": "LINEAR",
+        "total_duration": 4.0,
         "path_mode": "LOOP"
       },
       "collision_type": "CONTAINER"
     },
     {
-      "name": "Ball_1",
+      "name": "Ball_0",
       "transform": {
-        "position": { "x": -2.0, "y": 0.0, "z": 0.0 },
-        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
-        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+        "position": {
+          "x": 0.0,
+          "y": -2.0,
+          "z": 0.0
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
       },
       "material": "BallMat",
       "shape_type": "Sphere",
-      "shape": { "radius": 1.0 },
+      "shape": {
+        "radius": 0.15
+      },
       "behaviour_type": "SimulatedObject",
       "behaviour": {
         "initial_state": {
-          "linear_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
-          "angular_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 }
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "name": "Ball_1",
+      "transform": {
+        "position": {
+          "x": 0.6,
+          "y": -1.2,
+          "z": 0.0
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": {
+        "radius": 0.2
+      },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
         }
       }
     },
     {
       "name": "Ball_2",
       "transform": {
-        "position": { "x": 2.0, "y": 1.0, "z": 0.0 },
-        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
-        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+        "position": {
+          "x": -0.6,
+          "y": -0.4,
+          "z": 0.3
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
       },
       "material": "BallMat",
       "shape_type": "Sphere",
-      "shape": { "radius": 1.0 },
+      "shape": {
+        "radius": 0.25
+      },
       "behaviour_type": "SimulatedObject",
       "behaviour": {
         "initial_state": {
-          "linear_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
-          "angular_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 }
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
         }
       }
     },
     {
       "name": "Ball_3",
       "transform": {
-        "position": { "x": 0.0, "y": -2.0, "z": 1.0 },
-        "orientation": { "yaw": 0.0, "pitch": 0.0, "roll": 0.0 },
-        "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+        "position": {
+          "x": 0.0,
+          "y": 0.4,
+          "z": -0.4
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
       },
       "material": "BallMat",
       "shape_type": "Sphere",
-      "shape": { "radius": 1.0 },
+      "shape": {
+        "radius": 0.3
+      },
       "behaviour_type": "SimulatedObject",
       "behaviour": {
         "initial_state": {
-          "linear_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 },
-          "angular_velocity": { "x": 0.0, "y": 0.0, "z": 0.0 }
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "name": "Ball_4",
+      "transform": {
+        "position": {
+          "x": 0.8,
+          "y": 1.2,
+          "z": 0.0
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": {
+        "radius": 0.35
+      },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "name": "Ball_5",
+      "transform": {
+        "position": {
+          "x": -0.8,
+          "y": 2.0,
+          "z": 0.0
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": {
+        "radius": 0.4
+      },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "name": "Ball_6",
+      "transform": {
+        "position": {
+          "x": 0.3,
+          "y": -1.8,
+          "z": -0.3
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": {
+        "radius": 0.45
+      },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "name": "Ball_7",
+      "transform": {
+        "position": {
+          "x": -0.3,
+          "y": 0.8,
+          "z": 0.5
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": {
+        "radius": 0.5
+      },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "name": "Ball_8",
+      "transform": {
+        "position": {
+          "x": 0.7,
+          "y": 0.0,
+          "z": -0.5
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": {
+        "radius": 0.55
+      },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        }
+      }
+    },
+    {
+      "name": "Ball_9",
+      "transform": {
+        "position": {
+          "x": -0.7,
+          "y": -0.6,
+          "z": 0.3
+        },
+        "orientation": {
+          "yaw": 0.0,
+          "pitch": 0.0,
+          "roll": 0.0
+        },
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "material": "BallMat",
+      "shape_type": "Sphere",
+      "shape": {
+        "radius": 0.6
+      },
+      "behaviour_type": "SimulatedObject",
+      "behaviour": {
+        "initial_state": {
+          "linear_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "angular_velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
         }
       }
     }
   ],
+  "spawners_type": [
+
+  ],
+  "spawners": [
+
+  ],
   "materials": [
-    { "name": "BallMat", "density": 1.0 },
-    { "name": "ContainerMat", "density": 2.0 }
+    {
+      "name": "CapsuleMat"
+    },
+    {
+      "name": "BallMat",
+      "density": 1.0
+    }
   ],
   "interactions": [
     {
       "material_a": "BallMat",
-      "material_b": "ContainerMat",
+      "material_b": "CapsuleMat",
       "restitution": 0.6,
-      "static_friction": 0.3,
+      "static_friction": 0.2,
       "dynamic_friction": 0.2
     },
     {
       "material_a": "BallMat",
       "material_b": "BallMat",
-      "restitution": 0.8,
-      "static_friction": 0.1,
+      "restitution": 0.5,
+      "static_friction": 0.2,
       "dynamic_friction": 0.05
     }
   ]

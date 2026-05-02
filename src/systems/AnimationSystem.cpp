@@ -106,8 +106,10 @@ void AnimationSystem::Update(Scene& scene, float deltaTime) {
         }
 
         glm::vec3 velocity = glm::vec3(0.0f);
+        glm::vec3 deltaRotation = glm::vec3(0.0f);
         if (deltaTime > 0.0f) {
             velocity = (worldPosition - transform.position) / deltaTime;
+            deltaRotation = (worldRotation - transform.rotation) / deltaTime;
         }
 
         transform.position = worldPosition;
@@ -128,14 +130,7 @@ void AnimationSystem::Update(Scene& scene, float deltaTime) {
             // geometry uses the rotated capsule/cylinder.
             physics.orientation = glm::mat3_cast(glm::quat(glm::radians(transform.rotation)));
 
-            // If this path applies a constant rotation, expose the angular velocity
-            // to the physics solver (convert degrees/sec to radians/sec).
-            if (path.applyConstantRotation) {
-                physics.angularVelocity = glm::radians(path.rotationSpinRate);
-            }
-            else {
-                physics.angularVelocity = glm::vec3(0.0f);
-            }
+            physics.angularVelocity = glm::radians(deltaRotation);
 
             // Keep animated objects static in terms of linear integration
             // so they follow the authored path, but their rotational state

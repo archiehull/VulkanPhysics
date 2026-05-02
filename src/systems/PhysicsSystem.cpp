@@ -283,58 +283,81 @@ namespace {
         }
     }
 
-    void ResolveSphereInsideCylinder(MovingSphere& sphere, const glm::vec3& cylCenter, float cylRadius, float cylHeight, float restitution, float friction) {
+    void ResolveSphereInsideCapsule(MovingSphere& sphere, 
+        const glm::vec3& capCenter, 
+        float capRadius, 
+        float capHeight, 
+        const glm::mat3& capOrientation,
+        const glm::vec3& capLinearVel,
+        const glm::vec3& capAngularVel,
+        float restitution, 
+        float friction) {
+        
         glm::vec3 pos = sphere.sphere.Position();
         float r = sphere.sphere.m_radius;
-        float halfHeight = cylHeight * 0.5f;
 
-        // 1. Resolve Floor and Ceiling (Y-axis)
-        if (pos.y - r < cylCenter.y - halfHeight) {
-            Plane floor(glm::vec3(0.0f, cylCenter.y - halfHeight, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            ResolveSpherePlaneCollision(sphere, floor, restitution, friction);
-            pos = sphere.sphere.Position(); // Update pos after correction
-        }
-        else if (pos.y + r > cylCenter.y + halfHeight) {
-            Plane ceiling(glm::vec3(0.0f, cylCenter.y + halfHeight, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f));
-            ResolveSpherePlaneCollision(sphere, ceiling, restitution, friction);
-            pos = sphere.sphere.Position();
+        // Calculate capsule segment in world space
+        glm::vec3 up = capOrientation * glm::vec3(0, 1, 0);
+        float halfSegmentLen = std::max(0.0f, (capHeight - 2.0f * capRadius) * 0.5f);
+        glm::vec3 p1 = capCenter - up * halfSegmentLen;
+        glm::vec3 p2 = capCenter + up * halfSegmentLen;
+
+        // Closest point on segment p1p2 to pos
+        glm::vec3 v = p2 - p1;
+        float vLenSq = glm::dot(v, v);
+        glm::vec3 closestPointOnSegment;
+        if (vLenSq < 1e-8f) {
+            closestPointOnSegment = p1;
+        } else {
+            glm::vec3 w = pos - p1;
+            float t = glm::dot(w, v) / vLenSq;
+            t = glm::clamp(t, 0.0f, 1.0f);
+            closestPointOnSegment = p1 + t * v;
         }
 
-        // 2. Resolve the curved walls (XZ plane)
-        glm::vec2 flatPos = glm::vec2(pos.x - cylCenter.x, pos.z - cylCenter.z);
-        float dist = glm::length(flatPos);
-        float maxAllowedDist = cylRadius - r;
+        glm::vec3 delta = pos - closestPointOnSegment;
+        float dist = glm::length(delta);
+        float maxAllowedDist = capRadius - r;
 
         if (dist > maxAllowedDist && dist > 0.0001f) {
-            glm::vec3 normal = glm::vec3(-flatPos.x / dist, 0.0f, -flatPos.y / dist); // Pointing inward
-            glm::vec3 contactPoint = glm::vec3(cylCenter.x + (flatPos.x / dist) * cylRadius, pos.y, cylCenter.z + (flatPos.y / dist) * cylRadius);
-            Plane wallPlane(contactPoint, normal);
+            glm::vec3 normal = -delta / dist; // Points towards segment
 
-            ResolveSpherePlaneCollision(sphere, wallPlane, restitution, friction);
+            glm::vec3 contactPoint = closestPointOnSegment + (delta / dist) * capRadius;
+            
+            // Calculate wall velocity at contact point
+            glm::vec3 pointOffset = contactPoint - capCenter;
+            glm::vec3 wallVel = capLinearVel + glm::cross(capAngularVel, pointOffset);
+
+            Plane wallPlane(contactPoint, normal);
+            ResolveSpherePlaneCollision(sphere, wallPlane, restitution, friction, wallVel);
 
             // Correct position
-            glm::vec3 correctedPos = sphere.sphere.Position();
-            glm::vec2 correctedFlat = glm::vec2(correctedPos.x - cylCenter.x, correctedPos.z - cylCenter.z);
-            if (glm::length(correctedFlat) > maxAllowedDist) {
-                glm::vec2 clampedFlat = glm::normalize(correctedFlat) * maxAllowedDist;
-                sphere.sphere.SetPosition(glm::vec3(cylCenter.x + clampedFlat.x, correctedPos.y, cylCenter.z + clampedFlat.y));
-            }
+            sphere.sphere.SetPosition(closestPointOnSegment + (delta / dist) * maxAllowedDist);
         }
     }
 
-    void ResolveSphereInsideSphere(MovingSphere& smallSphere, const glm::vec3& hollowCenter, float hollowRadius, float restitution, float friction) {
+    void ResolveSphereInsideSphere(MovingSphere& smallSphere, 
+        const glm::vec3& hollowCenter, 
+        float hollowRadius, 
+        const glm::vec3& hollowLinearVel,
+        const glm::vec3& hollowAngularVel,
+        float restitution, 
+        float friction) {
         glm::vec3 delta = smallSphere.sphere.Position() - hollowCenter;
         float dist = glm::length(delta);
         float maxAllowedDist = hollowRadius - smallSphere.sphere.m_radius;
 
         if (dist > maxAllowedDist && dist > 0.0001f) {
-            float penetration = dist - maxAllowedDist;
             glm::vec3 normal = -delta / dist; // Points towards center
 
             glm::vec3 contactPoint = hollowCenter + (delta / dist) * hollowRadius;
-            Plane p(contactPoint, normal);
             
-            ResolveSpherePlaneCollision(smallSphere, p, restitution, friction);
+            // Calculate wall velocity at contact point
+            glm::vec3 pointOffset = contactPoint - hollowCenter;
+            glm::vec3 wallVel = hollowLinearVel + glm::cross(hollowAngularVel, pointOffset);
+
+            Plane p(contactPoint, normal);
+            ResolveSpherePlaneCollision(smallSphere, p, restitution, friction, wallVel);
             smallSphere.sphere.SetPosition(hollowCenter + (delta / dist) * maxAllowedDist);
         }
     }
@@ -355,26 +378,28 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
             auto& transform = transformArray->GetData(i);
             auto& collider = colliderArray->GetData(i);
 
-            // Extract absolute scales just in case of negative scaling
-            const float scaleX = std::abs(transform.scale.x);
-            const float scaleY = std::abs(transform.scale.y);
-            const float scaleZ = std::abs(transform.scale.z);
-            const float maxScale = std::max({ scaleX, scaleY, scaleZ });
+            if (collider.autoScale) {
+                // Extract absolute scales just in case of negative scaling
+                const float scaleX = std::abs(transform.scale.x);
+                const float scaleY = std::abs(transform.scale.y);
+                const float scaleZ = std::abs(transform.scale.z);
+                const float maxScale = std::max({ scaleX, scaleY, scaleZ });
 
-            // Sync based on collider type
-            if (collider.type == 0) { // Sphere
-                // If base geometry is diameter 1.0 (radius 0.5):
-                collider.radius = maxScale * 0.5f; 
-            }
-            else if (collider.type == 2) { // Capsule / Cylinder
-                // Assuming X/Z scaling changes thickness, and Y changes height
-                collider.radius = std::max(scaleX, scaleZ) * 0.5f;
-                collider.height = scaleY; 
-            }
-            else if (collider.type == 3) { // Box / AABB
-                collider.halfExtents = glm::vec3(scaleX, scaleY, scaleZ) * 0.5f;
-                // Update legacy radius for systems still using it
-                collider.radius = std::max({ scaleX, scaleY, scaleZ }) * 0.5f;
+                // Sync based on collider type
+                if (collider.type == 0) { // Sphere
+                    // If base geometry is diameter 1.0 (radius 0.5):
+                    collider.radius = maxScale * 0.5f; 
+                }
+                else if (collider.type == 2) { // Capsule / Cylinder
+                    // Assuming X/Z scaling changes thickness, and Y changes height
+                    collider.radius = std::max(scaleX, scaleZ) * 0.5f;
+                    collider.height = scaleY; 
+                }
+                else if (collider.type == 3) { // Box / AABB
+                    collider.halfExtents = glm::vec3(scaleX, scaleY, scaleZ) * 0.5f;
+                    // Update legacy radius for systems still using it
+                    collider.radius = std::max({ scaleX, scaleY, scaleZ }) * 0.5f;
+                }
             }
         }
     }
@@ -725,7 +750,7 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 sphereA.inertiaTensor = p1.inertiaTensor;
                 sphereA.inverseInertiaTensor = p1.inverseInertiaTensor;
 
-                ResolveSphereInsideSphere(sphereA, t2.position, c2.radius, p2.restitution, p1.friction);
+                ResolveSphereInsideSphere(sphereA, t2.position, c2.radius, p2.velocity, p2.angularVelocity, p2.restitution, p1.friction);
 
                 if (!p1.isStatic) {
                     p1.velocity = sphereA.velocity;
@@ -741,7 +766,7 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 sphereB.inertiaTensor = p2.inertiaTensor;
                 sphereB.inverseInertiaTensor = p2.inverseInertiaTensor;
 
-                ResolveSphereInsideSphere(sphereB, t1.position, c1.radius, p1.restitution, p2.friction);
+                ResolveSphereInsideSphere(sphereB, t1.position, c1.radius, p1.velocity, p1.angularVelocity, p1.restitution, p2.friction);
 
                 if (!p2.isStatic) {
                     p2.velocity = sphereB.velocity;
@@ -757,7 +782,7 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 sphereB.inertiaTensor = p2.inertiaTensor;
                 sphereB.inverseInertiaTensor = p2.inverseInertiaTensor;
 
-                ResolveSphereInsideCylinder(sphereB, t1.position, c1.radius, c1.height, p1.restitution, p2.friction);
+                ResolveSphereInsideCapsule(sphereB, t1.position, c1.radius, c1.height, p1.orientation, p1.velocity, p1.angularVelocity, p1.restitution, p2.friction);
 
                 if (!p2.isStatic) {
                     p2.velocity = sphereB.velocity;
@@ -773,7 +798,7 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 sphereA.inertiaTensor = p1.inertiaTensor;
                 sphereA.inverseInertiaTensor = p1.inverseInertiaTensor;
 
-                ResolveSphereInsideCylinder(sphereA, t2.position, c2.radius, c2.height, p2.restitution, p1.friction);
+                ResolveSphereInsideCapsule(sphereA, t2.position, c2.radius, c2.height, p2.orientation, p2.velocity, p2.angularVelocity, p2.restitution, p1.friction);
 
                 if (!p1.isStatic) {
                     p1.velocity = sphereA.velocity;

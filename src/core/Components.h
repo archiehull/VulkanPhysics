@@ -243,6 +243,7 @@ enum class CollisionSide {
 struct ColliderComponent {
     bool hasCollision = true;
     bool isClothParticle = false;
+    bool autoScale = true;
     int type = 0; // 0 = Sphere, 1 = Plane, 2 = Capsule, 3 = Box (AABB), 4 = Cube, 5 = Cylinder
     float radius = 2.0f; 
     glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f); 
