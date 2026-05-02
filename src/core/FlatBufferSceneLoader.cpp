@@ -221,20 +221,22 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
         }
         case Simulation::Shape_Capsule: {
             auto capsule = fbObj->shape_as_Capsule();
-            float r = capsule ? capsule->radius() : 0.5f;
-            float h = capsule ? capsule->height() : 1.0f;
+            float r = capsule ? capsule->radius() : 0.2f;
+            float cylinderBodyL = capsule ? capsule->height() : 1.6f; // Use 1.6f to result in 2.0f total height by default
             
-            // Apply shape dimensions to the transform scale
-            scale *= glm::vec3(r * 2.0f, h, r * 2.0f);
-            entity = scene.AddCapsule(name, 0.5f, 1.0f, 32, 16, pos, scale, defaultTexture);
+            // Calculate Total Height: H = L + 2r
+            float totalHeight = cylinderBodyL + (2.0f * r);
+
+            // Pass the calculated total height to the scene
+            entity = scene.AddCapsule(name, r, totalHeight, 32, 16, pos, scale, defaultTexture);
             
             if (!scene.GetRegistry().HasComponent<ColliderComponent>(entity)) {
                 scene.GetRegistry().AddComponent<ColliderComponent>(entity, ColliderComponent{});
             }
             auto& col = scene.GetRegistry().GetComponent<ColliderComponent>(entity);
             col.type = 2; // Capsule
-            col.radius = std::max(scale.x, scale.z) * 0.5f;
-            col.height = scale.y;
+            col.radius = r * std::max(scale.x, scale.z);
+            col.height = totalHeight * scale.y;
             col.hasCollision = true;
             break;
         }
@@ -374,6 +376,7 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
             pathComp.timingMode = PathAnimationTimingMode::Absolute;
             pathComp.initialized = false;
             pathComp.isPlaying = true;
+            pathComp.connectEndToStart = animatedData->connect_end_to_start();
             
             scene.GetRegistry().AddComponent<PathAnimationComponent>(entity, pathComp);
         }

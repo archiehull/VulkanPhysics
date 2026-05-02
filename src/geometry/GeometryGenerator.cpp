@@ -499,6 +499,8 @@ std::unique_ptr<Geometry> GeometryGenerator::CreateCapsule(VkDevice device, VkPh
 
     if (rings % 2 != 0) rings++;
     int halfRings = rings / 2;
+    int cylinderSegments = rings / 2; // Add some subdivisions to the cylinder body
+    if (cylinderSegments < 1) cylinderSegments = 1;
 
     // Cylinder body height (distance between hemisphere centers)
     float cylHeight = std::max(0.0f, height - 2.0f * radius);
@@ -509,56 +511,73 @@ std::unique_ptr<Geometry> GeometryGenerator::CreateCapsule(VkDevice device, VkPh
 
     // --- Top Hemisphere ---
     for (int i = 0; i <= halfRings; ++i) {
-        float v_ratio = static_cast<float>(i) / halfRings; // 0.0 to 1.0
-        float phi = v_ratio * glm::half_pi<float>();       // 0 to pi/2 (North pole down to equator)
-        
-        float currentDist = phi * radius;            // Distance along the curve from the top
-        
+        float v_ratio = static_cast<float>(i) / halfRings;
+        float phi = v_ratio * glm::half_pi<float>();
+        float currentDist = phi * radius;
+
         for (int j = 0; j <= radialSegments; ++j) {
             float u = static_cast<float>(j) / radialSegments;
             float theta = u * glm::two_pi<float>();
-            
+
             float x = std::sin(phi) * std::cos(theta);
             float y = std::cos(phi);
             float z = std::sin(phi) * std::sin(theta);
-            
+
             Vertex vertex{};
             vertex.pos = glm::vec3(x * radius, y * radius + cylHalfHeight, z * radius);
-            vertex.normal = glm::vec3(x, y, z);
+            vertex.normal = glm::vec3(x, y, z); // Normal relative to sphere center
             vertex.texCoord = glm::vec2(u, currentDist / totalArc);
             vertex.color = glm::vec3(1.0f);
-            
+            geometry->AddVertex(vertex);
+        }
+    }
+
+    // --- Cylinder Body ---
+    // We start from 1 and end at cylinderSegments-1 to avoid duplicating equator rows
+    for (int i = 1; i < cylinderSegments; ++i) {
+        float v_ratio = static_cast<float>(i) / cylinderSegments;
+        float y = cylHalfHeight - v_ratio * cylHeight;
+        float currentDist = (glm::half_pi<float>() * radius) + (v_ratio * cylHeight);
+
+        for (int j = 0; j <= radialSegments; ++j) {
+            float u = static_cast<float>(j) / radialSegments;
+            float theta = u * glm::two_pi<float>();
+
+            Vertex vertex{};
+            vertex.pos = glm::vec3(std::cos(theta) * radius, y, std::sin(theta) * radius);
+            vertex.normal = glm::vec3(std::cos(theta), 0.0f, std::sin(theta));
+            vertex.texCoord = glm::vec2(u, currentDist / totalArc);
+            vertex.color = glm::vec3(1.0f);
             geometry->AddVertex(vertex);
         }
     }
 
     // --- Bottom Hemisphere ---
     for (int i = 0; i <= halfRings; ++i) {
-        float v_ratio = static_cast<float>(i) / halfRings; 
-        float phi = glm::half_pi<float>() + v_ratio * glm::half_pi<float>(); // pi/2 to pi (Equator down to South pole)
-        
+        float v_ratio = static_cast<float>(i) / halfRings;
+        float phi = glm::half_pi<float>() + v_ratio * glm::half_pi<float>();
         float currentDist = (glm::half_pi<float>() * radius) + cylHeight + (v_ratio * glm::half_pi<float>() * radius);
-        
+
         for (int j = 0; j <= radialSegments; ++j) {
             float u = static_cast<float>(j) / radialSegments;
             float theta = u * glm::two_pi<float>();
-            
+
             float x = std::sin(phi) * std::cos(theta);
             float y = std::cos(phi);
             float z = std::sin(phi) * std::sin(theta);
-            
+
             Vertex vertex{};
             vertex.pos = glm::vec3(x * radius, y * radius - cylHalfHeight, z * radius);
-            vertex.normal = glm::vec3(x, y, z);
+            vertex.normal = glm::vec3(x, y, z); // Normal relative to sphere center
             vertex.texCoord = glm::vec2(u, currentDist / totalArc);
             vertex.color = glm::vec3(1.0f);
-            
             geometry->AddVertex(vertex);
         }
     }
 
     // --- Generate Indices ---
-    int totalRows = (halfRings + 1) * 2; 
+    // Total rows = (halfRings + 1) + (cylinderSegments - 1) + (halfRings + 1)
+    int totalRows = (halfRings + 1) * 2 + (cylinderSegments - 1);
     for (int r = 0; r < totalRows - 1; ++r) {
         for (int s = 0; s < radialSegments; ++s) {
             uint32_t i0 = r * (radialSegments + 1) + s;

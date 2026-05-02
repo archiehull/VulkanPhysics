@@ -78,7 +78,7 @@ union Shape {
 
 table Sphere { radius: float; }
 table Plane { normal: Vec3; } // local-space normal, rotated by object transform
-table Capsule { radius: float; height: float; }
+table Capsule { radius: float = 0.2; height: float = 1.6; }
 table Cylinder { radius: float; height: float; }
 table Cuboid { size: Vec3; }
 
@@ -111,6 +111,7 @@ table AnimatedObject {
   total_duration: float;
   easing: EasingType;
   path_mode: PathMode;
+  connect_end_to_start: bool = false;
 }
 
 table SimulatedObject {

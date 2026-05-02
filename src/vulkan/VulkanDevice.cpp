@@ -56,6 +56,8 @@ void VulkanDevice::CreateLogicalDevice() {
 
     VkPhysicalDeviceFeatures deviceFeatures{};
     deviceFeatures.samplerAnisotropy = (availableFeatures.samplerAnisotropy == VK_TRUE) ? VK_TRUE : VK_FALSE;
+    deviceFeatures.fillModeNonSolid = (availableFeatures.fillModeNonSolid == VK_TRUE) ? VK_TRUE : VK_FALSE;
+    supportsNonSolidFill = (availableFeatures.fillModeNonSolid == VK_TRUE);
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

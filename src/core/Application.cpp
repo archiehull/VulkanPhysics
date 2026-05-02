@@ -1033,6 +1033,11 @@ void Application::MainLoop() {
                 sleepTangentialThreshold);
         }
 
+        int colliderVisMode = 0;
+        if (editorUI->ConsumeColliderVisualizationRequest(colliderVisMode)) {
+            renderer->colliderVisMode = static_cast<ColliderVisMode>(colliderVisMode);
+        }
+
         bool showSpringVisuals = false;
         if (editorUI->ConsumeSpringVisualizationRequest(showSpringVisuals)) {
             scene->SetSpringVisualizationEnabled(showSpringVisuals);
@@ -1125,6 +1130,9 @@ void Application::MainLoop() {
                 }
                 else if (req.type == "Disk") {
                     render.geometry = GeometryGenerator::CreateDisk(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 1.0f, 32);
+                }
+                else if (req.type == "Capsule") {
+                    render.geometry = GeometryGenerator::CreateCapsule(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 0.25f, 1.5f, 32, 16);
                 }
                 else if (req.type == "Grid") {
                     render.geometry = GeometryGenerator::CreateGrid(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 20, 20, 0.5f);

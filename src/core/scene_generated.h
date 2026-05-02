@@ -1133,10 +1133,10 @@ struct Capsule FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_HEIGHT = 6
   };
   float radius() const {
-    return GetField<float>(VT_RADIUS, 0.0f);
+    return GetField<float>(VT_RADIUS, 0.2f);
   }
   float height() const {
-    return GetField<float>(VT_HEIGHT, 0.0f);
+    return GetField<float>(VT_HEIGHT, 1.6f);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
@@ -1152,10 +1152,10 @@ struct CapsuleBuilder {
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_radius(float radius) {
-    fbb_.AddElement<float>(Capsule::VT_RADIUS, radius, 0.0f);
+    fbb_.AddElement<float>(Capsule::VT_RADIUS, radius, 0.2f);
   }
   void add_height(float height) {
-    fbb_.AddElement<float>(Capsule::VT_HEIGHT, height, 0.0f);
+    fbb_.AddElement<float>(Capsule::VT_HEIGHT, height, 1.6f);
   }
   explicit CapsuleBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -1170,8 +1170,8 @@ struct CapsuleBuilder {
 
 inline ::flatbuffers::Offset<Capsule> CreateCapsule(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    float radius = 0.0f,
-    float height = 0.0f) {
+    float radius = 0.2f,
+    float height = 1.6f) {
   CapsuleBuilder builder_(_fbb);
   builder_.add_height(height);
   builder_.add_radius(radius);
@@ -1370,7 +1370,8 @@ struct AnimatedObject FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_WAYPOINTS = 4,
     VT_TOTAL_DURATION = 6,
     VT_EASING = 8,
-    VT_PATH_MODE = 10
+    VT_PATH_MODE = 10,
+    VT_CONNECT_END_TO_START = 12
   };
   const ::flatbuffers::Vector<::flatbuffers::Offset<Simulation::Waypoint>> *waypoints() const {
     return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<Simulation::Waypoint>> *>(VT_WAYPOINTS);
@@ -1384,6 +1385,9 @@ struct AnimatedObject FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   Simulation::PathMode path_mode() const {
     return static_cast<Simulation::PathMode>(GetField<int8_t>(VT_PATH_MODE, 0));
   }
+  bool connect_end_to_start() const {
+    return GetField<uint8_t>(VT_CONNECT_END_TO_START, 0) != 0;
+  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -1393,6 +1397,7 @@ struct AnimatedObject FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<float>(verifier, VT_TOTAL_DURATION, 4) &&
            VerifyField<int8_t>(verifier, VT_EASING, 1) &&
            VerifyField<int8_t>(verifier, VT_PATH_MODE, 1) &&
+           VerifyField<uint8_t>(verifier, VT_CONNECT_END_TO_START, 1) &&
            verifier.EndTable();
   }
 };
@@ -1413,6 +1418,9 @@ struct AnimatedObjectBuilder {
   void add_path_mode(Simulation::PathMode path_mode) {
     fbb_.AddElement<int8_t>(AnimatedObject::VT_PATH_MODE, static_cast<int8_t>(path_mode), 0);
   }
+  void add_connect_end_to_start(bool connect_end_to_start) {
+    fbb_.AddElement<uint8_t>(AnimatedObject::VT_CONNECT_END_TO_START, static_cast<uint8_t>(connect_end_to_start), 0);
+  }
   explicit AnimatedObjectBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -1429,10 +1437,12 @@ inline ::flatbuffers::Offset<AnimatedObject> CreateAnimatedObject(
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<Simulation::Waypoint>>> waypoints = 0,
     float total_duration = 0.0f,
     Simulation::EasingType easing = Simulation::EasingType_LINEAR,
-    Simulation::PathMode path_mode = Simulation::PathMode_STOP) {
+    Simulation::PathMode path_mode = Simulation::PathMode_STOP,
+    bool connect_end_to_start = false) {
   AnimatedObjectBuilder builder_(_fbb);
   builder_.add_total_duration(total_duration);
   builder_.add_waypoints(waypoints);
+  builder_.add_connect_end_to_start(connect_end_to_start);
   builder_.add_path_mode(path_mode);
   builder_.add_easing(easing);
   return builder_.Finish();
@@ -1443,14 +1453,16 @@ inline ::flatbuffers::Offset<AnimatedObject> CreateAnimatedObjectDirect(
     const std::vector<::flatbuffers::Offset<Simulation::Waypoint>> *waypoints = nullptr,
     float total_duration = 0.0f,
     Simulation::EasingType easing = Simulation::EasingType_LINEAR,
-    Simulation::PathMode path_mode = Simulation::PathMode_STOP) {
+    Simulation::PathMode path_mode = Simulation::PathMode_STOP,
+    bool connect_end_to_start = false) {
   auto waypoints__ = waypoints ? _fbb.CreateVector<::flatbuffers::Offset<Simulation::Waypoint>>(*waypoints) : 0;
   return Simulation::CreateAnimatedObject(
       _fbb,
       waypoints__,
       total_duration,
       easing,
-      path_mode);
+      path_mode,
+      connect_end_to_start);
 }
 
 struct SimulatedObject FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {

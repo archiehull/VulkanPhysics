@@ -145,7 +145,21 @@ public:
         sleepTangentialThresholdEnabled = m_SleepTangentialThresholdEnabled;
         sleepTangentialThreshold = m_SleepTangentialThreshold;
         return true;
-    }   
+    }
+
+    void SetColliderVisualizationMode(int mode) {
+        m_ColliderVisualizationMode = mode;
+    }
+
+    bool ConsumeColliderVisualizationRequest(int& mode) {
+        if (!m_ColliderVisualizationChanged) {
+            return false;
+        }
+
+        m_ColliderVisualizationChanged = false;
+        mode = m_ColliderVisualizationMode;
+        return true;
+    }
 
     bool ConsumeSpringVisualizationRequest(bool& enabled) {
         if (!m_SpringVisualizationChanged) {
@@ -250,6 +264,9 @@ private:
     bool m_SleepTangentialThresholdEnabled = true;
     float m_SleepTangentialThreshold = 0.12f;
     bool m_PhysicsSettingsChanged = false;
+
+    int m_ColliderVisualizationMode = 0;
+    bool m_ColliderVisualizationChanged = false;
 
     bool m_ShowSpringVisuals = false;
     bool m_SpringVisualizationChanged = false;

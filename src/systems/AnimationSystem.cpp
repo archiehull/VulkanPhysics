@@ -1,6 +1,7 @@
 #include "AnimationSystem.h"
 #include "../rendering/Scene.h"
 #include "../util/AnimationMath.h"
+#include <glm/gtc/quaternion.hpp>
 #include <algorithm>
 #include <cmath>
 
@@ -122,10 +123,25 @@ void AnimationSystem::Update(Scene& scene, float deltaTime) {
             physics.velocity = velocity;
             physics.forceAccumulator = glm::vec3(0.0f);
             physics.torqueAccumulator = glm::vec3(0.0f);
-            if (!physics.isStatic || physics.mass != 0.0f || physics.inverseMass != 0.0f) {
-                physics.isStatic = true;
-                physics.SetMass(0.0f);
+
+            // Write animated orientation into physics component so collision
+            // geometry uses the rotated capsule/cylinder.
+            physics.orientation = glm::mat3_cast(glm::quat(glm::radians(transform.rotation)));
+
+            // If this path applies a constant rotation, expose the angular velocity
+            // to the physics solver (convert degrees/sec to radians/sec).
+            if (path.applyConstantRotation) {
+                physics.angularVelocity = glm::radians(path.rotationSpinRate);
             }
+            else {
+                physics.angularVelocity = glm::vec3(0.0f);
+            }
+
+            // Keep animated objects static in terms of linear integration
+            // so they follow the authored path, but their rotational state
+            // is visible to the collision solver.
+            physics.isStatic = true;
+            physics.SetMass(0.0f);
         }
     }
 }

@@ -2,7 +2,7 @@
 <Project>
   <ProjectOutputs>
     <ProjectOutput>
-      <FullPath>c:\Users\Ell\Documents\repos\VulkanPhysics\x64\Debug\VulkanPhysics.exe</FullPath>
+      <FullPath>C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Debug\VulkanPhysics.exe</FullPath>
     </ProjectOutput>
   </ProjectOutputs>
   <ContentFiles />

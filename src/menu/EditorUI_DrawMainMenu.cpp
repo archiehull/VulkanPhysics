@@ -683,7 +683,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 ImGui::DragFloat("Spawn Lifespan (s, -1 inf)", &spawner.spawnLifespanSeconds, 0.1f, -1.0f, 600.0f);
 
                 int geometryIndex = 0;
-                const char* geometryTypes[] = { "Sphere", "Cube", "Plane", "Model", "Smoke Grenade" };
+                const char* geometryTypes[] = { "Sphere", "Cube", "Plane", "Capsule", "Model", "Smoke Grenade" };
                 if (spawner.spawnGeometryType == "Cube") geometryIndex = 1;
                 else if (spawner.spawnGeometryType == "Plane") geometryIndex = 2;
                 else if (spawner.spawnGeometryType == "Model") geometryIndex = 3;
@@ -953,6 +953,30 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
                 if (ImGui::SliderFloat("Tangential Threshold (m/s)", &m_SleepTangentialThreshold, 0.0f, 1.0f, "%.3f")) {
                     m_PhysicsSettingsChanged = true;
                 }
+            }
+
+            ImGui::Separator();
+            ImGui::Text("Collider Visualization");
+
+            int colliderVisMode = m_ColliderVisualizationMode;
+            if (ImGui::RadioButton("None", colliderVisMode == 0)) {
+                m_ColliderVisualizationMode = 0;
+                m_ColliderVisualizationChanged = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Transparent", colliderVisMode == 1)) {
+                m_ColliderVisualizationMode = 1;
+                m_ColliderVisualizationChanged = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Wireframe", colliderVisMode == 2)) {
+                m_ColliderVisualizationMode = 2;
+                m_ColliderVisualizationChanged = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Hitboxes Only", colliderVisMode == 3)) {
+                m_ColliderVisualizationMode = 3;
+                m_ColliderVisualizationChanged = true;
             }
 
             ImGui::Spacing();

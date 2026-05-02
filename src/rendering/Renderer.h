@@ -22,6 +22,13 @@
 #include <functional>
 #include "../vulkan/VulkanContext.h"
 
+enum class ColliderVisMode {
+    None,
+    TransparentOverlay,
+    Wireframe,
+    HitboxesOnly
+};
+
 class Renderer final {
 public:
     Renderer(VulkanDevice* deviceArg, VulkanSwapChain* swapChainArg);
@@ -48,6 +55,8 @@ public:
     VulkanRenderPass* GetRenderPass() const { return renderPass.get(); }
     GraphicsPipeline* GetPipeline() const { return graphicsPipeline.get(); }
 
+    ColliderVisMode colliderVisMode = ColliderVisMode::None;
+
     VkDescriptorPool imguiPool = VK_NULL_HANDLE;
     VkRenderPass uiRenderPass = VK_NULL_HANDLE;
     std::vector<VkFramebuffer> uiFramebuffers;
@@ -70,6 +79,7 @@ private:
     std::unique_ptr<VulkanRenderPass> renderPass;
     std::unique_ptr<GraphicsPipeline> graphicsPipeline;
     std::unique_ptr<GraphicsPipeline> transparentPipeline;
+    std::unique_ptr<GraphicsPipeline> wireframePipeline;
     std::unique_ptr<VulkanCommandBuffer> commandBuffer;
     std::unique_ptr<VulkanSyncObjects> syncObjects;
     std::unique_ptr<ShadowPass> shadowPass;
@@ -83,6 +93,7 @@ private:
 
     std::shared_ptr<Geometry> layerRegionSphereGeometry;
     std::shared_ptr<Geometry> layerRegionBoxGeometry;
+    std::shared_ptr<Geometry> debugCapsuleGeometry;
 
     // --- 2. Vulkan Handles (Ptr/64-bit) ---
     VkImage refractionImage = VK_NULL_HANDLE;
@@ -155,6 +166,7 @@ private:
     };
 
     void DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLayout layout, bool bindTextures, bool skipIfNotCastingShadow, int viewMask, int insideRegionMask, SceneDrawMode drawMode);
+    void DrawColliders(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, VkPipelineLayout layout);
     void RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
     void RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, int viewMask, int insideRegionMask);
     void CreateLayerRegionDebugGeometries();

@@ -47,7 +47,8 @@ void ResolveSpherePlaneCollision(
     MovingSphere& a,
     const Plane& p,
     float planeRestitution,
-    float contactFriction = 1.0f);
+    float contactFriction = 1.0f,
+    const glm::vec3& planePointVelocity = glm::vec3(0.0f));
 
 void ResolveCapsulePlaneCollision(
     MovingCapsule& a,

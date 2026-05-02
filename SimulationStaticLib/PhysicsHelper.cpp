@@ -136,16 +136,18 @@ void ResolveSpherePlaneCollision(
 	MovingSphere& a,
 	const Plane& p,
 	float planeRestitution,
-	float contactFriction)
+	float contactFriction,
+	const glm::vec3& planePointVelocity)
 {
 	if (a.invMass <= 0.0f) return;
 
 	glm::vec3 n = p.GetNormal();
 	glm::vec3 rA = -n * a.sphere.m_radius;
 
-	// Contact point velocity
+	// Contact point velocity relative to the wall point velocity
 	glm::vec3 vAp = a.velocity + glm::cross(a.angularVelocity, rA);
-	float vn = glm::dot(vAp, n);
+	glm::vec3 relVel = vAp - planePointVelocity;
+	float vn = glm::dot(relVel, n);
 	if (vn >= 0.0f) return;
 
 	float e = glm::clamp(a.restitution * planeRestitution, 0.0f, 1.0f);
@@ -165,7 +167,8 @@ void ResolveSpherePlaneCollision(
 
 	// 2) Tangential friction impulse (recalculate after normal impulse)
 	vAp = a.velocity + glm::cross(a.angularVelocity, rA);
-	glm::vec3 tangent = vAp - (n * glm::dot(vAp, n));
+	relVel = vAp - planePointVelocity;
+	glm::vec3 tangent = relVel - (n * glm::dot(relVel, n));
 	float tangentLen = glm::length(tangent);
 	glm::vec3 frictionImpulse(0.0f);
 
@@ -174,7 +177,7 @@ void ResolveSpherePlaneCollision(
 		glm::vec3 rA_cross_t = glm::cross(rA, t);
 		float angularTerm = glm::dot(a.inverseInertiaTensor * rA_cross_t, rA_cross_t);
 
-		float jt = -glm::dot(vAp, t) / (a.invMass + angularTerm);
+		float jt = -glm::dot(relVel, t) / (a.invMass + angularTerm);
 		const float maxFriction = std::abs(j) * glm::clamp(contactFriction, 0.0f, 1.0f);
 		jt = glm::clamp(jt, -maxFriction, maxFriction);
 

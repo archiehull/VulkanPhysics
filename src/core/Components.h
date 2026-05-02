@@ -104,7 +104,7 @@ struct PathAnimationComponent {
     bool showPath = false;
     glm::vec4 pathColor = glm::vec4(0.6f, 0.2f, 0.8f, 1.0f);
     bool reversePath = false;
-    bool connectEndToStart = true;
+    bool connectEndToStart = false;
     glm::vec3 animationVelocity = glm::vec3(0.0f);
     bool initialized = false;
     bool useLocalSpace = false;

@@ -637,7 +637,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
                     if (ImGui::TreeNode(geometryNodeLabel.c_str())) {
                         static int geoTypeIdx = 0;
-                        const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Plane", "Cylinder", "Bowl", "Terrain", "Disk", "Grid" };
+                        const char* geoTypes[] = { "Model File", "Cube", "Sphere", "Plane", "Cylinder", "Capsule", "Bowl", "Terrain", "Disk", "Grid" };
                         ImGui::Combo("Shape Type", &geoTypeIdx, geoTypes, IM_ARRAYSIZE(geoTypes));
 
                         static std::string selectedModel = "";

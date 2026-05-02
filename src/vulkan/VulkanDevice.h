@@ -35,6 +35,7 @@ public:
     VkQueue GetGraphicsQueue() const { return graphicsQueue; }
     VkQueue GetPresentQueue() const { return presentQueue; }
     const QueueFamilyIndices& GetQueueFamilies() const { return cachedQueueFamilies; }
+    bool SupportsNonSolidFill() const { return supportsNonSolidFill; }
 
     VkInstance GetInstance() const { return instance; }
 
@@ -45,6 +46,7 @@ private:
     VkDevice device = VK_NULL_HANDLE;
     VkQueue graphicsQueue = VK_NULL_HANDLE;
     VkQueue presentQueue = VK_NULL_HANDLE;
+    bool supportsNonSolidFill = false;
 
     QueueFamilyIndices cachedQueueFamilies;
 

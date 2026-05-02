@@ -593,6 +593,16 @@ void Renderer::CreatePipeline() {
 
     transparentPipeline = std::make_unique<GraphicsPipeline>(device->GetDevice(), pipelineConfig);
     transparentPipeline->Create();
+
+    pipelineConfig.polygonMode = VK_POLYGON_MODE_LINE;
+    pipelineConfig.cullMode = VK_CULL_MODE_NONE;
+    pipelineConfig.depthWriteEnable = false;
+    pipelineConfig.blendEnable = true;
+
+    if (device->SupportsNonSolidFill()) {
+        wireframePipeline = std::make_unique<GraphicsPipeline>(device->GetDevice(), pipelineConfig);
+        wireframePipeline->Create();
+    }
 }
 
 void Renderer::CreateOffScreenResources() {
@@ -887,9 +897,81 @@ void Renderer::CreateParticlePipelines() {
 void Renderer::CreateLayerRegionDebugGeometries() {
     auto sphere = GeometryGenerator::CreateSphere(device->GetDevice(), device->GetPhysicalDevice(), 16, 24, 0.5f);
     auto box = GeometryGenerator::CreateCube(device->GetDevice(), device->GetPhysicalDevice());
+    auto capsule = GeometryGenerator::CreateCapsule(device->GetDevice(), device->GetPhysicalDevice(), 0.5f, 1.0f, 16, 8);
 
     layerRegionSphereGeometry = std::shared_ptr<Geometry>(std::move(sphere));
     layerRegionBoxGeometry = std::shared_ptr<Geometry>(std::move(box));
+    debugCapsuleGeometry = std::shared_ptr<Geometry>(std::move(capsule));
+}
+
+void Renderer::DrawColliders(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, VkPipelineLayout layout) {
+    if (colliderVisMode == ColliderVisMode::None) {
+        return;
+    }
+
+    if (!layerRegionSphereGeometry || !layerRegionBoxGeometry || !debugCapsuleGeometry || !descriptorSet) {
+        return;
+    }
+
+    Registry& reg = scene.GetRegistry();
+    const VkDescriptorSet globalSet = descriptorSet->GetDescriptorSets()[currentFrame];
+    const VkDescriptorSet textureSet = defaultTextureResource.descriptorSet;
+
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &globalSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, 1, &textureSet, 0, nullptr);
+
+    for (Entity e = 0; e < reg.GetEntityCount(); ++e) {
+        if (!reg.HasComponent<ColliderComponent>(e) || !reg.HasComponent<TransformComponent>(e)) continue;
+
+        auto& collider = reg.GetComponent<ColliderComponent>(e);
+        auto& transform = reg.GetComponent<TransformComponent>(e);
+        if (!collider.hasCollision) continue;
+
+        glm::vec3 debugScale(1.0f);
+        Geometry* geometryToDraw = nullptr;
+
+        if (collider.type == 0) {
+            debugScale = glm::vec3(collider.radius * 2.0f);
+            geometryToDraw = layerRegionSphereGeometry.get();
+        }
+        else if (collider.type == 2) {
+            const float bodyHeight = std::max(collider.height, collider.radius * 2.0f);
+            debugScale = glm::vec3(collider.radius * 2.0f, bodyHeight, collider.radius * 2.0f);
+            geometryToDraw = debugCapsuleGeometry.get();
+        }
+        else if (collider.type == 3) {
+            debugScale = collider.halfExtents * 2.0f;
+            geometryToDraw = layerRegionBoxGeometry.get();
+        }
+        else {
+            continue;
+        }
+
+        PushConstantObject pco{};
+        glm::mat4 translation = glm::translate(glm::mat4(1.0f), transform.position);
+        glm::mat4 rotation = glm::mat4(1.0f);
+        if (reg.HasComponent<PhysicsComponent>(e)) {
+            rotation = glm::mat4(reg.GetComponent<PhysicsComponent>(e).orientation);
+        }
+        pco.model = translation * rotation * glm::scale(glm::mat4(1.0f), debugScale);
+        pco.shadingMode = 1;
+        pco.receiveShadows = 0;
+        pco.layerMask = SceneLayers::ALL;
+        pco.burnFactor = 0.0f;
+        pco.debugOverlay = 1;
+
+        const bool isStatic = reg.HasComponent<PhysicsComponent>(e) && reg.GetComponent<PhysicsComponent>(e).isStatic;
+        pco.debugColor = isStatic ? glm::vec4(0.2f, 1.0f, 0.2f, 1.0f) : glm::vec4(1.0f, 0.2f, 0.2f, 1.0f);
+        pco.debugColor.a = (colliderVisMode == ColliderVisMode::TransparentOverlay) ? 0.4f : 1.0f;
+        pco.opacity = pco.debugColor.a;
+
+        vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
+
+        if (geometryToDraw) {
+            geometryToDraw->Bind(cmd);
+            geometryToDraw->Draw(cmd);
+        }
+    }
 }
 
 void Renderer::DrawLayerRegionDebugOverlays(VkCommandBuffer cmd, uint32_t currentFrame, Scene& scene, VkPipelineLayout layout, bool forceShowAll) {
@@ -1069,7 +1151,7 @@ void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& sc
 
     const bool regionsOnly = scene.GetRegionsOnlyDebugView();
 
-    if (!regionsOnly && skyboxPass) {
+    if (!regionsOnly && skyboxPass && colliderVisMode != ColliderVisMode::HitboxesOnly) {
         skyboxPass->Draw(cmd, scene, currentFrame, descriptorSet->GetDescriptorSets()[currentFrame]);
     }
 
@@ -1077,14 +1159,22 @@ void Renderer::RenderScene(VkCommandBuffer cmd, uint32_t currentFrame, Scene& sc
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
 
     if (!regionsOnly) {
-        DrawSceneObjects(cmd, scene, graphicsPipeline->GetLayout(), true, false, viewMask, insideRegionMask, SceneDrawMode::Opaque);
+        if (colliderVisMode != ColliderVisMode::HitboxesOnly) {
+            DrawSceneObjects(cmd, scene, graphicsPipeline->GetLayout(), true, false, viewMask, insideRegionMask, SceneDrawMode::Opaque);
 
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline->GetPipeline());
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
-        DrawSceneObjects(cmd, scene, transparentPipeline->GetLayout(), true, false, viewMask, insideRegionMask, SceneDrawMode::Transparent);
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline->GetPipeline());
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline->GetLayout(), 0, 1, &descriptorSet->GetDescriptorSets()[currentFrame], 0, nullptr);
+            DrawSceneObjects(cmd, scene, transparentPipeline->GetLayout(), true, false, viewMask, insideRegionMask, SceneDrawMode::Transparent);
 
-        for (const auto& sys : scene.GetParticleSystems()) {
-            sys->Draw(cmd, descriptorSet->GetDescriptorSets()[currentFrame], currentFrame);
+            for (const auto& sys : scene.GetParticleSystems()) {
+                sys->Draw(cmd, descriptorSet->GetDescriptorSets()[currentFrame], currentFrame);
+            }
+        }
+
+        if (colliderVisMode != ColliderVisMode::None) {
+            GraphicsPipeline* pipe = (colliderVisMode == ColliderVisMode::Wireframe && wireframePipeline) ? wireframePipeline.get() : transparentPipeline.get();
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe->GetPipeline());
+            DrawColliders(cmd, currentFrame, scene, pipe->GetLayout());
         }
     }
 

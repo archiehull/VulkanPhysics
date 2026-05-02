@@ -298,12 +298,15 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     else if (geometryType == "Model" && !spawner.spawnModelPath.empty()) {
         spawnedEntity = scene.AddModel(spawnedName, spawnPos, glm::vec3(0.0f), effectiveSpawnScale, spawner.spawnModelPath, spawner.spawnTexturePath, false);
     }
+    else if (geometryType == "Capsule") {
+        // Base unit capsule: radius 0.2, total height 1.0 (longer and thinner default)
+        float r = 0.2f;
+        float h = 1.0f;
+        spawnedEntity = scene.AddCapsule(spawnedName, r, h, 32, 16, spawnPos, effectiveSpawnScale, spawner.spawnTexturePath);
+    }
     else if (geometryType == "Smoke Grenade") {
-        // Spawn a cylinder geometry, but we assign Capsule physics & SmokeGrenadeComponent
-        // Base Unit Cylinder scale for Smoke Grenade (radius 0.4 -> scale 0.8, height 1.2 -> scale 1.2)
-        glm::vec3 baseScale(0.8f, 1.2f, 0.8f);
-        glm::vec3 finalScale = baseScale * spawner.spawnScale;
-        spawnedEntity = scene.AddCylinder(spawnedName, 32, spawnPos, finalScale, spawner.spawnTexturePath);
+        // Base Unit Capsule scale for Smoke Grenade (radius 0.15, total height 0.75 - M18 canister proportions)
+        spawnedEntity = scene.AddCapsule(spawnedName, 0.15f, 0.75f, 24, 12, spawnPos, effectiveSpawnScale, "textures/smoke_grenade.png");
         
         if (spawnedEntity != MAX_ENTITIES) {
             registry.AddComponent<SmokeGrenadeComponent>(spawnedEntity, SmokeGrenadeComponent{});
@@ -338,10 +341,16 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     auto& collider = registry.GetComponent<ColliderComponent>(spawnedEntity);
     collider.hasCollision = true;
     
-    if (geometryType == "Smoke Grenade") {
+    if (geometryType == "Smoke Grenade" || geometryType == "Capsule") {
         collider.type = 2; // Capsule
-        collider.radius = 0.4f * std::max(0.05f, spawner.spawnScale.x);
-        collider.height = 1.2f * std::max(0.05f, spawner.spawnScale.y);
+        if (geometryType == "Smoke Grenade") {
+            collider.radius = 0.4f * std::max(0.05f, spawner.spawnScale.x);
+            collider.height = 1.2f * std::max(0.05f, spawner.spawnScale.y);
+        } else {
+            // For general capsules, use the calculated effective scale
+            collider.radius = std::max(effectiveSpawnScale.x, effectiveSpawnScale.z) * 0.5f;
+            collider.height = effectiveSpawnScale.y;
+        }
     } else {
         collider.type = 0; // Sphere
         collider.radius = std::max(0.1f, std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f);

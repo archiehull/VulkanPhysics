@@ -233,37 +233,53 @@ namespace {
             std::abs(v) <= (planeCollider.height + sphereRadius);
     }
 
-    void ResolveSphereInsideAABB(MovingSphere& sphere, const glm::vec3& boxCenter, const glm::vec3& boxHalfExtents, float restitution, float friction) {
-        glm::vec3 pos = sphere.sphere.Position();
-        float r = sphere.sphere.m_radius;
-        
-        glm::vec3 minBounds = boxCenter - boxHalfExtents;
-        glm::vec3 maxBounds = boxCenter + boxHalfExtents;
+    void ResolveSphereInsideAABB(MovingSphere& sphere,
+        const glm::vec3& boxCenter,
+        const glm::vec3& boxHalfExtents,
+        const glm::mat3& boxOrientation,
+        const glm::vec3& boxLinearVelocity,
+        const glm::vec3& boxAngularVelocity,
+        float restitution,
+        float friction) {
+        const float r = sphere.sphere.m_radius;
+        const glm::mat3 invBoxRot = glm::transpose(boxOrientation);
+
+        glm::vec3 worldPos = sphere.sphere.Position();
+        glm::vec3 localPos = invBoxRot * (worldPos - boxCenter);
+        const glm::vec3 localHalfExtents = glm::abs(boxHalfExtents);
 
         for (int i = 0; i < 3; ++i) {
-            glm::vec3 normal(0.0f);
+            glm::vec3 localNormal(0.0f);
             float penetration = 0.0f;
 
-            if (pos[i] - r < minBounds[i]) {
-                normal[i] = 1.0f; 
-                penetration = minBounds[i] - (pos[i] - r);
-            } 
-            else if (pos[i] + r > maxBounds[i]) {
-                normal[i] = -1.0f;
-                penetration = (pos[i] + r) - maxBounds[i];
+            if (localPos[i] - r < -localHalfExtents[i]) {
+                localNormal[i] = 1.0f;
+                penetration = -localHalfExtents[i] - (localPos[i] - r);
+            }
+            else if (localPos[i] + r > localHalfExtents[i]) {
+                localNormal[i] = -1.0f;
+                penetration = (localPos[i] + r) - localHalfExtents[i];
             }
 
-            if (penetration > 0.0f) {
-                glm::vec3 wallPos = sphere.sphere.Position();
-                wallPos[i] = (normal[i] > 0.0f) ? minBounds[i] : maxBounds[i];
-                Plane p(wallPos, normal);
-                
-                ResolveSpherePlaneCollision(sphere, p, restitution, friction);
-                
-                glm::vec3 correctedPos = sphere.sphere.Position();
-                correctedPos[i] += normal[i] * penetration;
-                sphere.sphere.SetPosition(correctedPos);
+            if (penetration <= 0.0f) {
+                continue;
             }
+
+            const glm::vec3 worldNormal = glm::normalize(boxOrientation * localNormal);
+
+            glm::vec3 localContactPoint = localPos;
+            localContactPoint[i] = (localNormal[i] > 0.0f) ? -localHalfExtents[i] : localHalfExtents[i];
+            const glm::vec3 worldContactPoint = boxCenter + (boxOrientation * localContactPoint);
+
+            const glm::vec3 pointOffset = worldContactPoint - boxCenter;
+            const glm::vec3 wallVelocityAtContact = boxLinearVelocity + glm::cross(boxAngularVelocity, pointOffset);
+
+            Plane wallPlane(worldContactPoint, worldNormal);
+            ResolveSpherePlaneCollision(sphere, wallPlane, restitution, friction, wallVelocityAtContact);
+
+            worldPos = sphere.sphere.Position() + (worldNormal * penetration);
+            sphere.sphere.SetPosition(worldPos);
+            localPos = invBoxRot * (worldPos - boxCenter);
         }
     }
 
@@ -356,7 +372,7 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
                 collider.height = scaleY; 
             }
             else if (collider.type == 3) { // Box / AABB
-                collider.halfExtents = transform.scale * 0.5f;
+                collider.halfExtents = glm::vec3(scaleX, scaleY, scaleZ) * 0.5f;
                 // Update legacy radius for systems still using it
                 collider.radius = std::max({ scaleX, scaleY, scaleZ }) * 0.5f;
             }
@@ -491,8 +507,11 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                 if (colType == 2) {
                     glm::vec3 up(0, 1, 0);
                     up = physics.orientation * up;
-                    glm::vec3 p1 = transform.position - up * (colHeight * 0.5f);
-                    glm::vec3 p2 = transform.position + up * (colHeight * 0.5f);
+                    // For a true capsule, total height H includes the spherical caps.
+                    // The distance between the sphere centers is H - 2r.
+                    float halfSegmentLen = std::max(0.0f, (colHeight - 2.0f * colRadius) * 0.5f);
+                    glm::vec3 p1 = transform.position - up * halfSegmentLen;
+                    glm::vec3 p2 = transform.position + up * halfSegmentLen;
                     Capsule cap(p1, p2, colRadius);
                     MovingCapsule helperBody(cap, physics.velocity, physics.inverseMass, physics.restitution);
                     helperBody.forceAccumulator = physics.forceAccumulator;
@@ -771,7 +790,15 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 sphereA.inverseInertiaTensor = p1.inverseInertiaTensor;
 
                 if (c2.collisionSide == CollisionSide::INSIDE) {
-                    ResolveSphereInsideAABB(sphereA, t2.position, c2.halfExtents, p2.restitution, p1.friction);
+                    ResolveSphereInsideAABB(
+                        sphereA,
+                        t2.position,
+                        c2.halfExtents,
+                        p2.orientation,
+                        p2.velocity,
+                        p2.angularVelocity,
+                        p2.restitution,
+                        p1.friction);
                     if (!p1.isStatic) {
                         p1.velocity = sphereA.velocity;
                         p1.angularVelocity = sphereA.angularVelocity;
@@ -787,7 +814,15 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 sphereB.inertiaTensor = p2.inertiaTensor;
                 sphereB.inverseInertiaTensor = p2.inverseInertiaTensor;
 
-                ResolveSphereInsideAABB(sphereB, t1.position, c1.halfExtents, p1.restitution, p2.friction);
+                ResolveSphereInsideAABB(
+                    sphereB,
+                    t1.position,
+                    c1.halfExtents,
+                    p1.orientation,
+                    p1.velocity,
+                    p1.angularVelocity,
+                    p1.restitution,
+                    p2.friction);
                 if (!p2.isStatic) {
                     p2.velocity = sphereB.velocity;
                     p2.angularVelocity = sphereB.angularVelocity;
@@ -844,8 +879,9 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
             // Capsule vs Plane
             else if (c1.type == 2 && c2.type == 1) {
                 glm::vec3 up = p1.orientation * glm::vec3(0, 1, 0);
-                glm::vec3 p1_local = t1.position - up * (c1.height * 0.5f);
-                glm::vec3 p2_local = t1.position + up * (c1.height * 0.5f);
+                float segmentHalfLength = std::max(0.0f, (c1.height - 2.0f * c1.radius) * 0.5f);
+                glm::vec3 p1_local = t1.position - up * segmentHalfLength;
+                glm::vec3 p2_local = t1.position + up * segmentHalfLength;
                 Capsule capA(p1_local, p2_local, c1.radius);
                 
                 MovingCapsule capsuleA(capA, p1.velocity, p1.inverseMass, p1.restitution);
@@ -881,8 +917,9 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
             // Plane vs Capsule
             else if (c1.type == 1 && c2.type == 2) {
                 glm::vec3 up = p2.orientation * glm::vec3(0, 1, 0);
-                glm::vec3 p1_local = t2.position - up * (c2.height * 0.5f);
-                glm::vec3 p2_local = t2.position + up * (c2.height * 0.5f);
+                float segmentHalfLength = std::max(0.0f, (c2.height - 2.0f * c2.radius) * 0.5f);
+                glm::vec3 p1_local = t2.position - up * segmentHalfLength;
+                glm::vec3 p2_local = t2.position + up * segmentHalfLength;
                 Capsule capB(p1_local, p2_local, c2.radius);
                 
                 MovingCapsule capsuleB(capB, p2.velocity, p2.inverseMass, p2.restitution);
