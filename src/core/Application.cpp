@@ -1,4 +1,9 @@
 #define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#define _WINSOCKAPI_  // Prevent inclusion of winsock.h by windows.h
+#include <winsock2.h>
+#include <ws2ipdef.h>
+#include <ws2tcpip.h>
 #include <windows.h> // For CPU affinity
 #include <iostream>
 #include <iomanip>
@@ -112,6 +117,18 @@ void Application::Run() {
 
     m_RenderThreadId = static_cast<uint32_t>(GetCurrentThreadId());
     m_RenderAffinityApplied = ApplyCurrentThreadAffinity(static_cast<DWORD_PTR>(m_RenderAffinityMask));
+
+    m_networkManager = std::make_unique<NetworkManager>();
+    m_networkManager->SetDebugLogging(true);
+    //m_networkManager->SetLocalPeerId(); // Passed from main()
+
+    // Configure the mesh map (everyone needs to know the layout)
+    m_networkManager->ConfigurePeer(0, "127.0.0.1", 27015);
+    m_networkManager->ConfigurePeer(1, "127.0.0.1", 27016);
+    m_networkManager->ConfigurePeer(2, "127.0.0.1", 27017);
+    m_networkManager->ConfigurePeer(3, "127.0.0.1", 27018);
+
+    m_networkManager->Startup();
 
     std::string initialPath = editorUI->GetInitialScenePath();
     if (!initialPath.empty()) {
@@ -1620,6 +1637,10 @@ void Application::Cleanup() {
     m_IsRunning = false;
     if (m_SimulationThread.joinable()) {
         m_SimulationThread.join();
+    }
+
+    if (m_networkManager) {
+        m_networkManager->Shutdown();
     }
 
     if (vulkanDevice) {

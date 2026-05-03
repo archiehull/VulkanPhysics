@@ -1,0 +1,127 @@
+// Network Runtime Schema for VulkanPhysics Peer-to-Peer Networking
+// Defines UDP physics snapshots and TCP reliable events
+
+namespace NetworkRuntime;
+
+// ============================================================================
+// Basic Types for Network Messages
+// ============================================================================
+
+struct Vec3 {
+    x: float;
+    y: float;
+    z: float;
+}
+
+struct Quaternion {
+    x: float;
+    y: float;
+    z: float;
+    w: float;
+}
+
+// Message type identifiers for routing
+enum MessageType : byte {
+    PHYSICS_SNAPSHOT = 0,      // UDP: Physics state update
+    SCENE_CHANGE = 1,          // TCP: Scene load/change request
+    ENTITY_SPAWN = 2,          // TCP: Entity spawn command
+    ENTITY_DESPAWN = 3,        // TCP: Entity despawn command
+    OWNERSHIP_TRANSFER = 4,    // TCP: Transfer ownership of entity
+    HANDSHAKE = 5,             // TCP: Initial peer handshake
+    ACK = 6                     // TCP: Acknowledgment for reliable messages
+}
+
+enum PeerID : byte {
+    PEER_1 = 0,
+    PEER_2 = 1,
+    PEER_3 = 2,
+    PEER_4 = 3
+}
+
+enum OwnershipType : byte {
+    ONE = 0,
+    TWO = 1,
+    THREE = 2,
+    FOUR = 3
+}
+
+// ============================================================================
+// Physics Snapshot (UDP) - Unreliable State Synchronization
+// ============================================================================
+
+table PhysicsEntitySnapshot {
+    entity_id: uint32;                  // Unique entity identifier
+    owner: OwnershipType;                // Current owner of this entity
+    position: Vec3;                     // World position (metres)
+    rotation: Quaternion;               // World rotation (quaternion)
+    linear_velocity: Vec3;              // Linear velocity (m/s)
+    angular_velocity: Vec3;             // Angular velocity (rad/s or degrees/s - match existing PhysicsState)
+}
+
+table PhysicsSnapshot {
+    sender_peer: PeerID;                // Peer that sent this snapshot
+    snapshot_sequence: uint32;          // Sequence number for ordering and detecting duplicates
+    tick_index: uint32;                 // Physics tick or frame number when snapshot was taken
+    timestamp_ms: uint64;               // Millisecond timestamp for interpolation
+    entities: [PhysicsEntitySnapshot];  // Array of entity states
+}
+
+// ============================================================================
+// Reliable Events (TCP) - Guaranteed Delivery
+// ============================================================================
+
+table SceneChangeEvent {
+    scene_name: string;                 // Name/path of scene to load
+    sender_peer: PeerID;                // Peer that requested the change
+}
+
+table EntitySpawnEvent {
+    entity_id: uint32;                  // Entity identifier
+    owner: OwnershipType;                // Who owns this entity
+    position: Vec3;                     // Initial position
+    rotation: Quaternion;               // Initial rotation
+    entity_type: string;                // Type name for spawning logic
+    sender_peer: PeerID;                // Peer that requested spawn
+}
+
+table EntityDespawnEvent {
+    entity_id: uint32;                  // Entity to despawn
+    sender_peer: PeerID;                // Peer that requested despawn
+}
+
+table OwnershipTransferEvent {
+    entity_id: uint32;                  // Entity being transferred
+    new_owner: OwnershipType;            // New owner after transfer
+    sender_peer: PeerID;                // Peer that initiated transfer
+}
+
+table HandshakeMessage {
+    sender_peer: PeerID;                // ID of peer sending handshake
+    protocol_version: uint32;           // For future compatibility
+    local_port: uint16;                 // Port this peer is listening on
+    ready: bool;                        // Ready to participate in simulation
+}
+
+table AckMessage {
+    acknowledged_sequence: uint32;      // Sequence number being acknowledged
+    sender_peer: PeerID;                // Peer sending the ack
+}
+
+// ============================================================================
+// Root Message Wrapper
+// ============================================================================
+
+table NetworkMessage {
+    message_type: MessageType;          // Type of message contained
+    
+    // Only one of these will be populated depending on message_type
+    physics_snapshot: PhysicsSnapshot;
+    scene_change: SceneChangeEvent;
+    entity_spawn: EntitySpawnEvent;
+    entity_despawn: EntityDespawnEvent;
+    ownership_transfer: OwnershipTransferEvent;
+    handshake: HandshakeMessage;
+    ack: AckMessage;
+}
+
+root_type NetworkMessage;

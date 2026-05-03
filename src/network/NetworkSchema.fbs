@@ -1,0 +1,56 @@
+// src/network/NetworkSchema.fbs
+
+namespace VulkanPhysics.Network;
+
+// 1. Math primitives (Structs are inline and fast in FlatBuffers)
+struct Vec3 {
+  x: float;
+  y: float;
+  z: float;
+}
+
+// 2. Reliable TCP Event Types
+enum EventType : byte {
+  SceneLoad = 0,
+  SpawnObject = 1,
+  DespawnObject = 2,
+  IdAssignment = 3
+}
+
+// 3. The physics payload for a single entity
+table EntityState {
+  entity_id: uint32;
+  owner: byte;              // Maps to your ObjectOwnershipType (0-3)
+  position: Vec3;
+  rotation: Vec3;           // Euler angles (matches TransformComponent.rotation)
+  linear_velocity: Vec3;
+  angular_velocity: Vec3;
+}
+
+// 4. UDP Message: Physics Snapshot
+table PhysicsSnapshot {
+  sequence_number: uint32;  // To drop older, out-of-order packets
+  tick_index: uint64;       // Timestamp/tick for interpolation
+  states: [EntityState];    // Array of updated entities
+}
+
+// 5. TCP Message: Reliable Global Action
+table ReliableEvent {
+  event_type: EventType;
+  string_payload: string;   // e.g., "worlds/desert.world" or "Smoke Grenade"
+  target_entity_id: uint32; // Used if despawning a specific entity
+}
+
+// 6. Union to hold either a UDP snapshot or a TCP event
+union Payload {
+  PhysicsSnapshot,
+  ReliableEvent
+}
+
+// 7. The Root Message wrapper
+table NetworkMessage {
+  sender_peer_id: byte;     // Peer ID (0-3)
+  payload: Payload;
+}
+
+root_type NetworkMessage;

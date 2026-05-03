@@ -39,6 +39,8 @@ public:
 
     static bool simulationPaused;
 
+    static int localPeerId;
+
     // Setters for runtime adjustment
     static void SetLinearDamping(bool enabled, float factor);
     static void SetQuadraticDrag(bool enabled, float coefficient);

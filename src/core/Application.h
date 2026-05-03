@@ -9,6 +9,7 @@
 #include "../rendering/CameraController.h"
 #include "../menu/EditorUI.h"
 #include "InputManager.h"
+#include "../network/NetworkManager.h"
 
 #include "Config.h"
 
@@ -89,6 +90,7 @@ private:
     std::unique_ptr<Scene> scene;
     std::unique_ptr<CameraController> cameraController;
     std::unique_ptr<EditorUI> editorUI;
+    std::unique_ptr<NetworkManager> m_networkManager;
 
     std::chrono::time_point<std::chrono::high_resolution_clock> lastFrameTime;
 

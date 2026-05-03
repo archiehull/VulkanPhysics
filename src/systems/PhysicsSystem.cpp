@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <vector>
 
+int PhysicsSystem::localPeerId = -1;
+
 // Default settings
 int PhysicsSystem::subSteps = 4;
 IntegrationMethod PhysicsSystem::currentMethod = IntegrationMethod::SemiImplicitEuler;

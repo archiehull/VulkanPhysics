@@ -103,7 +103,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Use this if your FPS is locked at 90 unexpectedly.\nForces Vulkan to reset its swapchain and presentation modes.");
 
         ImGui::Separator();
-        ImGui::MenuItem("Performance Stats", nullptr, &m_Profiler.showProfiler);
+        ImGui::MenuItem("Performance", nullptr, &m_Profiler.showProfiler);
         ImGui::MenuItem("Runtime", nullptr, &m_ShowRuntimeWindow);
         if (ImGui::Button("Demo Mode: Render 30Hz / Sim 1000Hz")) {
             SetRuntimeSettings(30.0f, 1000.0f);

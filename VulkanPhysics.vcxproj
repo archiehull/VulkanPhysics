@@ -37,6 +37,7 @@
     <ClCompile Include="src\geometry\SJGLoader.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\core\FlatBufferSceneLoader.cpp" />
+    <ClCompile Include="src\network\NetworkManager.cpp" />
     <ClCompile Include="src\menu\EditorUI.cpp" />
     <ClCompile Include="src\menu\EditorUI_DrawMainMenu.cpp" />
     <ClCompile Include="src\menu\EditorUI_DrawWindows.cpp" />
@@ -75,6 +76,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Application.h" />
+    <ClInclude Include="src\network\NetworkSchema_generated.h" />
     <ClInclude Include="src\scene_generated.h" />
     <ClInclude Include="src\core\FlatBufferSceneLoader.h" />
     <ClInclude Include="src\core\ClothFactory.h" />
@@ -83,6 +85,7 @@
     <ClInclude Include="src\core\CoreTypes.h" />
     <ClInclude Include="src\core\ECS.h" />
     <ClInclude Include="src\core\InputManager.h" />
+    <ClInclude Include="src\network\NetworkManager.h" />
     <ClInclude Include="src\core\Window.h" />
     <ClInclude Include="src\geometry\Geometry.h" />
     <ClInclude Include="src\geometry\GeometryGenerator.h" />
