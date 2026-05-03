@@ -84,7 +84,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Use this if your FPS is locked at 90 unexpectedly.\nForces Vulkan to reset its swapchain and presentation modes.");
 
         ImGui::Separator();
-        ImGui::MenuItem("UI Profiler", nullptr, &m_Profiler.showProfiler);
+        ImGui::MenuItem("Performance Stats", nullptr, &m_Profiler.showProfiler);
 
         ImGui::Separator();
 

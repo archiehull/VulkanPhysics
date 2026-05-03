@@ -14,6 +14,7 @@
 #include "../vulkan/VulkanContext.h"
 #include "../vulkan/UniformBufferObject.h"
 #include "ParticleSystem.h"
+#include <mutex>
 
 struct TerrainConfig {
     bool exists = false;
@@ -110,8 +111,10 @@ public:
     void UpdateVisuals(float deltaTime);
     void ResetEnvironment();
 
-    // Per-system timing access
-    const std::vector<std::pair<std::string, float>>& GetLastSystemTimings() const { return m_LastSystemTimings; }
+    // Return smoothed per-system timings (thread-safe copy)
+    std::vector<std::pair<std::string, float>> GetSmoothedSystemTimings() const;
+    std::vector<std::string> GetSystemNamesOrdered() const;
+    std::unordered_map<std::string, float> GetSmoothedTimingsMap() const;
     float GetLastPhysicsTime() const { return m_LastPhysicsTime; }
 
     void ToggleGlobalShadingMode();
@@ -255,6 +258,11 @@ private:
     float m_ElapsedTime = 0.0f;
     int globalShadingMode = 1;
 
-    std::vector<std::pair<std::string, float>> m_LastSystemTimings;
+    mutable std::vector<std::pair<std::string, float>> m_LastSystemTimings;
+    std::vector<std::pair<std::string, float>> m_LastPhysicsTimings;
+    std::vector<std::pair<std::string, float>> m_LastVisualTimings;
+    mutable std::mutex m_TimingsMutex;
+    mutable std::unordered_map<std::string, float> m_SmoothedTimings;
+    float m_SmoothingAlpha = 0.08f; // EMA alpha: lower = smoother
     float m_LastPhysicsTime = 0.0f;
 };

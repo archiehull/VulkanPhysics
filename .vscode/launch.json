@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "c:/Users/Ell/Documents/repos/VulkanPhysics",
-      "program": "c:/Users/Ell/Documents/repos/VulkanPhysics/build/Release/outRelease",
+      "cwd": "c:/Users/Ell/Documents/repos/VulkanPhysics/VulkanPhysics",
+      "program": "c:/Users/Ell/Documents/repos/VulkanPhysics/VulkanPhysics/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

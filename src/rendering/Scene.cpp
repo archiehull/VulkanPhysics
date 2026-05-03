@@ -238,6 +238,64 @@ void Scene::RegisterEntityName(const std::string& name, Entity entity) {
     }
 }
 
+std::vector<std::pair<std::string, float>> Scene::GetSmoothedSystemTimings() const {
+    std::unordered_map<std::string, float> latest;
+    {
+        std::lock_guard<std::mutex> lock(m_TimingsMutex);
+        for (const auto& p : m_LastPhysicsTimings) latest[p.first] += p.second;
+        for (const auto& p : m_LastVisualTimings) latest[p.first] += p.second;
+    }
+
+    std::vector<std::pair<std::string, float>> out;
+    {
+        std::lock_guard<std::mutex> lock(m_TimingsMutex);
+        for (const auto& kv : latest) {
+            const std::string& name = kv.first;
+            float val = kv.second;
+            float prev = 0.0f;
+            auto it = m_SmoothedTimings.find(name);
+            if (it != m_SmoothedTimings.end()) prev = it->second;
+            float sm = prev * (1.0f - m_SmoothingAlpha) + val * m_SmoothingAlpha;
+            m_SmoothedTimings[name] = sm;
+        }
+
+        for (auto it = m_SmoothedTimings.begin(); it != m_SmoothedTimings.end(); ) {
+            if (latest.find(it->first) == latest.end()) {
+                float sm = it->second * (1.0f - m_SmoothingAlpha);
+                if (sm < 0.0001f) {
+                    it = m_SmoothedTimings.erase(it);
+                    continue;
+                }
+                it->second = sm;
+            }
+            ++it;
+        }
+
+        out.reserve(m_SmoothedTimings.size());
+        for (const auto& kv : m_SmoothedTimings) out.emplace_back(kv.first, kv.second);
+    }
+
+    std::sort(out.begin(), out.end(), [](const std::pair<std::string, float>& a, const std::pair<std::string, float>& b) {
+        if (a.second == b.second) return a.first < b.first;
+        return a.second > b.second;
+    });
+
+    return out;
+}
+
+std::vector<std::string> Scene::GetSystemNamesOrdered() const {
+    std::vector<std::pair<std::string, float>> timings = GetSmoothedSystemTimings();
+    std::vector<std::string> names;
+    names.reserve(timings.size());
+    for (const auto& timing : timings) names.push_back(timing.first);
+    return names;
+}
+
+std::unordered_map<std::string, float> Scene::GetSmoothedTimingsMap() const {
+    std::lock_guard<std::mutex> lock(m_TimingsMutex);
+    return m_SmoothedTimings;
+}
+
 void Scene::DeleteEntity(Entity entity) {
     if (entity == MAX_ENTITIES || entity >= m_Registry.GetEntityCount() || !m_Registry.IsAlive(entity)) return;
 
@@ -1552,7 +1610,11 @@ void Scene::Update(float deltaTime) {
 }
 
 void Scene::UpdatePhysics(float deltaTime) {
-    m_LastSystemTimings.clear();
+    // Collect physics timings into a dedicated buffer to avoid races with the renderer/UI thread
+    {
+        std::lock_guard<std::mutex> lock(m_TimingsMutex);
+        m_LastPhysicsTimings.clear();
+    }
     const auto physStart = std::chrono::high_resolution_clock::now();
     for (auto& sys : m_Systems) {
         if (sys->IsPhysics()) {
@@ -1561,7 +1623,8 @@ void Scene::UpdatePhysics(float deltaTime) {
             const auto sEnd = std::chrono::high_resolution_clock::now();
             float ms = std::chrono::duration<float, std::milli>(sEnd - sStart).count();
             // Store the system name via RTTI as a fallback
-            m_LastSystemTimings.emplace_back(typeid(*sys).name(), ms);
+            std::lock_guard<std::mutex> lock(m_TimingsMutex);
+            m_LastPhysicsTimings.emplace_back(typeid(*sys).name(), ms);
         }
     }
     const auto physEnd = std::chrono::high_resolution_clock::now();
@@ -1570,13 +1633,18 @@ void Scene::UpdatePhysics(float deltaTime) {
 
 void Scene::UpdateVisuals(float deltaTime) {
     m_ElapsedTime += std::max(0.0f, deltaTime);
+    {
+        std::lock_guard<std::mutex> lock(m_TimingsMutex);
+        m_LastVisualTimings.clear();
+    }
     for (auto& sys : m_Systems) {
         if (!sys->IsPhysics()) {
             const auto sStart = std::chrono::high_resolution_clock::now();
             sys->Update(*this, deltaTime);
             const auto sEnd = std::chrono::high_resolution_clock::now();
             float ms = std::chrono::duration<float, std::milli>(sEnd - sStart).count();
-            m_LastSystemTimings.emplace_back(typeid(*sys).name(), ms);
+            std::lock_guard<std::mutex> lock(m_TimingsMutex);
+            m_LastVisualTimings.emplace_back(typeid(*sys).name(), ms);
         }
     }
 

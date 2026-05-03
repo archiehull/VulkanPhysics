@@ -54,22 +54,75 @@ if (m_ShowControlsWindow) {
 }
 
 if (m_Profiler.showProfiler) {
-    ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("UI Profiler", &m_Profiler.showProfiler)) {
-        ImGui::Text("Total UI Draw: %.3f ms", m_Profiler.totalTime);
+    ImGui::SetNextWindowSize(ImVec2(420, 300), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Performance", &m_Profiler.showProfiler)) {
+        ImGui::Text("UI Total Draw: %.3f ms", m_Profiler.totalTime);
         ImGui::Separator();
         ImGui::Text("Main Menu Bar: %.3f ms", m_Profiler.drawMainMenuTime);
         ImGui::Text("Property Windows: %.3f ms", m_Profiler.drawWindowsTime);
-        
+
+        ImGui::Separator();
+        ImGui::Text("Update: %.3f ms", m_Profiler.updateTime);
+        ImGui::Text("Physics: %.3f ms", m_Profiler.physicsTime);
+        ImGui::Text("Render: %.3f ms", m_Profiler.renderTime);
+        ImGui::Separator();
+        ImGui::Text("Threads: %d", m_Profiler.threadCount);
+        ImGui::Text("Affinity Mask: 0x%08X", m_Profiler.threadAffinityMask);
+
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Per-System Timings")) {
+            auto timings = scene.GetSmoothedSystemTimings();
+            if (timings.empty()) {
+                ImGui::TextDisabled("No per-system timings available");
+            } else {
+                static ImGuiTableFlags tableFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable | ImGuiTableFlags_Resizable;
+                if (ImGui::BeginTable("SystemTimingsTable", 2, tableFlags)) {
+                    ImGui::TableSetupColumn("System Name", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableHeadersRow();
+
+                    if (ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs()) {
+                        if (sortSpecs->SpecsCount > 0) {
+                            std::sort(timings.begin(), timings.end(), [sortSpecs](const auto& a, const auto& b) {
+                                const ImGuiTableColumnSortSpecs* sortSpec = &sortSpecs->Specs[0];
+                                bool ascending = sortSpec->SortDirection == ImGuiSortDirection_Ascending;
+                                if (sortSpec->ColumnIndex == 0) {
+                                    if (a.first == b.first) return a.second < b.second;
+                                    return ascending ? (a.first < b.first) : (a.first > b.first);
+                                } else {
+                                    if (a.second == b.second) return a.first < b.first;
+                                    return ascending ? (a.second < b.second) : (a.second > b.second);
+                                }
+                            });
+                        }
+                        sortSpecs->SpecsDirty = false;
+                    }
+
+                    for (const auto& entry : timings) {
+                        if (entry.second < 0.01f) continue;
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%s", entry.first.c_str());
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%.3f", entry.second);
+                    }
+                    ImGui::EndTable();
+                }
+            }
+        }
+
         ImGui::Separator();
         ImGui::TextDisabled("Vulkan Stats:");
         ImGui::Text("Target FPS: %s", m_FpsCapEnabled ? std::to_string(m_MaxFps).c_str() : "Unlimited");
         ImGui::Text("VSync: %s", m_VSyncEnabled ? "On" : "Off");
-        
+
         if (ImGui::Button("Reset All Timers")) {
             m_Profiler.totalTime = 0;
             m_Profiler.drawMainMenuTime = 0;
             m_Profiler.drawWindowsTime = 0;
+            m_Profiler.updateTime = 0;
+            m_Profiler.physicsTime = 0;
+            m_Profiler.renderTime = 0;
         }
     }
     ImGui::End();

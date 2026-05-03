@@ -134,6 +134,7 @@ private:
     std::vector<bool> isAlive;  // Track which entities are currently alive to prevent double-free
     std::unordered_map<std::type_index, std::shared_ptr<IComponentArray>> componentArrays;
     mutable std::mutex componentArraysMutex;
+    mutable std::mutex entityMutex;
 
 
 
@@ -167,7 +168,7 @@ public:
     }
 
     Entity CreateEntity() {
-        std::lock_guard<std::mutex> lock(componentArraysMutex);
+        std::lock_guard<std::mutex> lock(entityMutex);
         if (!availableEntities.empty()) {
             Entity id = availableEntities.front();
             availableEntities.pop();
@@ -190,28 +191,51 @@ public:
 
     void DestroyEntity(Entity entity) {
         // Prevent double-free: if entity is already dead, ignore
-        std::lock_guard<std::mutex> lock(componentArraysMutex);
-        if (entity >= isAlive.size() || !isAlive[entity]) {
-            return;
+        {
+            std::lock_guard<std::mutex> entLock(entityMutex);
+            if (entity >= isAlive.size() || !isAlive[entity]) {
+                return;
+            }
+            isAlive[entity] = false;
+            availableEntities.push(entity);
         }
-        isAlive[entity] = false;
-        for (auto const& pair : componentArrays) {
-            pair.second->EntityDestroyed(entity);
+
+        // Snapshot component arrays under the component map lock, then call EntityDestroyed
+        std::vector<std::shared_ptr<IComponentArray>> arrays;
+        {
+            std::lock_guard<std::mutex> lock(componentArraysMutex);
+            arrays.reserve(componentArrays.size());
+            for (auto const& pair : componentArrays) arrays.push_back(pair.second);
         }
-        availableEntities.push(entity);
+        for (auto const& arr : arrays) {
+            if (arr) arr->EntityDestroyed(entity);
+        }
     }
 
     void Clear() {
-        for (auto const& pair : componentArrays) {
-            // We can't easily clear the vectors inside without more template logic, 
-            // but we can at least invalidate all entities.
-            for (Entity i = 0; i < nextEntityId; ++i) {
-                if (isAlive[i]) pair.second->EntityDestroyed(i);
+        // Snapshot arrays to avoid holding the componentArrays mutex while destroying entities
+        std::vector<std::shared_ptr<IComponentArray>> arrays;
+        {
+            std::lock_guard<std::mutex> lock(componentArraysMutex);
+            arrays.reserve(componentArrays.size());
+            for (auto const& pair : componentArrays) arrays.push_back(pair.second);
+        }
+
+        // Call EntityDestroyed for all alive entities
+        for (Entity i = 0; i < nextEntityId; ++i) {
+            if (i < isAlive.size() && isAlive[i]) {
+                for (auto const& arr : arrays) {
+                    if (arr) arr->EntityDestroyed(i);
+                }
             }
         }
-        nextEntityId = 0;
-        while (!availableEntities.empty()) availableEntities.pop();
-        std::fill(isAlive.begin(), isAlive.end(), false);
+
+        {
+            std::lock_guard<std::mutex> entLock(entityMutex);
+            nextEntityId = 0;
+            while (!availableEntities.empty()) availableEntities.pop();
+            std::fill(isAlive.begin(), isAlive.end(), false);
+        }
     }
 
     template <typename T>
@@ -250,6 +274,7 @@ public:
     }
 
     Entity GetEntityCount() const {
+        std::lock_guard<std::mutex> lock(entityMutex);
         return nextEntityId;
     }
 };
