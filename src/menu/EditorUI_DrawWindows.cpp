@@ -7,6 +7,14 @@
 #include <random>
 #include <unordered_set>
 
+void EditorUI::SetNetworkTelemetry(uint64_t bytesSent, uint64_t bytesReceived, int peerCount, bool running, uint32_t localId) {
+    m_Profiler.networkBytesSent = bytesSent;
+    m_Profiler.networkBytesReceived = bytesReceived;
+    m_Profiler.networkPeerCount = peerCount;
+    m_Profiler.networkRunning = running;
+    m_Profiler.localPeerId = localId;
+}
+
 void EditorUI::DrawPostMainMenuSection(Scene& scene, Entity entityToDelete) {
 if (entityToDelete != MAX_ENTITIES) {
     scene.DeleteEntity(entityToDelete);
@@ -131,6 +139,24 @@ if (m_Profiler.showProfiler) {
             m_Profiler.updateTime = 0;
             m_Profiler.physicsTime = 0;
             m_Profiler.renderTime = 0;
+        }
+    }
+    ImGui::End();
+}
+
+// Network window
+if (m_ShowNetworkWindow) {
+    ImGui::SetNextWindowSize(ImVec2(420, 180), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Network", &m_ShowNetworkWindow)) {
+        ImGui::Text("Network: %s", m_Profiler.networkRunning ? "Running" : "Stopped");
+        ImGui::Separator();
+        ImGui::Text("Local Peer ID: %u", m_Profiler.localPeerId);
+        ImGui::Text("Peers: %d", m_Profiler.networkPeerCount);
+        ImGui::Text("Bytes Sent: %llu", (unsigned long long)m_Profiler.networkBytesSent);
+        ImGui::Text("Bytes Received: %llu", (unsigned long long)m_Profiler.networkBytesReceived);
+
+        if (ImGui::Button("Ping All Peers")) {
+            if (m_PingCallback) m_PingCallback();
         }
     }
     ImGui::End();

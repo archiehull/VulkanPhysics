@@ -105,6 +105,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         ImGui::Separator();
         ImGui::MenuItem("Performance Stats", nullptr, &m_Profiler.showProfiler);
         ImGui::MenuItem("Runtime", nullptr, &m_ShowRuntimeWindow);
+        ImGui::MenuItem("Network", nullptr, &m_ShowNetworkWindow);
         if (ImGui::Button("Demo Mode: Render 30Hz / Sim 1000Hz")) {
             SetRuntimeSettings(30.0f, 1000.0f);
             m_RuntimeSettingsChanged = true;

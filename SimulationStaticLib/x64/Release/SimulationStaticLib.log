@@ -1,2 +1,11 @@
-﻿  PhysicsHelper.cpp
+﻿  pch.cpp
+  AABB.cpp
+  Collider.cpp
+  Capsule.cpp
+  Cylinder.cpp
+  PhysicsHelper.cpp
+  Plane.cpp
+  Raycast.cpp
+  SimulationStaticLib.cpp
+  Sphere.cpp
   SimulationStaticLib.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\SimulationStaticLib.lib

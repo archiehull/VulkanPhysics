@@ -2,6 +2,9 @@
 
 #include <string>
 #include <vector>
+#include <functional>
+#include <unordered_map>
+#include <glm/glm.hpp>
 #include "../core/Config.h"
 #include "../rendering/Scene.h"
 #include <chrono>
@@ -27,6 +30,12 @@ struct UIProfiler {
     bool renderAffinityApplied = false;
     bool simulationAffinityApplied = false;
     bool showProfiler = false;
+    // Networking telemetry
+    uint64_t networkBytesSent = 0;
+    uint64_t networkBytesReceived = 0;
+    int networkPeerCount = 0;
+    bool networkRunning = false;
+    uint32_t localPeerId = 0;
 };
 
 class EditorUI {
@@ -61,10 +70,10 @@ public:
 
     struct ProceduralTextureRequest {
         std::string name;
-        ProcTexType type;
-        glm::vec4 color1;
-        glm::vec4 color2;
-        int cellSize;
+        ProcTexType type = ProcTexType::SOLID;
+        glm::vec4 color1 = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        glm::vec4 color2 = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        int cellSize = 8;
     };
 
     std::vector<ProceduralTextureRequest> ConsumeTextureRequests() {
@@ -75,7 +84,7 @@ public:
 
     // --- GEOMETRY CHANGE SYSTEM ---
     struct GeometryChangeRequest {
-        Entity entity;
+        Entity entity = MAX_ENTITIES;
         std::string type;
         std::string path;
     };
@@ -162,6 +171,10 @@ public:
         m_Profiler.renderAffinityApplied = renderAffinityApplied;
         m_Profiler.simulationAffinityApplied = simulationAffinityApplied;
     }
+
+    // Networking telemetry (called each frame)
+    void SetNetworkTelemetry(uint64_t bytesSent, uint64_t bytesReceived, int peerCount, bool running, uint32_t localId);
+    void SetPingCallback(const std::function<void()>& cb) { m_PingCallback = cb; }
 
     // Physics settings
     void SetPhysicsSettings(
@@ -304,6 +317,7 @@ private:
 
     bool m_ShowDemoWindow = false;
     bool m_ShowRuntimeWindow = false;
+    bool m_ShowNetworkWindow = false;
 
     bool m_IsPaused = false;
     float m_TimeScale = 1.0f;
@@ -351,4 +365,6 @@ private:
     bool m_ReplayPlaying = false;
     float m_ReplayPlaybackSpeed = 1.0f;
     float m_ReplayAccumulator = 0.0f;
+
+    std::function<void()> m_PingCallback;
 };
