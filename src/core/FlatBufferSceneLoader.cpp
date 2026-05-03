@@ -346,6 +346,12 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
         // Calculate Mass = Density * Volume
         float volume = CalculateVolume(fbObj, scale);
         physComp.SetMass(density * volume);
+        
+        // Add ownership component based on SimulatedObject owner
+        if (simObj) {
+            ObjectOwnershipType ownerType = static_cast<ObjectOwnershipType>(simObj->owner());
+            scene.GetRegistry().AddComponent<OwnershipComponent>(entity, { ownerType });
+        }
     }
 
     // 6. Support for Animated Objects (Path Animation)
@@ -688,6 +694,15 @@ bool FlatBufferSceneLoader::LoadScene(Scene& scene, AppConfig& config, const std
                         spawnerComp.maxSpawnsPerRun = (int)burst->count();
                         spawnerComp.alwaysOn = false;
                         spawnerComp.spawnInterval = 0.001f; // Burst
+                    }
+                    
+                    // Assign spawner ownership (ONE, TWO, THREE, FOUR, or SEQUENTIAL)
+                    if (base->owner() == Simulation::SpawnerOwnerType_SEQUENTIAL) {
+                        spawnerComp.assignedOwner = 255; // Use 255 as a marker for SEQUENTIAL
+                        spawnerComp.nextSequentialOwner = 0; // Start with player 1
+                    } else {
+                        // Map SpawnerOwnerType to owner index (ONE=0, TWO=1, THREE=2, FOUR=3)
+                        spawnerComp.assignedOwner = std::min((uint8_t)base->owner(), (uint8_t)3);
                     }
                     
                     spawnerComp.isRunning = true;

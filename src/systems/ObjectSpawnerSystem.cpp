@@ -426,4 +426,14 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
 
     phys.velocity = velocity;
     phys.angularVelocity = angVel; // assign initial spin
+    
+    // Assign ownership to spawned object
+    uint8_t objectOwner = spawner.assignedOwner;
+    if (spawner.assignedOwner == 255) {
+        // SEQUENTIAL mode: use nextSequentialOwner and then rotate
+        objectOwner = spawner.nextSequentialOwner;
+        spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
+    }
+    ObjectOwnershipType ownerType = static_cast<ObjectOwnershipType>(std::min(objectOwner, (uint8_t)3));
+    registry.AddComponent<OwnershipComponent>(spawnedEntity, { ownerType });
 }

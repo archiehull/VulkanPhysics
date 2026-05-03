@@ -343,6 +343,10 @@ struct ObjectSpawnerComponent {
     float runElapsedSeconds = 0.0f;
     int maxSpawnsPerRun = -1;         // -1 = unlimited
     int spawnedThisRun = 0;
+    
+    // Ownership tracking (0=Player1, 1=Player2, 2=Player3, 3=Player4)
+    uint8_t assignedOwner = 0;      // Fixed owner (ONE, TWO, THREE, FOUR)
+    uint8_t nextSequentialOwner = 0; // For SEQUENTIAL: tracks next player to own
 
     std::string spawnGeometryType = "Sphere"; // Sphere, Cube, Model
     std::string spawnModelPath = "";
@@ -419,4 +423,36 @@ struct LayerRegionComponent {
 
     bool showRegionDebug = false;
     glm::vec4 regionDebugColor = glm::vec4(0.5f, 0.8f, 1.0f, 0.25f);
+};
+
+// 11. Ownership Tracking for Distributed Simulation
+enum class ObjectOwnershipType : uint8_t {
+    ONE = 0,
+    TWO = 1,
+    THREE = 2,
+    FOUR = 3
+};
+
+struct OwnershipComponent {
+    ObjectOwnershipType owner = ObjectOwnershipType::ONE;
+
+    uint8_t GetOwnerIndex() const { return static_cast<uint8_t>(owner); }
+    std::string GetOwnerName() const {
+        switch (owner) {
+            case ObjectOwnershipType::ONE: return "Player 1";
+            case ObjectOwnershipType::TWO: return "Player 2";
+            case ObjectOwnershipType::THREE: return "Player 3";
+            case ObjectOwnershipType::FOUR: return "Player 4";
+            default: return "Unknown";
+        }
+    }
+    glm::vec4 GetOwnerColor() const {
+        switch (owner) {
+            case ObjectOwnershipType::ONE: return glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+            case ObjectOwnershipType::TWO: return glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+            case ObjectOwnershipType::THREE: return glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+            case ObjectOwnershipType::FOUR: return glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+            default: return glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
+        }
+    }
 };

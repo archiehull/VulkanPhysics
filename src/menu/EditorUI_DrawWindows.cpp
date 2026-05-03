@@ -1141,6 +1141,31 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 }
             }
 
+            // --- 10.5 Ownership Component (Distributed Simulation) ---
+            if (registry.HasComponent<OwnershipComponent>(e)) {
+                bool open = ImGui::TreeNodeEx("OwnershipComponent", ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::SameLine(ImGui::GetWindowWidth() - 90.0f);
+                if (ImGui::Button("Remove##Ownership")) registry.RemoveComponent<OwnershipComponent>(e);
+
+                if (open && registry.HasComponent<OwnershipComponent>(e)) {
+                    auto& ownership = registry.GetComponent<OwnershipComponent>(e);
+                    
+                    glm::vec4 glmColor = ownership.GetOwnerColor();
+                    ImVec4 ownerColor(glmColor.x, glmColor.y, glmColor.z, glmColor.w);
+                    ImGui::TextColored(ownerColor, "Owner: %s", ownership.GetOwnerName().c_str());
+                    ImGui::TextDisabled("Owner Index: %d", ownership.GetOwnerIndex());
+                    
+                    // Combo to change ownership (for testing)
+                    int currentOwner = static_cast<int>(ownership.owner);
+                    const char* ownerOptions[] = {"Player 1 (Red)", "Player 2 (Green)", "Player 3 (Blue)", "Player 4 (Yellow)"};
+                    if (ImGui::Combo("##Owner", &currentOwner, ownerOptions, IM_ARRAYSIZE(ownerOptions))) {
+                        ownership.owner = static_cast<ObjectOwnershipType>(currentOwner);
+                    }
+
+                    ImGui::TreePop();
+                }
+            }
+
             // --- 11. Spring Component ---
             if (registry.HasComponent<SpringComponent>(e)) {
                 bool open = ImGui::TreeNodeEx("SpringComponent", ImGuiTreeNodeFlags_DefaultOpen);
@@ -1759,6 +1784,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                 addMenuItem((ThermoComponent*)nullptr, "ThermoComponent", e);
                 addMenuItem((ColliderComponent*)nullptr, "ColliderComponent", e);
                 addMenuItem((PhysicsComponent*)nullptr, "PhysicsComponent", e);
+                addMenuItem((OwnershipComponent*)nullptr, "OwnershipComponent", e);
                 addMenuItem((SpringComponent*)nullptr, "SpringComponent", e);
                 addMenuItem((PathAnimationComponent*)nullptr, "PathAnimationComponent", e);
                 addMenuItem((LightComponent*)nullptr, "LightComponent", e);

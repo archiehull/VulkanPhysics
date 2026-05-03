@@ -873,6 +873,38 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         }
 
         ImGui::Separator();
+        
+        if (ImGui::CollapsingHeader("Distributed Ownership", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::TextDisabled("Object Distribution Across Players:");
+            
+            // Count objects by owner
+            Registry& registry = scene.GetRegistry();
+            const Entity entityCount = registry.GetEntityCount();
+            std::array<int, 4> ownerCount = {0, 0, 0, 0};
+            
+            for (Entity e = 0; e < entityCount; ++e) {
+                if (registry.HasComponent<OwnershipComponent>(e)) {
+                    uint8_t ownerIdx = registry.GetComponent<OwnershipComponent>(e).GetOwnerIndex();
+                    if (ownerIdx < 4) {
+                        ownerCount[ownerIdx]++;
+                    }
+                }
+            }
+            
+            const char* playerNames[] = {"Player 1 (Red)", "Player 2 (Green)", "Player 3 (Blue)", "Player 4 (Yellow)"};
+            const ImVec4 playerColors[] = {
+                ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                ImVec4(0.0f, 1.0f, 0.0f, 1.0f),
+                ImVec4(0.0f, 0.0f, 1.0f, 1.0f),
+                ImVec4(1.0f, 1.0f, 0.0f, 1.0f)
+            };
+            
+            for (int i = 0; i < 4; ++i) {
+                ImGui::TextColored(playerColors[i], "%s: %d objects", playerNames[i], ownerCount[i]);
+            }
+        }
+
+        ImGui::Separator();
 
         ImGui::Text("Simulation Speed (CTRL + CLICK to Type)");
         ImGui::SliderFloat("##speed", &m_TimeScale, 0.0f, 100.0f, "%.3fx", ImGuiSliderFlags_Logarithmic);
