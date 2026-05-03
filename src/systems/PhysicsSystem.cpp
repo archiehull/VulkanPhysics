@@ -410,6 +410,26 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     auto springArray = registry.GetComponentArray<SpringComponent>();
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
 
+    std::unordered_set<Entity> pendingDelete;
+
+    // Optimization: Build active lists once per Update instead of per sub-step
+    std::vector<Entity> activeColliders;
+    std::vector<Entity> activeSpheres;
+    activeColliders.reserve(entityCount);
+    activeSpheres.reserve(entityCount);
+
+    for (Entity i = 0; i < entityCount; ++i) {
+        if (transformArray->HasData(i) && colliderArray->HasData(i) && physicsArray->HasData(i)) {
+            const auto& col = colliderArray->GetData(i);
+            if (col.hasCollision && !col.isClothParticle) {
+                activeColliders.push_back(i);
+                if (col.type == 0) { // 0 = Sphere
+                    activeSpheres.push_back(i);
+                }
+            }
+        }
+    }
+
     // 1. Move the sub-step loop to wrap ALL physics force applications
     for (int i = 0; i < subSteps; ++i) {
         
@@ -485,7 +505,15 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
 
         // 2. Integration and Collisions happen AFTER forces are calculated for this step
         Integrate(registry, dt);
-        ResolveCollisions(scene, registry, dt);
+        ResolveCollisions(scene, registry, dt, activeColliders, activeSpheres, pendingDelete);
+    }
+
+    for (Entity e : pendingDelete) {
+        if (scene.IsLookaheadMode()) {
+            scene.DeactivateEntityForLookahead(e);
+        } else {
+            scene.DeleteEntity(e);
+        }
     }
 
     // 3. Update transforms once per frame after all sub-steps
@@ -646,10 +674,9 @@ void PhysicsSystem::ApplySpherePlaneCorrection(TransformComponent& sphereTrans, 
     }
 }
 
-void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt) {
+void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt, const std::vector<Entity>& activeColliders, const std::vector<Entity>& activeSpheres, std::unordered_set<Entity>& pendingDelete) {
     const auto entityCount = registry.GetEntityCount();
     bool useForce = (currentResolutionMethod == ResolutionMethod::Force);
-    std::unordered_set<Entity> pendingDelete;
 
     auto transformArray = registry.GetComponentArray<TransformComponent>();
     auto colliderArray = registry.GetComponentArray<ColliderComponent>();
@@ -672,22 +699,15 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
         }
     };
 
-    // Phase 2 Optimization: Dense active colliders list
-    std::vector<Entity> activeColliders;
-    activeColliders.reserve(entityCount);
-    for (Entity i = 0; i < entityCount; ++i) {
-        if (transformArray->HasData(i) && colliderArray->HasData(i) && physicsArray->HasData(i)) {
-            if (colliderArray->GetData(i).hasCollision) {
-                activeColliders.push_back(i);
-            }
-        }
-    }
-
+    // Use the pre-filtered active lists passed from Update()
     const size_t activeCount = activeColliders.size();
     for (size_t iIdx = 0; iIdx < activeCount; ++iIdx) {
         Entity i = activeColliders[iIdx];
+        if (!registry.IsAlive(i)) continue;
+
         for (size_t jIdx = iIdx + 1; jIdx < activeCount; ++jIdx) {
             Entity j = activeColliders[jIdx];
+            if (!registry.IsAlive(j)) continue;
 
             auto& t1 = transformArray->GetData(i);
             auto& c1 = colliderArray->GetData(i);
@@ -980,15 +1000,8 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
         }
     }
 
+    // activeSpheres is now passed from Update()
     auto clothArray = registry.GetComponentArray<ClothComponent>();
-    
-    std::vector<Entity> activeSpheres;
-    for (size_t iIdx = 0; iIdx < activeCount; ++iIdx) {
-        Entity i = activeColliders[iIdx];
-        if (colliderArray->GetData(i).type == 0) { // 0 = Sphere
-            activeSpheres.push_back(i);
-        }
-    }
 
     for (Entity c = 0; c < entityCount; ++c) {
         if (!clothArray->HasData(c)) continue;
@@ -998,14 +1011,41 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
 
         const auto& indices = cloth.dynamicGeometry->GetIndices();
         
+        // Cache the set of particles to avoid re-construction in the inner loop
+        // Note: For extreme optimization, we could store this set in the ClothComponent
         std::unordered_set<Entity> clothParticleSet(cloth.particles.begin(), cloth.particles.end());
 
+        // Optimization: Calculate Cloth AABB once per sub-step to prune sphere checks
+        glm::vec3 clothMin(std::numeric_limits<float>::max());
+        glm::vec3 clothMax(std::numeric_limits<float>::lowest());
+        bool hasValidParticles = false;
+        for (Entity p : cloth.particles) {
+            if (transformArray->HasData(p)) {
+                const glm::vec3& pos = transformArray->GetData(p).position;
+                clothMin = glm::min(clothMin, pos);
+                clothMax = glm::max(clothMax, pos);
+                hasValidParticles = true;
+            }
+        }
+
+        if (!hasValidParticles) continue;
+
         for (Entity s : activeSpheres) {
+            if (!registry.IsAlive(s)) continue;
             if (clothParticleSet.find(s) != clothParticleSet.end()) continue;
 
             auto& sphereTrans = transformArray->GetData(s);
             auto& sphereCol = colliderArray->GetData(s);
             auto& spherePhys = physicsArray->GetData(s);
+
+            // Pruning: Skip this cloth entirely if the sphere is not near the cloth's AABB
+            float r = sphereCol.radius;
+            glm::vec3 sPos = sphereTrans.position;
+            if (sPos.x + r < clothMin.x || sPos.x - r > clothMax.x ||
+                sPos.y + r < clothMin.y || sPos.y - r > clothMax.y ||
+                sPos.z + r < clothMin.z || sPos.z - r > clothMax.z) {
+                continue;
+            }
 
             MovingSphere helperSphere(sphereTrans.position, sphereCol.radius, spherePhys.velocity, spherePhys.inverseMass, spherePhys.restitution);
             helperSphere.angularVelocity = spherePhys.angularVelocity;
@@ -1038,17 +1078,6 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 spherePhys.velocity = helperSphere.velocity;
                 spherePhys.angularVelocity = helperSphere.angularVelocity;
             }
-        }
-    }
-
-    for (Entity e : pendingDelete) {
-        if (!physicsArray->HasData(e) || !transformArray->HasData(e)) {
-            continue;
-        }
-        if (scene.IsLookaheadMode()) {
-            scene.DeactivateEntityForLookahead(e);
-        } else {
-            scene.DeleteEntity(e);
         }
     }
 }

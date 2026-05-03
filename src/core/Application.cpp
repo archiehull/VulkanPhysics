@@ -1,5 +1,5 @@
-#include "Application.h"
-#include "../rendering/ParticleLibrary.h"
+#define NOMINMAX
+#include <windows.h> // For CPU affinity
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -7,6 +7,11 @@
 #include <thread>
 #include <limits>
 #include <cctype>
+#include "Application.h"
+#include "../rendering/ParticleLibrary.h"
+#include <chrono>
+#include <vector>
+#include <utility>
 
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
@@ -30,6 +35,8 @@ namespace {
     constexpr float kPerfLogIntervalSeconds = 1.0f;
     constexpr float kPerfHitchThresholdMs = 20.0f;
 }
+
+        
 
 // TODO:
 // refactor and decouple scene class to entity component system
@@ -76,6 +83,9 @@ void Application::Run() {
     }
 
     lastFrameTime = std::chrono::high_resolution_clock::now();
+
+    m_IsRunning = true;
+    m_SimulationThread = std::thread(&Application::SimulationLoop, this);
 
     MainLoop();
     Cleanup();
@@ -158,6 +168,8 @@ void Application::LoadScene(const std::string& scenePath) {
     if (vulkanDevice) {
         vkDeviceWaitIdle(vulkanDevice->GetDevice());
     }
+
+    std::unique_lock<std::shared_mutex> lock(m_RegistryMutex);
 
     // 2. Clear current scene data
     if (scene) {
@@ -973,7 +985,7 @@ void Application::MainLoop() {
         lastFrameTime = currentTime;
 
         // Clamp simulation delta to avoid huge catch-up spikes when VSync/frame pacing misses a refresh interval.
-        float simDeltaTime = std::min(deltaTime, 1.0f / 30.0f);
+        float simDeltaTime = std::min(deltaTime.load(), 1.0f / 30.0f);
         if (deltaTime > 0.1f) {
             simDeltaTime = 0.0f; // Drop physics frame on huge hitch (e.g. window resize) to prevent explosion
         }
@@ -990,11 +1002,15 @@ void Application::MainLoop() {
         ImGui::NewFrame();
 
         // The Draw call now handles the top bar logic
-        std::string nextScene = editorUI->Draw(deltaTime,
+        std::string nextScene;
+        {
+            std::shared_lock<std::shared_mutex> uiLock(m_RegistryMutex);
+            nextScene = editorUI->Draw(deltaTime,
             scene->GetWeatherIntensity(),
             scene->GetSeasonName(),
             *scene,
             cameraController->GetOrbitTarget());
+        }
 
         const float* uiColor = editorUI->GetClearColor();
         renderer->SetClearColor(glm::vec4(uiColor[0], uiColor[1], uiColor[2], uiColor[3]));
@@ -1049,11 +1065,13 @@ void Application::MainLoop() {
 
         bool showSpringVisuals = false;
         if (editorUI->ConsumeSpringVisualizationRequest(showSpringVisuals)) {
+            std::unique_lock<std::shared_mutex> lock(m_RegistryMutex);
             scene->SetSpringVisualizationEnabled(showSpringVisuals);
         }
 
         bool showSpawnerVisuals = false;
         if (editorUI->ConsumeSpawnerVisualizationRequest(showSpawnerVisuals)) {
+            std::unique_lock<std::shared_mutex> lock(m_RegistryMutex);
             scene->SetSpawnerVisualizationEnabled(showSpawnerVisuals);
         }
 
@@ -1097,6 +1115,7 @@ void Application::MainLoop() {
         if (!geoRequests.empty()) {
             // CRITICAL: Wait for the GPU to finish the current frame before destroying vertex buffers!
             vkDeviceWaitIdle(vulkanDevice->GetDevice());
+            std::unique_lock<std::shared_mutex> geoLock(m_RegistryMutex);
             auto& registry = scene->GetRegistry();
 
             for (const auto& req : geoRequests) {
@@ -1176,10 +1195,14 @@ void Application::MainLoop() {
 
         const auto updateStart = std::chrono::high_resolution_clock::now();
         cameraController->SetReplayFreeRoam(editorUI->IsReplaying() && editorUI->GetReplayFreeRoam());
-        cameraController->Update(simDeltaTime, *scene, *inputManager);
+        {
+            std::unique_lock<std::shared_mutex> camLock(m_RegistryMutex);
+            cameraController->Update(simDeltaTime, *scene, *inputManager);
+        }
 
         // --- Replay Mode Override ---
         if (editorUI->ConsumeGenerateLookaheadRequest(m_LookaheadTimeframe)) {
+            std::unique_lock<std::shared_mutex> lookaheadLock(m_RegistryMutex);
             GenerateLookahead(m_LookaheadTimeframe);
             editorUI->SetIsReplaying(true);
         }
@@ -1188,6 +1211,7 @@ void Application::MainLoop() {
             m_IsReplaying = true;
             m_CurrentReplayFrame = editorUI->GetReplayFrame();
 
+            std::unique_lock<std::shared_mutex> replayLock(m_RegistryMutex);
             if (!m_ReplayFrames.empty() && m_CurrentReplayFrame >= 0 && m_CurrentReplayFrame < m_ReplayFrames.size()) {
                 const auto& snapshot = m_ReplayFrames[m_CurrentReplayFrame];
                 auto& registry = scene->GetRegistry();
@@ -1242,12 +1266,17 @@ void Application::MainLoop() {
                 }
             }
             PhysicsSystem::simulationPaused = true;
-            scene->Update(simDeltaTime);
+            // Removed scene->Update(simDeltaTime) as it runs in simulation loop
         } else {
             m_IsReplaying = false;
             PhysicsSystem::simulationPaused = false;
-            // 4. Update the scene with the calculated delta
-            scene->Update(simDeltaTime);
+            
+            // Visual systems (Cloth vertex updates, Animation, etc.) are updated on the main thread 
+            // to share the workload and avoid stalling the high-frequency physics thread.
+            {
+                std::unique_lock<std::shared_mutex> visualLock(m_RegistryMutex);
+                scene->UpdateVisuals(simDeltaTime);
+            }
         }
         
         const auto updateEnd = std::chrono::high_resolution_clock::now();
@@ -1259,20 +1288,23 @@ void Application::MainLoop() {
         int currentViewMask = SceneLayers::ALL;
         int currentInsideRegionMask = 0;
 
-        if (activeCamEntity != MAX_ENTITIES && registry.HasComponent<CameraComponent>(activeCamEntity)) {
-            hadActiveCamera = true;
-            auto& camComp = registry.GetComponent<CameraComponent>(activeCamEntity);
+        {
+            std::shared_lock<std::shared_mutex> renderLock(m_RegistryMutex);
+            if (activeCamEntity != MAX_ENTITIES && registry.HasComponent<CameraComponent>(activeCamEntity)) {
+                hadActiveCamera = true;
+                auto& camComp = registry.GetComponent<CameraComponent>(activeCamEntity);
 
-            const glm::mat4 viewMatrix = camComp.viewMatrix;
-            const glm::mat4 projMatrix = camComp.projectionMatrix;
+                const glm::mat4 viewMatrix = camComp.viewMatrix;
+                const glm::mat4 projMatrix = camComp.projectionMatrix;
 
-            currentViewMask = camComp.viewMask;
-            currentInsideRegionMask = camComp.insideRegionMask;
+                currentViewMask = camComp.viewMask;
+                currentInsideRegionMask = camComp.insideRegionMask;
 
-            if (renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask, currentInsideRegionMask)) {
-                framebufferResized = true;
+                if (renderer->DrawFrame(*scene, currentFrame, viewMatrix, projMatrix, currentViewMask, currentInsideRegionMask)) {
+                    framebufferResized = true;
+                }
+                drewFrame = true;
             }
-            drewFrame = true;
         }
         const auto drawEnd = std::chrono::high_resolution_clock::now();
 
@@ -1288,6 +1320,10 @@ void Application::MainLoop() {
             if (frameElapsed < targetFrameDuration) {
                 std::this_thread::sleep_for(targetFrameDuration - frameElapsed);
             }
+        } else if (!config.vsync) {
+            // If uncapped, provide a tiny amount of breathing room to prevent 100% CPU usage
+            // on the main thread and allow the simulation thread to acquire the lock.
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
 
         if (kRuntimeDebug) {
@@ -1316,10 +1352,10 @@ void Application::MainLoop() {
             const double drawCpuMs = std::chrono::duration<double, std::milli>(drawEnd - updateEnd).count();
             const double frameCpuMs = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - frameStart).count();
 
-            perfLogTimer += deltaTime;
+            perfLogTimer += deltaTime.load();
             perfFrameCount++;
-            perfMinDt = std::min(perfMinDt, deltaTime);
-            perfMaxDt = std::max(perfMaxDt, deltaTime);
+            perfMinDt = std::min(perfMinDt, deltaTime.load());
+            perfMaxDt = std::max(perfMaxDt, deltaTime.load());
             perfUpdateCpuMsAccum += updateCpuMs;
             perfDrawCpuMsAccum += drawCpuMs;
 
@@ -1368,84 +1404,93 @@ void Application::ProcessInput() {
         editorUI->SetPaused(!editorUI->IsPaused());
     }
 
-    auto handleCameraBind = [&](InputAction action, const char* bindName) {
-        if (!inputManager->IsActionJustPressed(action)) return;
+    const bool sprintHeld = inputManager->IsActionHeld(InputAction::Sprint);
+    bool needsReload = false;
 
-        const bool wasAlreadyActive = cameraController->IsActiveCameraBoundTo(bindName);
-        cameraController->SwitchCameraByBind(bindName, *scene);
+    {
+        std::unique_lock<std::shared_mutex> lock(m_RegistryMutex);
 
-        if (wasAlreadyActive) {
-            cameraController->CycleRandomTarget(*scene); // no-op unless active camera type is RandomTarget
-        }
+        auto handleCameraBind = [&](InputAction action, const char* bindName) {
+            if (!inputManager->IsActionJustPressed(action)) return;
+
+            const bool wasAlreadyActive = cameraController->IsActiveCameraBoundTo(bindName);
+            cameraController->SwitchCameraByBind(bindName, *scene);
+
+            if (wasAlreadyActive) {
+                cameraController->CycleRandomTarget(*scene); // no-op unless active camera type is RandomTarget
+            }
         };
 
-    // --- Dynamic Camera Switching ---
-    // These now look up the assigned camera name from the config file using the ActionBind
-    handleCameraBind(InputAction::Camera1, "Camera1");
-    handleCameraBind(InputAction::Camera2, "Camera2");
-    handleCameraBind(InputAction::Camera3, "Camera3");
-    handleCameraBind(InputAction::Camera4, "Camera4");
-    handleCameraBind(InputAction::Camera5, "Camera5");
-    handleCameraBind(InputAction::Camera6, "Camera6");
-    handleCameraBind(InputAction::Camera7, "Camera7");
-    handleCameraBind(InputAction::Camera8, "Camera8");
+        // --- Dynamic Camera Switching ---
+        // These now look up the assigned camera name from the config file using the ActionBind
+        handleCameraBind(InputAction::Camera1, "Camera1");
+        handleCameraBind(InputAction::Camera2, "Camera2");
+        handleCameraBind(InputAction::Camera3, "Camera3");
+        handleCameraBind(InputAction::Camera4, "Camera4");
+        handleCameraBind(InputAction::Camera5, "Camera5");
+        handleCameraBind(InputAction::Camera6, "Camera6");
+        handleCameraBind(InputAction::Camera7, "Camera7");
+        handleCameraBind(InputAction::Camera8, "Camera8");
 
-    // --- Decoupled Ignite Logic (F4) ---
-    // Works automatically with any camera configured as "RandomTarget" or "Orbit" 
-    // that targets a specific object.
-    if (inputManager->IsActionJustPressed(InputAction::IgniteTarget)) {
-        Entity target = cameraController->GetOrbitTarget();
-        if (target != MAX_ENTITIES) {
-            scene->Ignite(target);
-            std::cout << "Ignited Orbit Target Entity: " << target << std::endl;
+        // --- Decoupled Ignite Logic (F4) ---
+        // Works automatically with any camera configured as "RandomTarget" or "Orbit" 
+        // that targets a specific object.
+        if (inputManager->IsActionJustPressed(InputAction::IgniteTarget)) {
+            Entity target = cameraController->GetOrbitTarget();
+            if (target != MAX_ENTITIES) {
+                scene->Ignite(target);
+                std::cout << "Ignited Orbit Target Entity: " << target << std::endl;
+            }
+            else {
+                std::cout << "No valid target in focus to ignite." << std::endl;
+            }
         }
-        else {
-            std::cout << "No valid target in focus to ignite." << std::endl;
+
+        // --- Environment & Rendering Toggles ---
+        if (inputManager->IsActionJustPressed(InputAction::ToggleShading)) {
+            scene->ToggleGlobalShadingMode();
+        }
+        if (inputManager->IsActionJustPressed(InputAction::ToggleShadows)) {
+            scene->ToggleSimpleShadows();
+        }
+        if (inputManager->IsActionJustPressed(InputAction::NextSeason)) {
+            scene->NextSeason();
+        }
+        if (inputManager->IsActionJustPressed(InputAction::SpawnDustCloud)) {
+            scene->SpawnDustCloud();
+        }
+        if (inputManager->IsActionJustPressed(InputAction::ToggleWeather)) {
+            scene->ToggleWeather();
+        }
+        if (inputManager->IsActionJustPressed(InputAction::ResetEnvironment)) {
+            needsReload = true;
+        }
+
+        if (inputManager->IsActionJustPressed(InputAction::ToggleNoclip)) {
+            CameraSystem::ToggleNoclip(*scene);
+            std::cout << "Noclip toggled via Hotkey\n";
+        }
+
+        if (inputManager->IsActionJustPressed(InputAction::FireSpawnerGroupA)) {
+            if (sprintHeld) {
+                ObjectSpawnerSystem::StartGroup(*scene, "A");
+            }
+            else {
+                ObjectSpawnerSystem::FireGroup(*scene, "A");
+            }
+        }
+        if (inputManager->IsActionJustPressed(InputAction::FireSpawnerGroupB)) {
+            if (sprintHeld) {
+                ObjectSpawnerSystem::StartGroup(*scene, "B");
+            }
+            else {
+                ObjectSpawnerSystem::FireGroup(*scene, "B");
+            }
         }
     }
 
-    // --- Environment & Rendering Toggles ---
-    if (inputManager->IsActionJustPressed(InputAction::ToggleShading)) {
-        scene->ToggleGlobalShadingMode();
-    }
-    if (inputManager->IsActionJustPressed(InputAction::ToggleShadows)) {
-        scene->ToggleSimpleShadows();
-    }
-    if (inputManager->IsActionJustPressed(InputAction::NextSeason)) {
-        scene->NextSeason();
-    }
-    if (inputManager->IsActionJustPressed(InputAction::SpawnDustCloud)) {
-        scene->SpawnDustCloud();
-    }
-    if (inputManager->IsActionJustPressed(InputAction::ToggleWeather)) {
-        scene->ToggleWeather();
-    }
-    if (inputManager->IsActionJustPressed(InputAction::ResetEnvironment)) {
+    if (needsReload) {
         ReloadCurrentScene();
-    }
-
-    if (inputManager->IsActionJustPressed(InputAction::ToggleNoclip)) {
-        CameraSystem::ToggleNoclip(*scene);
-        std::cout << "Noclip toggled via Hotkey\n";
-    }
-
-    const bool sprintHeld = inputManager->IsActionHeld(InputAction::Sprint);
-
-    if (inputManager->IsActionJustPressed(InputAction::FireSpawnerGroupA)) {
-        if (sprintHeld) {
-            ObjectSpawnerSystem::StartGroup(*scene, "A");
-        }
-        else {
-            ObjectSpawnerSystem::FireGroup(*scene, "A");
-        }
-    }
-    if (inputManager->IsActionJustPressed(InputAction::FireSpawnerGroupB)) {
-        if (sprintHeld) {
-            ObjectSpawnerSystem::StartGroup(*scene, "B");
-        }
-        else {
-            ObjectSpawnerSystem::FireGroup(*scene, "B");
-        }
     }
 
     // --- Time Speed (Holding T logic) ---
@@ -1459,11 +1504,11 @@ void Application::ProcessInput() {
             timeScale = 1.0f;
         }
         else if (shiftPressed) {
-            timeScale -= scaleChangeRate * deltaTime;
+            timeScale.store(timeScale.load() - scaleChangeRate * deltaTime.load());
             if (timeScale < 0.1f) timeScale = 0.1f;
         }
         else {
-            timeScale += scaleChangeRate * deltaTime;
+            timeScale.store(timeScale.load() + scaleChangeRate * deltaTime.load());
         }
     }
 
@@ -1481,6 +1526,11 @@ void Application::FramebufferResizeCallback(GLFWwindow* glfwWindow, int width, i
 }
 
 void Application::Cleanup() {
+    m_IsRunning = false;
+    if (m_SimulationThread.joinable()) {
+        m_SimulationThread.join();
+    }
+
     if (vulkanDevice) {
         vkDeviceWaitIdle(vulkanDevice->GetDevice());
     }
@@ -1515,4 +1565,75 @@ void Application::Cleanup() {
         vulkanContext.reset();
     }
 
+}
+
+void Application::SimulationLoop() {
+    auto lastTime = std::chrono::high_resolution_clock::now();
+    float accumulator = 0.0f;
+
+    while (m_IsRunning) {
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float frameTime = std::chrono::duration<float>(currentTime - lastTime).count();
+        lastTime = currentTime;
+
+        // Apply timescale to the advancement of physics time
+        float currentScale = timeScale.load();
+        accumulator += frameTime * currentScale;
+
+        // Cap the accumulator to prevent "spiral of death" or huge unstable catch-up steps
+        if (accumulator > 0.25f) {
+            accumulator = 0.25f;
+        }
+
+        const float fixedDt = 1.0f / m_TargetSimFrequency.load();
+
+        // 1. Process thread-safe tasks from the main thread
+        {
+            std::unique_lock<std::mutex> taskLock(m_TaskQueueMutex);
+            if (!m_TaskQueue.empty()) {
+                std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
+                for (auto& task : m_TaskQueue) {
+                    task();
+                }
+                m_TaskQueue.clear();
+            }
+        }
+
+        // 2. Consume accumulator in fixed steps
+        bool stepped = false;
+        int stepsThisFrame = 0;
+        const int maxStepsPerFrame = 5; // Cap steps to prevent "spiral of death"
+
+        while (accumulator >= fixedDt && stepsThisFrame < maxStepsPerFrame) {
+            if (!m_IsReplaying && !PhysicsSystem::simulationPaused && scene) {
+                std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
+                scene->UpdatePhysics(fixedDt);
+                stepped = true;
+            } else {
+                // If paused or replaying, just discard the time
+                accumulator = 0.0f;
+                break;
+            }
+
+            accumulator -= fixedDt;
+            stepsThisFrame++;
+
+            // If we are doing multiple catch-up steps, yield briefly between them
+            // to allow the renderer thread to get a shared lock for a frame.
+            if (accumulator >= fixedDt && stepsThisFrame < maxStepsPerFrame) {
+                std::this_thread::sleep_for(std::chrono::nanoseconds(1));
+            }
+        }
+
+        // If we hit the step cap, discard the remaining time to avoid a permanent lag spiral.
+        // This causes "time dilation" (physics runs slow) but keeps the app responsive.
+        if (accumulator > fixedDt) {
+            accumulator = 0.0f;
+        }
+
+        // Prevent 100% CPU usage and allow lock breathing room if we are caught up
+        if (!stepped || accumulator < fixedDt) {
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+    }
 }

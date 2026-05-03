@@ -106,7 +106,13 @@ public:
     const std::vector<std::unique_ptr<ParticleSystem>>& GetParticleSystems() const { return particleSystems; }
 
     void Update(float deltaTime);
+    void UpdatePhysics(float deltaTime);
+    void UpdateVisuals(float deltaTime);
     void ResetEnvironment();
+
+    // Per-system timing access
+    const std::vector<std::pair<std::string, float>>& GetLastSystemTimings() const { return m_LastSystemTimings; }
+    float GetLastPhysicsTime() const { return m_LastPhysicsTime; }
 
     void ToggleGlobalShadingMode();
 
@@ -248,4 +254,7 @@ private:
     bool m_RegionsOnlyDebugView = false;
     float m_ElapsedTime = 0.0f;
     int globalShadingMode = 1;
+
+    std::vector<std::pair<std::string, float>> m_LastSystemTimings;
+    float m_LastPhysicsTime = 0.0f;
 };

@@ -15,6 +15,12 @@
 #include <memory>
 #include <chrono>
 #include <unordered_map>
+#include <thread>
+#include <atomic>
+#include <shared_mutex>
+#include <mutex>
+#include <functional>
+#include <vector>
 
 struct EntitySnapshot {
     glm::vec3 position;
@@ -57,6 +63,8 @@ private:
     void RecreateSwapChain();
     void ReloadCurrentScene();
 
+    void SimulationLoop();
+
     void GenerateLookahead(float timeframe);
 
     void LoadScene(const std::string& scenePath);
@@ -85,11 +93,19 @@ private:
     AppConfig config;
     std::string currentScenePath;
 
-    float deltaTime = 0.0f;
-    float timeScale = 1.0f;
+    std::atomic<float> deltaTime = 0.0f;
+    std::atomic<float> timeScale = 1.0f;
 
     uint32_t currentFrame = 0;
     bool framebufferResized = false;
+
+    // Multithreading and Affinity
+    std::thread m_SimulationThread;
+    std::atomic<bool> m_IsRunning = false;
+    std::atomic<float> m_TargetSimFrequency = 120.0f;
+    std::shared_mutex m_RegistryMutex;
+    std::mutex m_TaskQueueMutex;
+    std::vector<std::function<void()>> m_TaskQueue;
 
     // Lookahead Replay State
     std::vector<FrameSnapshot> m_ReplayFrames;

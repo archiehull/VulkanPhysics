@@ -10,6 +10,11 @@ struct UIProfiler {
     float drawMainMenuTime = 0.0f;
     float drawWindowsTime = 0.0f;
     float totalTime = 0.0f;
+    float updateTime = 0.0f; // ms spent in update (physics + logic)
+    float physicsTime = 0.0f; // ms spent in physics
+    float renderTime = 0.0f;  // ms spent in render/draw
+    int threadCount = 0;      // active threads
+    unsigned long threadAffinityMask = 0; // affinity bitmask
     bool showProfiler = false;
 };
 
@@ -26,6 +31,12 @@ public:
     // Renders the top menu bar. Returns a path if a new scene is selected.
     std::string Draw(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget = MAX_ENTITIES);    // Returns the path determined during Initialize
     std::string GetInitialScenePath() const;
+
+    // Runtime profiling setters
+    void SetUpdateTime(float ms);
+    void SetPhysicsTime(float ms);
+    void SetRenderTime(float ms);
+    void SetThreadInfo(int count, unsigned long affinityMask);
 
     const float* GetClearColor() const { return m_ClearColor; }
 

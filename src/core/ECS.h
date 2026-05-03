@@ -9,6 +9,7 @@
 #include <vector>
 #include <limits>
 #include <iostream>
+#include <mutex>
 
 using Entity = uint32_t;
 const Entity MAX_ENTITIES = 30000;
@@ -132,6 +133,7 @@ private:
     std::queue<Entity> availableEntities;
     std::vector<bool> isAlive;  // Track which entities are currently alive to prevent double-free
     std::unordered_map<std::type_index, std::shared_ptr<IComponentArray>> componentArrays;
+    mutable std::mutex componentArraysMutex;
 
 
 
@@ -139,16 +141,21 @@ public:
     template<typename T>
     std::shared_ptr<ComponentArray<T>> GetComponentArray() {
         auto type = std::type_index(typeid(T));
-        if (componentArrays.find(type) == componentArrays.end()) {
-            componentArrays[type] = std::make_shared<ComponentArray<T>>();
+        std::lock_guard<std::mutex> lock(componentArraysMutex);
+        auto it = componentArrays.find(type);
+        if (it == componentArrays.end()) {
+            auto arr = std::make_shared<ComponentArray<T>>();
+            componentArrays[type] = arr;
+            return std::static_pointer_cast<ComponentArray<T>>(componentArrays[type]);
         }
-        return std::static_pointer_cast<ComponentArray<T>>(componentArrays[type]);
+        return std::static_pointer_cast<ComponentArray<T>>(it->second);
     }
 
     // --- ADD CONST VERSION (No lazy creation) ---
     template<typename T>
     std::shared_ptr<const ComponentArray<T>> GetComponentArray() const {
         auto type = std::type_index(typeid(T));
+        std::lock_guard<std::mutex> lock(componentArraysMutex);
         auto it = componentArrays.find(type);
         if (it == componentArrays.end()) return nullptr;
         return std::static_pointer_cast<const ComponentArray<T>>(it->second);
@@ -160,6 +167,7 @@ public:
     }
 
     Entity CreateEntity() {
+        std::lock_guard<std::mutex> lock(componentArraysMutex);
         if (!availableEntities.empty()) {
             Entity id = availableEntities.front();
             availableEntities.pop();
@@ -182,6 +190,7 @@ public:
 
     void DestroyEntity(Entity entity) {
         // Prevent double-free: if entity is already dead, ignore
+        std::lock_guard<std::mutex> lock(componentArraysMutex);
         if (entity >= isAlive.size() || !isAlive[entity]) {
             return;
         }

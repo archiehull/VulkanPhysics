@@ -1,5 +1,6 @@
 #pragma once
-
+#include <unordered_set>
+#include <vector>
 #include "ISystem.h"
 #include "../core/ECS.h"
 #include <glm/glm.hpp>
@@ -44,11 +45,12 @@ public:
     static void SetSleepThresholds(bool normalEnabled, float normalThreshold, bool tangentialEnabled, float tangentialThreshold);
 
     void Update(Scene& scene, float deltaTime) override;
+    bool IsPhysics() const override { return true; }
 
 private:
     void Integrate(Registry& registry, float dt);
-    void ResolveCollisions(Scene& scene, Registry& registry, float dt);
+    void ResolveCollisions(Scene& scene, Registry& registry, float dt, const std::vector<Entity>& activeColliders, const std::vector<Entity>& activeSpheres, std::unordered_set<Entity>& pendingDelete);
     bool IsCollidable(const Registry& reg, Entity e);
-    void ApplyPositionCorrection(struct TransformComponent& t1, struct TransformComponent& t2, float r1, float r2, bool static1, bool static2);
-    void ApplySpherePlaneCorrection(struct TransformComponent& sphereTrans, float radius, const class Plane& plane);
+    static void ApplyPositionCorrection(struct TransformComponent& t1, struct TransformComponent& t2, float r1, float r2, bool static1, bool static2);
+    static void ApplySpherePlaneCorrection(struct TransformComponent& sphereTrans, float radius, const class Plane& plane);
 };

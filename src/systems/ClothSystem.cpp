@@ -55,8 +55,9 @@ void ClothSystem::Update(Scene& scene, float deltaTime) {
                 }
                 for(size_t i = 0; i < cloth.dynamicGeometry->VertexCount(); ++i) {
                     glm::vec3& n = cloth.dynamicGeometry->GetVertex(i).normal;
-                    if (glm::length(n) > 0.0001f) {
-                        n = glm::normalize(n);
+                    float lenSq = glm::dot(n, n);
+                    if (lenSq > 1e-8f) {
+                        n *= glm::inversesqrt(lenSq);
                     } else {
                         n = glm::vec3(0.0f, 1.0f, 0.0f);
                     }

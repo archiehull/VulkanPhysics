@@ -11,4 +11,7 @@ public:
 
     // Every system takes the registry and the delta time
     virtual void Update(Scene& scene, float deltaTime) = 0;
+
+    // Identify physics systems for work-sharing
+    virtual bool IsPhysics() const { return false; }
 };

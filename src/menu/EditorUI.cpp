@@ -142,6 +142,23 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
     return sceneToLoad;
 }
 
+void EditorUI::SetUpdateTime(float ms) {
+    m_Profiler.updateTime = ms;
+}
+
+void EditorUI::SetPhysicsTime(float ms) {
+    m_Profiler.physicsTime = ms;
+}
+
+void EditorUI::SetRenderTime(float ms) {
+    m_Profiler.renderTime = ms;
+}
+
+void EditorUI::SetThreadInfo(int count, unsigned long affinityMask) {
+    m_Profiler.threadCount = count;
+    m_Profiler.threadAffinityMask = affinityMask;
+}
+
 void EditorUI::DrawReplayEditor(Scene& scene) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     float windowHeight = 140.0f * m_UIScale;

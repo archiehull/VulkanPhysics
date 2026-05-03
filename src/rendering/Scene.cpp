@@ -13,6 +13,7 @@
 #include <cctype>
 #include <unordered_set>
 #include "../util/AnimationMath.h"
+#include <chrono>
 
 namespace {
 float ComputeFlickerPresetValue(int preset, float t, float phase) {
@@ -1546,9 +1547,37 @@ void Scene::UpdateSpawnerVisuals() {
 }
 
 void Scene::Update(float deltaTime) {
+    UpdatePhysics(deltaTime);
+    UpdateVisuals(deltaTime);
+}
+
+void Scene::UpdatePhysics(float deltaTime) {
+    m_LastSystemTimings.clear();
+    const auto physStart = std::chrono::high_resolution_clock::now();
+    for (auto& sys : m_Systems) {
+        if (sys->IsPhysics()) {
+            const auto sStart = std::chrono::high_resolution_clock::now();
+            sys->Update(*this, deltaTime);
+            const auto sEnd = std::chrono::high_resolution_clock::now();
+            float ms = std::chrono::duration<float, std::milli>(sEnd - sStart).count();
+            // Store the system name via RTTI as a fallback
+            m_LastSystemTimings.emplace_back(typeid(*sys).name(), ms);
+        }
+    }
+    const auto physEnd = std::chrono::high_resolution_clock::now();
+    m_LastPhysicsTime = std::chrono::duration<float, std::milli>(physEnd - physStart).count();
+}
+
+void Scene::UpdateVisuals(float deltaTime) {
     m_ElapsedTime += std::max(0.0f, deltaTime);
     for (auto& sys : m_Systems) {
-        sys->Update(*this, deltaTime);
+        if (!sys->IsPhysics()) {
+            const auto sStart = std::chrono::high_resolution_clock::now();
+            sys->Update(*this, deltaTime);
+            const auto sEnd = std::chrono::high_resolution_clock::now();
+            float ms = std::chrono::duration<float, std::milli>(sEnd - sStart).count();
+            m_LastSystemTimings.emplace_back(typeid(*sys).name(), ms);
+        }
     }
 
     if (m_ShowSpringVisuals) {
