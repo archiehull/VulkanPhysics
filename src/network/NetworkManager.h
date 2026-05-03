@@ -21,6 +21,9 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
+// Forward declaration to avoid header dependency
+class Registry;
+
 struct RemotePeer {
     int id = -1;
     std::string ip = "127.0.0.1";
@@ -63,6 +66,9 @@ public:
 
     void SendUDP(const std::vector<uint8_t>& data);
     void SendTCP(const std::vector<uint8_t>& data);
+
+    void BroadcastState(Registry& registry);
+    void ProcessInboundPackets(Registry& registry);
 
 private:
     std::atomic<bool> m_isRunning{ false };

@@ -1,5 +1,6 @@
 #include "ObjectSpawnerSystem.h"
 #include "../rendering/Scene.h"
+#include "../systems/PhysicsSystem.h"
 #include "../core/Components.h"
 #include <algorithm>
 #include <cctype>
@@ -90,6 +91,17 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
 
         auto& spawner = spawnerArray->GetData(e);
         auto& transform = transformArray->GetData(e);
+
+        // --- NEW: Ownership check for the spawner itself ---
+        // If the spawner has an OwnershipComponent, only the owner runs the spawn logic.
+        // This prevents multiple peers from spawning duplicates of the same object.
+        if (registry.HasComponent<OwnershipComponent>(e)) {
+            auto& spawnerOwnership = registry.GetComponent<OwnershipComponent>(e);
+            int localId = PhysicsSystem::localPeerId;
+            if (localId != -1 && static_cast<int>(spawnerOwnership.GetOwnerIndex()) != localId) {
+                continue; 
+            }
+        }
 
         if (spawner.attachToTarget) {
             Entity targetEnt = MAX_ENTITIES;
@@ -429,11 +441,26 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     
     // Assign ownership to spawned object
     uint8_t objectOwner = spawner.assignedOwner;
-    if (spawner.assignedOwner == 255) {
+    if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
         // SEQUENTIAL mode: use nextSequentialOwner and then rotate
         objectOwner = spawner.nextSequentialOwner;
         spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
     }
+    else if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_LOCAL) {
+        // LOCAL mode: Use the ID of the peer that is currently running the simulation
+        int localId = PhysicsSystem::localPeerId;
+
+        if (localId == -1 && registry.HasComponent<OwnershipComponent>(spawnerEntity)) {
+            // If we're still connecting but the spawner already has an assigned owner, 
+            // use that. This prevents objects from being "orphaned" to Peer 0 
+            // before the local peer ID handshake completes.
+            objectOwner = static_cast<uint8_t>(registry.GetComponent<OwnershipComponent>(spawnerEntity).GetOwnerIndex());
+        }
+        else {
+            objectOwner = static_cast<uint8_t>(localId == -1 ? 0 : localId);
+        }
+    }
+
     ObjectOwnershipType ownerType = static_cast<ObjectOwnershipType>(std::min(objectOwner, (uint8_t)3));
     registry.AddComponent<OwnershipComponent>(spawnedEntity, { ownerType });
 }

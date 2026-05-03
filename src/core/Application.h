@@ -25,25 +25,26 @@
 #include <cstdint>
 
 struct EntitySnapshot {
-    glm::vec3 position;
-    glm::vec3 rotation;
-    glm::vec3 scale;
-    glm::mat4 matrix;
-    bool visible;
-    float lightIntensity;
+    // Transform / render state
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 rotation = glm::vec3(0.0f);
+    glm::vec3 scale = glm::vec3(1.0f);
+    glm::mat4 matrix = glm::mat4(1.0f);
+    bool visible = true;
+    float lightIntensity = 1.0f;
 
     // Physics state
     bool hasPhysics = false;
-    glm::vec3 velocity;
-    glm::vec3 angularVelocity;
-    glm::mat3 orientation;
-    bool isStatic;
-    glm::vec3 forceAccumulator;
-    glm::vec3 torqueAccumulator;
+    glm::vec3 velocity = glm::vec3(0.0f);
+    glm::vec3 angularVelocity = glm::vec3(0.0f);
+    glm::mat3 orientation = glm::mat3(1.0f);
+    bool isStatic = false;
+    glm::vec3 forceAccumulator = glm::vec3(0.0f);
+    glm::vec3 torqueAccumulator = glm::vec3(0.0f);
 
     // Collider state
     bool hasCollider = false;
-    bool hasCollision;
+    bool hasCollision = false;
 };
 
 struct FrameSnapshot {

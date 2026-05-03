@@ -1688,6 +1688,10 @@ void Application::SimulationLoop() {
     int steppedFrames = 0;
     auto hzWindowStart = std::chrono::high_resolution_clock::now();
 
+	// Broadcast throttling (seconds) - adjust as needed (0.0 = every physics step) (TODO: expose in UI)
+    const float kBroadcastInterval = 0.1f; // 10 Hz
+    float broadcastAccumulator = 0.0f;
+
     while (m_IsRunning) {
         auto currentTime = std::chrono::high_resolution_clock::now();
         float frameTime = std::chrono::duration<float>(currentTime - lastTime).count();
@@ -1730,6 +1734,20 @@ void Application::SimulationLoop() {
                 m_LastPhysicsStepMs = static_cast<float>(std::chrono::duration<double, std::milli>(physEnd - physStart).count());
                 stepped = true;
                 steppedFrames++;
+
+                // Network broadcast of authoritative state (throttled)
+                if (m_networkManager) {
+                    if (kBroadcastInterval <= 0.0f) {
+                        // immediate broadcast every physics step
+                        m_networkManager->BroadcastState(scene->GetRegistry());
+                    } else {
+                        broadcastAccumulator += fixedDt;
+                        if (broadcastAccumulator >= kBroadcastInterval) {
+                            broadcastAccumulator = 0.0f;
+                            m_networkManager->BroadcastState(scene->GetRegistry());
+                        }
+                    }
+                }
             } else {
                 // If paused or replaying, just discard the time
                 accumulator = 0.0f;

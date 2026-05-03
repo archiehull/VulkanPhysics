@@ -1766,6 +1766,24 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     }
 
                     ImGui::Separator();
+                    ImGui::TextDisabled("Network Ownership");
+                    const char* ownerModes[] = { "Player 1", "Player 2", "Player 3", "Player 4", "Sequential", "Local Peer" };
+                    int currentMode = 0;
+                    if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) currentMode = 4;
+                    else if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_LOCAL) currentMode = 5;
+                    else currentMode = std::min((int)spawner.assignedOwner, 3);
+
+                    if (ImGui::Combo("Spawned Owner", &currentMode, ownerModes, IM_ARRAYSIZE(ownerModes))) {
+                        if (currentMode == 4) spawner.assignedOwner = ObjectSpawnerComponent::OWNER_SEQUENTIAL;
+                        else if (currentMode == 5) spawner.assignedOwner = ObjectSpawnerComponent::OWNER_LOCAL;
+                        else spawner.assignedOwner = (uint8_t)currentMode;
+                    }
+
+                    if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
+                        ImGui::TextDisabled("Next Sequential: Player %d", spawner.nextSequentialOwner + 1);
+                    }
+
+                    ImGui::Separator();
                     ImGui::Text("Spawned Count: %d", spawner.spawnedCount);
                     if (ImGui::Button("Fire Once")) {
                         ObjectSpawnerSystem::FireOnce(scene, e);

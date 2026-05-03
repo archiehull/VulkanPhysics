@@ -1,6 +1,8 @@
 #include "NetworkManager.h"
 #include "NetworkSchema_generated.h" 
 #include "../systems/PhysicsSystem.h"
+#include "../core/Components.h"
+
 
 using namespace VulkanPhysics::Network;
 
@@ -207,7 +209,7 @@ void NetworkManager::ReceiveTCP() {
 
     // 2. Process Established Peers (Standard reliable traffic)
     for (auto& peer : m_peers) {
-        if (!peer.isConnected || peer.id == m_localPeerId) continue;
+        if (!peer.isConnected || peer.id == m_localPeerId.load()) continue;
 
         int bytes = recv(peer.tcpSocket, buffer, sizeof(buffer), 0);
         if (bytes > 0) {
@@ -239,13 +241,14 @@ void NetworkManager::ReceiveUDP() {
     while (true) {
         int bytes = recvfrom(m_udpSocket, buffer, sizeof(buffer), 0, (sockaddr*)&from, &fromLen);
         if (bytes <= 0) break;
+        //if (m_debugLogging) std::cout << "[Network] Received UDP packet: " << bytes << " bytes.\n"; // ADD THIS
         PushInboundEvent(std::vector<uint8_t>(buffer, buffer + bytes));
     }
 }
 
 void NetworkManager::MaintainOutgoingConnections() {
     // Only search for anchor if we don't have an ID and aren't already waiting on a connection
-    if (m_localPeerId == -1 && m_pendingConnections.empty() && m_peerCount < 3) { // 4 PEER CAP
+    if (m_localPeerId.load() == -1 && m_pendingConnections.empty() && m_peerCount < 3) { // 4 PEER CAP
         static auto lastAttempt = std::chrono::steady_clock::now();
         if (std::chrono::steady_clock::now() - lastAttempt > std::chrono::seconds(2)) {
             lastAttempt = std::chrono::steady_clock::now();
@@ -276,7 +279,7 @@ void NetworkManager::MaintainOutgoingConnections() {
 }
 
 void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
-    if (m_localPeerId == 0 && remoteId == -1) {
+    if (m_localPeerId.load() == 0 && remoteId == -1) {
         int newId = GetNextAvailableId();
         if (newId != -1) {
             flatbuffers::FlatBufferBuilder b(128);
@@ -287,7 +290,7 @@ void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
             // Create the event using the string
             auto ev = CreateReliableEvent(b, EventType_IdAssignment, idStr);
 
-            auto msg = CreateNetworkMessage(b, m_localPeerId, Payload_ReliableEvent, ev.Union());
+            auto msg = CreateNetworkMessage(b, static_cast<int8_t>(m_localPeerId.load()), Payload_ReliableEvent, ev.Union());
             b.Finish(msg);
 
             uint32_t size = b.GetSize();
@@ -314,7 +317,7 @@ void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
 void NetworkManager::SendHandshake(SOCKET s) {
     flatbuffers::FlatBufferBuilder b(128);
     auto ev = CreateReliableEventDirect(b, EventType_SceneLoad, "HANDSHAKE");
-    auto msg = CreateNetworkMessage(b, m_localPeerId, Payload_ReliableEvent, ev.Union());
+    auto msg = CreateNetworkMessage(b, static_cast<int8_t>(m_localPeerId.load()), Payload_ReliableEvent, ev.Union());
     b.Finish(msg);
 
     uint32_t size = b.GetSize();
@@ -337,7 +340,7 @@ bool NetworkManager::PopInboundEvent(std::vector<uint8_t>& out) {
 
 void NetworkManager::SendUDP(const std::vector<uint8_t>& d) {
     for (auto& p : m_peers) {
-        if (p.isConnected && p.id != m_localPeerId) {
+        if (p.isConnected && p.id != m_localPeerId.load()) {
             sendto(m_udpSocket, (char*)d.data(), (int)d.size(), 0, (sockaddr*)&p.udpAddr, sizeof(p.udpAddr));
         }
     }
@@ -349,6 +352,125 @@ void NetworkManager::SendTCP(const std::vector<uint8_t>& d) {
         if (p.isConnected && p.tcpSocket != INVALID_SOCKET && p.id != m_localPeerId) {
             send(p.tcpSocket, (char*)&size, 4, 0);
             send(p.tcpSocket, (char*)d.data(), size, 0);
+        }
+    }
+}
+
+void NetworkManager::BroadcastState(Registry& registry) {
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+    auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
+
+    flatbuffers::FlatBufferBuilder builder(2048);
+    std::vector<flatbuffers::Offset<EntityState>> entityStates;
+
+    // Static counter for sequence numbers
+    static uint32_t sequenceCounter = 0;
+
+    for (Entity i = 0; i < registry.GetEntityCount(); ++i) {
+        // Check if we have the necessary components and if we OWN this entity
+        if (transformArray->HasData(i) && physicsArray->HasData(i) && ownershipArray->HasData(i)) {
+            auto& ownership = ownershipArray->GetData(i);
+
+            if (static_cast<int>(ownership.GetOwnerIndex()) == m_localPeerId) {
+                auto& t = transformArray->GetData(i);
+                auto& p = physicsArray->GetData(i);
+
+                // Build the math primitives
+                Vec3 pos(t.position.x, t.position.y, t.position.z);
+                Vec3 rot(t.rotation.x, t.rotation.y, t.rotation.z);
+                Vec3 linVel(p.velocity.x, p.velocity.y, p.velocity.z);
+                Vec3 angVel(0.0f, 0.0f, 0.0f); // Add angular if your PhysicsComponent has it
+
+                // Create the EntityState table
+                auto state = CreateEntityState(
+                    builder,
+                    static_cast<uint32_t>(i),
+                    static_cast<int8_t>(m_localPeerId),
+                    &pos, &rot, &linVel, &angVel
+                );
+                entityStates.push_back(state);
+            }
+        }
+    }
+
+    if (entityStates.empty()) return;
+
+    // Create the PhysicsSnapshot (The UDP Payload)
+    auto statesVector = builder.CreateVector(entityStates);
+    auto snapshot = CreatePhysicsSnapshot(builder, sequenceCounter++, 0, statesVector);
+
+    // Wrap it in the Root NetworkMessage
+    auto msg = CreateNetworkMessage(
+        builder,
+        static_cast<int8_t>(m_localPeerId.load()),
+        Payload_PhysicsSnapshot,
+        snapshot.Union()
+    );
+
+    builder.Finish(msg);
+
+    // Broadcast via UDP
+    std::vector<uint8_t> data(builder.GetBufferPointer(), builder.GetBufferPointer() + builder.GetSize());
+    SendUDP(data);
+
+    if (m_debugLogging && !entityStates.empty()) {
+        //std::cout << "[Network] Broadcasting " << entityStates.size() << " objects via UDP.\n";
+    }
+}
+
+void NetworkManager::ProcessInboundPackets(Registry& registry) {
+    std::vector<uint8_t> packet;
+
+    // Fetch components for updating
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+    auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
+
+    // Empty the queue
+    while (PopInboundEvent(packet)) {
+        auto netMsg = GetNetworkMessage(packet.data());
+
+        // Handle UDP Physics Snapshots
+        if (netMsg->payload_type() == Payload_PhysicsSnapshot) {
+            if (m_debugLogging) { std::cout << "[Network] Processing Physics Snapshot...\n"; }
+            auto snapshot = netMsg->payload_as_PhysicsSnapshot();
+
+            // TODO: Optional - Check snapshot->sequence_number() 
+            // to ignore older packets that arrived out-of-order.
+
+            for (auto state : *snapshot->states()) {
+                Entity id = static_cast<Entity>(state->entity_id());
+
+                // Safety check: ensure the entity exists locally
+                if (transformArray->HasData(id) && physicsArray->HasData(id)) {
+                    if (m_debugLogging) { std::cout << "[Network] Snapping Entity " << id << "\n"; }
+
+
+                    // Logic: Only update if we DON'T own it
+                    bool isMine = false;
+                    if (ownershipArray->HasData(id)) {
+                        isMine = (static_cast<int>(ownershipArray->GetData(id).GetOwnerIndex()) == m_localPeerId);
+                    }
+
+                    if (!isMine) {
+                        auto& t = transformArray->GetData(id);
+                        auto& p = physicsArray->GetData(id);
+
+                        // Snap position and velocity to match the owner
+                        t.position = glm::vec3(state->position()->x(), state->position()->y(), state->position()->z());
+                        t.rotation = glm::vec3(state->rotation()->x(), state->rotation()->y(), state->rotation()->z());
+                        p.velocity = glm::vec3(state->linear_velocity()->x(), state->linear_velocity()->y(), state->linear_velocity()->z());
+                    }
+                }
+                else {
+                    std::cout << "[Network] ERROR: Received data for Entity " << id << " but it doesn't exist here!\n";
+                }
+            }
+        }
+        // Handle TCP Reliable Events (Scene loads, etc.)
+        else if (netMsg->payload_type() == Payload_ReliableEvent) {
+            // (Handle SceneLoad or Spawning here)
         }
     }
 }

@@ -167,6 +167,12 @@ namespace {
                 float sphereMassEffect = sphere.invMass + glm::dot(angularEffect, n);
                 
                 float j = -(1.0f + e) * velAlongNormal / (sphereMassEffect + clothInvMass);
+                
+                // Safety check: Avoid infinite impulses from division by near-zero mass or precision errors
+                if (std::isnan(j) || std::isinf(j) || j > 1000.0f) {
+                    j = 0.0f;
+                }
+
                 glm::vec3 impulse = n * j;
 
                 if (sphere.invMass > 0.0f) {
@@ -537,9 +543,19 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
     auto transformArray = registry.GetComponentArray<TransformComponent>();
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
     auto colliderArray = registry.GetComponentArray<ColliderComponent>();
+    auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
 
     for (Entity i = 0; i < registry.GetEntityCount(); ++i) {
         if (transformArray->HasData(i) && physicsArray->HasData(i)) {
+            if (ownershipArray->HasData(i)) {
+                auto& ownership = ownershipArray->GetData(i);
+                // Only skip if we have a valid peer ID AND we are not the owner.
+                // If localPeerId is -1, we are in standalone mode or joining, so we simulate everything.
+                if (localPeerId != -1 && static_cast<int>(ownership.GetOwnerIndex()) != localPeerId) {
+                    continue;
+                }
+            }
+
             auto& transform = transformArray->GetData(i);
             auto& physics = physicsArray->GetData(i);
 
@@ -661,6 +677,17 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                     physics.torqueAccumulator = helperBody.torqueAccumulator;
                 }
 
+                // Safety: Clamp extreme velocities and check for NaNs to prevent "freezing" or disappearing objects
+                if (glm::any(glm::isnan(physics.velocity)) || glm::length(physics.velocity) > 1000.0f) {
+                    physics.velocity = glm::vec3(0.0f);
+                }
+                if (glm::any(glm::isnan(physics.angularVelocity)) || glm::length(physics.angularVelocity) > 1000.0f) {
+                    physics.angularVelocity = glm::vec3(0.0f);
+                }
+                if (glm::any(glm::isnan(transform.position))) {
+                    transform.position = glm::vec3(0.0f, 10.0f, 0.0f); // Safe recovery position
+                }
+
                 physics.forceAccumulator = glm::vec3(0.0f);
             }
         }
@@ -684,6 +711,7 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
     auto colliderArray = registry.GetComponentArray<ColliderComponent>();
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
     auto despawnerArray = registry.GetComponentArray<DespawnerComponent>();
+    auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
 
     auto queueDespawnerDeletion = [&](Entity a, Entity b, const PhysicsComponent& physA, const PhysicsComponent& physB) {
         const bool aIsDespawner = despawnerArray->HasData(a) && despawnerArray->GetData(a).enabled;
@@ -744,6 +772,18 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 sphereB.inverseInertiaTensor = p2.inverseInertiaTensor;
 
                 if (sphereA.sphere.CollideWith(sphereB.sphere)) {
+                    bool ownA = true;
+                    if (ownershipArray->HasData(i)) {
+                        ownA = (static_cast<int>(ownershipArray->GetData(i).GetOwnerIndex()) == localPeerId);
+                    }
+
+                    bool ownB = true;
+                    if (ownershipArray->HasData(j)) {
+                        ownB = (static_cast<int>(ownershipArray->GetData(j).GetOwnerIndex()) == localPeerId);
+                    }
+
+                    if (!ownA && !ownB) continue;
+
                     queueDespawnerDeletion(i, j, p1, p2);
                     const float contactFriction = ComputeContactFriction(p1.friction, p2.friction, PhysicsSystem::contactFrictionScale);
                     ResolveElasticCollision(sphereA, sphereB, useForce, dt, contactFriction);

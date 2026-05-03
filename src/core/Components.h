@@ -345,7 +345,10 @@ struct ObjectSpawnerComponent {
     int spawnedThisRun = 0;
     
     // Ownership tracking (0=Player1, 1=Player2, 2=Player3, 3=Player4)
-    uint8_t assignedOwner = 0;      // Fixed owner (ONE, TWO, THREE, FOUR)
+    static constexpr uint8_t OWNER_SEQUENTIAL = 255;
+    static constexpr uint8_t OWNER_LOCAL = 254;
+
+    uint8_t assignedOwner = OWNER_LOCAL;      // Default to the person who spawned it
     uint8_t nextSequentialOwner = 0; // For SEQUENTIAL: tracks next player to own
 
     std::string spawnGeometryType = "Sphere"; // Sphere, Cube, Model
