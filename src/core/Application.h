@@ -22,8 +22,6 @@
 #include <functional>
 #include <vector>
 #include <cstdint>
-// Forward-declare NetworkManager to avoid pulling Winsock into headers
-namespace Network { class NetworkManager; }
 
 struct EntitySnapshot {
     glm::vec3 position;
@@ -54,7 +52,7 @@ struct FrameSnapshot {
 class Application final {
 public:
     Application();
-    ~Application();
+    ~Application() = default;
 
     void Run();
 
@@ -124,9 +122,6 @@ private:
 
     std::atomic<bool> m_RenderAffinityApplied = false;
     std::atomic<bool> m_SimulationAffinityApplied = false;
-
-    // Networking
-    std::unique_ptr<Network::NetworkManager> m_networkManager;
 
     // Lookahead Replay State
     std::vector<FrameSnapshot> m_ReplayFrames;

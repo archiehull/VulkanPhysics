@@ -37,7 +37,6 @@
     <ClCompile Include="src\geometry\SJGLoader.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\core\FlatBufferSceneLoader.cpp" />
-    <ClCompile Include="src\network\NetworkManager.cpp" />
     <ClCompile Include="src\menu\EditorUI.cpp" />
     <ClCompile Include="src\menu\EditorUI_DrawMainMenu.cpp" />
     <ClCompile Include="src\menu\EditorUI_DrawWindows.cpp" />
@@ -76,10 +75,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Application.h" />
-    <ClInclude Include="src\network\NetworkManager.h" />
-    <ClInclude Include="src\network\PacketDefs.h" />
-    <ClInclude Include="src\network\UDPTransport.h" />
-    <ClInclude Include="src\network\TCPControl.h" />
     <ClInclude Include="src\scene_generated.h" />
     <ClInclude Include="src\core\FlatBufferSceneLoader.h" />
     <ClInclude Include="src\core\ClothFactory.h" />
@@ -309,7 +304,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\Additional Libraries\imgui-master;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -327,7 +322,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)Additional Libraries\Additional Libraries\imgui-master;$(SolutionDir)Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;$(SolutionDir)Additional Libraries\;C:\Users\663073\Workspace\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022;C:\VulkanSDK\1.4.313.2\Lib;C:\Users\a\Desktop\TheOrb\Additional Libraries\glfw-3.4.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

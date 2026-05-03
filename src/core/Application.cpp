@@ -8,7 +8,6 @@
 #include <limits>
 #include <cctype>
 #include "Application.h"
-#include "../network/NetworkManager.h"
 #include "../rendering/ParticleLibrary.h"
 #include <chrono>
 #include <vector>
@@ -27,11 +26,6 @@
 #include "../systems/PhysicsSystem.h"
 #include "../systems/ObjectSpawnerSystem.h"
 #include "FlatBufferSceneLoader.h"
-
-// Define destructor out-of-line so std::unique_ptr<Network::NetworkManager>
-// can be destroyed with a complete type present in this translation unit.
-Application::~Application() {
-}
 
 namespace {
     constexpr bool kSceneDebug = false;
@@ -127,11 +121,6 @@ void Application::Run() {
     lastFrameTime = std::chrono::high_resolution_clock::now();
 
     m_IsRunning = true;
-    // Start networking (non-blocking)
-    m_networkManager = std::make_unique<Network::NetworkManager>();
-    if (!m_networkManager->Start(9000, 9001)) {
-        std::cerr << "Warning: NetworkManager failed to start" << std::endl;
-    }
     m_SimulationThread = std::thread(&Application::SimulationLoop, this);
 
     MainLoop();
@@ -209,17 +198,6 @@ void Application::InitVulkan() {
         camNames.push_back(cam.name);
     }
     editorUI->SetAvailableCameras(camNames);
-
-    // Register ping callback so UI can trigger reliable pings without blocking
-    editorUI->SetPingCallback([this]() {
-        // Run ping on background thread to avoid UI stall
-        std::thread([this]() {
-            if (m_networkManager) {
-                int ok = m_networkManager->PingAllPeers(500);
-                std::cout << "PingAllPeers: " << ok << " replies" << std::endl;
-            }
-        }).detach();
-    });
 
 
 }
@@ -1073,11 +1051,6 @@ void Application::MainLoop() {
             cameraController->GetOrbitTarget());
         }
 
-        // Update network telemetry for UI
-        if (m_networkManager) {
-            editorUI->SetNetworkTelemetry(m_networkManager->GetBytesSent(), m_networkManager->GetBytesReceived(), static_cast<int>(m_networkManager->GetPeerCount()), m_networkManager->IsRunning(), 0);
-        }
-
         const float* uiColor = editorUI->GetClearColor();
         renderer->SetClearColor(glm::vec4(uiColor[0], uiColor[1], uiColor[2], uiColor[3]));
 
@@ -1647,11 +1620,6 @@ void Application::Cleanup() {
     m_IsRunning = false;
     if (m_SimulationThread.joinable()) {
         m_SimulationThread.join();
-    }
-
-    if (m_networkManager) {
-        m_networkManager->Stop();
-        m_networkManager.reset();
     }
 
     if (vulkanDevice) {

@@ -1,1 +1,0 @@
-C:\Users\Ell\Documents\repos\VulkanPhysics\SimulationStaticLib\x64\Release\SimulationStaticLib.lib

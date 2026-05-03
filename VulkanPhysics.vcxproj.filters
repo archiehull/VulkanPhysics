@@ -40,9 +40,6 @@
     <Filter Include="Source Files\src\menu">
       <UniqueIdentifier>{b0f00ec3-ac5d-42ef-861c-f47c26a6a88a}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\src\network">
-      <UniqueIdentifier>{8ba3d0c4-1a89-441b-8ccb-9258a0d19a62}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -204,9 +201,6 @@
     <ClCompile Include="src\core\FlatBufferSceneLoader.cpp">
       <Filter>Source Files\src\core</Filter>
     </ClCompile>
-    <ClCompile Include="src\network\NetworkManager.cpp">
-      <Filter>Source Files\src\network</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Window.h">
@@ -364,18 +358,6 @@
     </ClInclude>
     <ClInclude Include="src\scene_generated.h">
       <Filter>Source Files\src\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\network\NetworkManager.h">
-      <Filter>Source Files\src\network</Filter>
-    </ClInclude>
-    <ClInclude Include="src\network\PacketDefs.h">
-      <Filter>Source Files\src\network</Filter>
-    </ClInclude>
-    <ClInclude Include="src\network\TCPControl.h">
-      <Filter>Source Files\src\network</Filter>
-    </ClInclude>
-    <ClInclude Include="src\network\UDPTransport.h">
-      <Filter>Source Files\src\network</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
