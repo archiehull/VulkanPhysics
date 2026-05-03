@@ -78,6 +78,25 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             ImGui::EndDisabled();
         }
 
+        ImGui::Separator();
+        ImGui::TextDisabled("Async Runtime Targets (Hz)");
+        if (ImGui::InputFloat("Render Hz", &m_TargetRenderHz, 1.0f, 10.0f, "%.1f")) {
+            // Allow 0 to indicate "unlimited" (no software frame cap)
+            m_TargetRenderHz = std::clamp(m_TargetRenderHz, 0.0f, 240.0f);
+            m_RuntimeSettingsChanged = true;
+        }
+        if (ImGui::InputFloat("Simulation Hz", &m_TargetSimulationHz, 10.0f, 100.0f, "%.1f")) {
+            m_TargetSimulationHz = std::clamp(m_TargetSimulationHz, 10.0f, 2000.0f);
+            m_RuntimeSettingsChanged = true;
+        }
+
+        if (ImGui::Button("Apply Runtime Targets")) {
+            m_RuntimeSettingsChanged = true;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Applies asynchronous target rates. Enter 0 for unlimited (no software cap).");
+        }
+
         if (ImGui::Button("Force Recreate Swapchain")) {
             m_PerformanceSettingsChanged = true;
         }
@@ -85,6 +104,12 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
 
         ImGui::Separator();
         ImGui::MenuItem("Performance Stats", nullptr, &m_Profiler.showProfiler);
+        ImGui::MenuItem("Runtime", nullptr, &m_ShowRuntimeWindow);
+        if (ImGui::Button("Demo Mode: Render 30Hz / Sim 1000Hz")) {
+            SetRuntimeSettings(30.0f, 1000.0f);
+            m_RuntimeSettingsChanged = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Sets a demo profile: render@30Hz, sim@1000Hz.");
 
         ImGui::Separator();
 

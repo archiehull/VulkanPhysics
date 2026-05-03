@@ -21,6 +21,7 @@
 #include <mutex>
 #include <functional>
 #include <vector>
+#include <cstdint>
 
 struct EntitySnapshot {
     glm::vec3 position;
@@ -64,6 +65,7 @@ private:
     void ReloadCurrentScene();
 
     void SimulationLoop();
+    // Networking is currently disabled (omitted per request)
 
     void GenerateLookahead(float timeframe);
 
@@ -102,10 +104,24 @@ private:
     // Multithreading and Affinity
     std::thread m_SimulationThread;
     std::atomic<bool> m_IsRunning = false;
+    std::atomic<float> m_TargetRenderFrequency = 60.0f;
     std::atomic<float> m_TargetSimFrequency = 120.0f;
     std::shared_mutex m_RegistryMutex;
     std::mutex m_TaskQueueMutex;
     std::vector<std::function<void()>> m_TaskQueue;
+
+    uint64_t m_RenderAffinityMask = 0;
+    uint64_t m_SimulationAffinityMask = 0;
+
+    std::atomic<float> m_RenderActualHz = 0.0f;
+    std::atomic<float> m_SimulationActualHz = 0.0f;
+    std::atomic<float> m_LastPhysicsStepMs = 0.0f;
+
+    std::atomic<uint32_t> m_RenderThreadId = 0;
+    std::atomic<uint32_t> m_SimulationThreadId = 0;
+
+    std::atomic<bool> m_RenderAffinityApplied = false;
+    std::atomic<bool> m_SimulationAffinityApplied = false;
 
     // Lookahead Replay State
     std::vector<FrameSnapshot> m_ReplayFrames;

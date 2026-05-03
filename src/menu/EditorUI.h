@@ -15,6 +15,17 @@ struct UIProfiler {
     float renderTime = 0.0f;  // ms spent in render/draw
     int threadCount = 0;      // active threads
     unsigned long threadAffinityMask = 0; // affinity bitmask
+    float targetRenderHz = 60.0f;
+    float targetSimulationHz = 120.0f;
+    float actualRenderHz = 0.0f;
+    float actualSimulationHz = 0.0f;
+    unsigned long renderAffinityMask = 0;
+    unsigned long simulationAffinityMask = 0;
+    unsigned int renderThreadId = 0;
+    unsigned int simulationThreadId = 0;
+    bool affinityCompliant = false;
+    bool renderAffinityApplied = false;
+    bool simulationAffinityApplied = false;
     bool showProfiler = false;
 };
 
@@ -111,6 +122,45 @@ public:
         vsyncEnabled = m_VSyncEnabled;
         maxFps = m_FpsCapEnabled ? ((m_MaxFps <= 0) ? 1 : m_MaxFps) : 0;
         return true;
+    }
+
+    void SetRuntimeSettings(float renderHz, float simulationHz) {
+        m_TargetRenderHz = renderHz;
+        m_TargetSimulationHz = simulationHz;
+        m_Profiler.targetRenderHz = renderHz;
+        m_Profiler.targetSimulationHz = simulationHz;
+    }
+
+    bool ConsumeRuntimeSettingsRequest(float& renderHz, float& simulationHz) {
+        if (!m_RuntimeSettingsChanged) {
+            return false;
+        }
+
+        m_RuntimeSettingsChanged = false;
+        renderHz = m_TargetRenderHz;
+        simulationHz = m_TargetSimulationHz;
+        return true;
+    }
+
+    void SetRuntimeTelemetry(
+        float actualRenderHz,
+        float actualSimulationHz,
+        unsigned long renderAffinityMask,
+        unsigned long simulationAffinityMask,
+        unsigned int renderThreadId,
+        unsigned int simulationThreadId,
+        bool affinityCompliant,
+        bool renderAffinityApplied,
+        bool simulationAffinityApplied) {
+        m_Profiler.actualRenderHz = actualRenderHz;
+        m_Profiler.actualSimulationHz = actualSimulationHz;
+        m_Profiler.renderAffinityMask = renderAffinityMask;
+        m_Profiler.simulationAffinityMask = simulationAffinityMask;
+        m_Profiler.renderThreadId = renderThreadId;
+        m_Profiler.simulationThreadId = simulationThreadId;
+        m_Profiler.affinityCompliant = affinityCompliant;
+        m_Profiler.renderAffinityApplied = renderAffinityApplied;
+        m_Profiler.simulationAffinityApplied = simulationAffinityApplied;
     }
 
     // Physics settings
@@ -253,6 +303,7 @@ private:
     float m_ClearColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f }; // Default dark grey
 
     bool m_ShowDemoWindow = false;
+    bool m_ShowRuntimeWindow = false;
 
     bool m_IsPaused = false;
     float m_TimeScale = 1.0f;
@@ -264,6 +315,10 @@ private:
     bool m_FpsCapEnabled = true;
     int m_MaxFps = 144;
     bool m_PerformanceSettingsChanged = false;
+
+    float m_TargetRenderHz = 60.0f;
+    float m_TargetSimulationHz = 120.0f;
+    bool m_RuntimeSettingsChanged = false;
 
     // Physics settings
     bool m_LinearDampingEnabled = true;

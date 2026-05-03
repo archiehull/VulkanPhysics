@@ -70,6 +70,14 @@ if (m_Profiler.showProfiler) {
         ImGui::Text("Affinity Mask: 0x%08X", m_Profiler.threadAffinityMask);
 
         ImGui::Separator();
+        ImGui::TextDisabled("Async Runtime");
+        ImGui::Text("Render: target %.1f Hz | actual %.1f Hz", m_Profiler.targetRenderHz, m_Profiler.actualRenderHz);
+        ImGui::Text("Simulation: target %.1f Hz | actual %.1f Hz", m_Profiler.targetSimulationHz, m_Profiler.actualSimulationHz);
+        ImGui::Text("Render Thread: %u | mask 0x%08X | pinned %s", m_Profiler.renderThreadId, m_Profiler.renderAffinityMask, m_Profiler.renderAffinityApplied ? "yes" : "no");
+        ImGui::Text("Sim Thread: %u | mask 0x%08X | pinned %s", m_Profiler.simulationThreadId, m_Profiler.simulationAffinityMask, m_Profiler.simulationAffinityApplied ? "yes" : "no");
+        ImGui::Text("Mapping Compliance: %s", m_Profiler.affinityCompliant ? "Compliant" : "Non-compliant");
+
+        ImGui::Separator();
         if (ImGui::CollapsingHeader("Per-System Timings")) {
             auto timings = scene.GetSmoothedSystemTimings();
             if (timings.empty()) {
@@ -123,6 +131,38 @@ if (m_Profiler.showProfiler) {
             m_Profiler.updateTime = 0;
             m_Profiler.physicsTime = 0;
             m_Profiler.renderTime = 0;
+        }
+    }
+    ImGui::End();
+}
+
+// Dedicated Runtime window for compliance indicators
+if (m_ShowRuntimeWindow) {
+    ImGui::SetNextWindowSize(ImVec2(420, 180), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Runtime", &m_ShowRuntimeWindow)) {
+        ImGui::Text("Runtime Targets: Render %.1f Hz | Sim %.1f Hz", m_Profiler.targetRenderHz, m_Profiler.targetSimulationHz);
+
+        // Color code render compliance
+        float renderRatio = (m_Profiler.targetRenderHz > 0.0f) ? (m_Profiler.actualRenderHz / m_Profiler.targetRenderHz) : 0.0f;
+        ImVec4 renderCol = (renderRatio >= 0.95f) ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ((renderRatio >= 0.7f) ? ImVec4(0.9f, 0.75f, 0.2f, 1.0f) : ImVec4(0.85f, 0.2f, 0.2f, 1.0f));
+        ImGui::TextColored(renderCol, "Render: %.1f Hz (target %.1f)", m_Profiler.actualRenderHz, m_Profiler.targetRenderHz);
+
+        float simRatio = (m_Profiler.targetSimulationHz > 0.0f) ? (m_Profiler.actualSimulationHz / m_Profiler.targetSimulationHz) : 0.0f;
+        ImVec4 simCol = (simRatio >= 0.95f) ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ((simRatio >= 0.7f) ? ImVec4(0.9f, 0.75f, 0.2f, 1.0f) : ImVec4(0.85f, 0.2f, 0.2f, 1.0f));
+        ImGui::TextColored(simCol, "Simulation: %.1f Hz (target %.1f)", m_Profiler.actualSimulationHz, m_Profiler.targetSimulationHz);
+
+        ImGui::Separator();
+        if (!m_Profiler.renderAffinityApplied) {
+            ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.2f, 1.0f), "Warning: Render thread not pinned to expected cores.");
+        }
+        if (!m_Profiler.simulationAffinityApplied) {
+            ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.2f, 1.0f), "Warning: Simulation thread not pinned to expected cores.");
+        }
+
+        if (m_Profiler.affinityCompliant) {
+            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "Affinity mapping: Compliant");
+        } else {
+            ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), "Affinity mapping: Non-compliant");
         }
     }
     ImGui::End();

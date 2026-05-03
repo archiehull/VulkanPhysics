@@ -34,6 +34,34 @@ namespace {
     constexpr float kRuntimeLogIntervalSeconds = 1.0f;
     constexpr float kPerfLogIntervalSeconds = 1.0f;
     constexpr float kPerfHitchThresholdMs = 20.0f;
+
+    constexpr DWORD_PTR kVisualCoreMask = static_cast<DWORD_PTR>(1ull << 0);      // Core 1
+
+    DWORD_PTR BuildSimulationCoreMask(unsigned int logicalCores) {
+        DWORD_PTR mask = 0;
+        if (logicalCores >= 4) {
+            for (unsigned int core = 3; core < logicalCores; ++core) {
+                mask |= (static_cast<DWORD_PTR>(1ull) << core);
+            }
+        }
+        return mask;
+    }
+
+    bool ApplyCurrentThreadAffinity(DWORD_PTR mask) {
+        if (mask == 0) {
+            return false;
+        }
+        return SetThreadAffinityMask(GetCurrentThread(), mask) != 0;
+    }
+
+    unsigned int GetLogicalCoreCount() {
+        const unsigned int reported = std::thread::hardware_concurrency();
+        return (reported == 0) ? 4u : reported;
+    }
+
+    float ClampHz(float value, float minHz, float maxHz) {
+        return std::clamp(value, minHz, maxHz);
+    }
 }
 
         
@@ -76,6 +104,14 @@ Application::Application() {
 
 void Application::Run() {
     InitVulkan();
+
+    const unsigned int logicalCores = GetLogicalCoreCount();
+    const DWORD_PTR simMask = BuildSimulationCoreMask(logicalCores);
+    m_RenderAffinityMask = static_cast<uint64_t>(kVisualCoreMask);
+    m_SimulationAffinityMask = static_cast<uint64_t>(simMask);
+
+    m_RenderThreadId = static_cast<uint32_t>(GetCurrentThreadId());
+    m_RenderAffinityApplied = ApplyCurrentThreadAffinity(static_cast<DWORD_PTR>(m_RenderAffinityMask));
 
     std::string initialPath = editorUI->GetInitialScenePath();
     if (!initialPath.empty()) {
@@ -154,6 +190,9 @@ void Application::InitVulkan() {
     editorUI = std::make_unique<EditorUI>();
     editorUI->Initialize("src/worlds/", "cloth_test");
     editorUI->SetPerformanceSettings(config.vsync, config.maxFps);
+    // Use 0.0f to represent "uncapped" (no software FPS cap). Previously code defaulted to 60.
+    m_TargetRenderFrequency = static_cast<float>((config.maxFps > 0) ? config.maxFps : 0);
+    editorUI->SetRuntimeSettings(m_TargetRenderFrequency.load(), m_TargetSimFrequency.load());
 
     for (const auto& cam : config.customCameras) {
         camNames.push_back(cam.name);
@@ -1024,11 +1063,29 @@ void Application::MainLoop() {
         int requestedMaxFps = config.maxFps;
         if (editorUI->ConsumePerformanceSettingsRequest(requestedVsync, requestedMaxFps)) {
             config.maxFps = std::max(0, requestedMaxFps);
+            if (config.maxFps > 0) {
+                m_TargetRenderFrequency = static_cast<float>(config.maxFps);
+            }
+            else {
+                // 0 represents uncapped rendering
+                m_TargetRenderFrequency = 0.0f;
+            }
+            editorUI->SetRuntimeSettings(m_TargetRenderFrequency.load(), m_TargetSimFrequency.load());
 
             if (config.vsync != requestedVsync) {
                 pendingVSync = requestedVsync;
                 hasPendingVSyncApply = true;
             }
+        }
+
+        float requestedRenderHz = m_TargetRenderFrequency.load();
+        float requestedSimulationHz = m_TargetSimFrequency.load();
+        if (editorUI->ConsumeRuntimeSettingsRequest(requestedRenderHz, requestedSimulationHz)) {
+            // Allow 0.0f for render target to represent "uncapped" (no software frame pacing)
+            m_TargetRenderFrequency = ClampHz(requestedRenderHz, 0.0f, 240.0f);
+            m_TargetSimFrequency = ClampHz(requestedSimulationHz, 10.0f, 2000.0f);
+            config.maxFps = static_cast<int>(std::round(m_TargetRenderFrequency.load()));
+            editorUI->SetRuntimeSettings(m_TargetRenderFrequency.load(), m_TargetSimFrequency.load());
         }
 
         // Handle physics settings changes
@@ -1308,22 +1365,56 @@ void Application::MainLoop() {
         }
         const auto drawEnd = std::chrono::high_resolution_clock::now();
 
+        const float updateMs = static_cast<float>(std::chrono::duration<double, std::milli>(updateEnd - updateStart).count());
+        const float renderMs = static_cast<float>(std::chrono::duration<double, std::milli>(drawEnd - updateEnd).count());
+        editorUI->SetUpdateTime(updateMs);
+        editorUI->SetRenderTime(renderMs);
+        editorUI->SetPhysicsTime(m_LastPhysicsStepMs.load());
+
+        const float dt = deltaTime.load();
+        if (dt > 0.00001f) {
+            const float instantaneousRenderHz = 1.0f / dt;
+            const float prevRenderHz = m_RenderActualHz.load();
+            m_RenderActualHz = (prevRenderHz <= 0.0f) ? instantaneousRenderHz : (0.9f * prevRenderHz + 0.1f * instantaneousRenderHz);
+        }
+
+        const bool affinityCompliant =
+            m_RenderAffinityApplied.load() &&
+            m_SimulationAffinityApplied.load() &&
+            (m_RenderAffinityMask == static_cast<uint64_t>(kVisualCoreMask)) &&
+            ((m_SimulationAffinityMask & static_cast<uint64_t>(0x7)) == 0) &&
+            (m_SimulationAffinityMask != 0);
+
+        editorUI->SetThreadInfo(2, static_cast<unsigned long>(m_RenderAffinityMask | m_SimulationAffinityMask));
+        editorUI->SetRuntimeTelemetry(
+            m_RenderActualHz.load(),
+            m_SimulationActualHz.load(),
+            static_cast<unsigned long>(m_RenderAffinityMask),
+            static_cast<unsigned long>(m_SimulationAffinityMask),
+            m_RenderThreadId.load(),
+            m_SimulationThreadId.load(),
+            affinityCompliant,
+            m_RenderAffinityApplied.load(),
+            m_SimulationAffinityApplied.load());
+
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 
         inputManager->Update();
 
-        if (!config.vsync && config.maxFps > 0) {
+        const float targetRenderHz = m_TargetRenderFrequency.load();
+        if (!config.vsync && targetRenderHz > 0.0f) {
             const auto targetFrameDuration = std::chrono::duration_cast<std::chrono::high_resolution_clock::duration>(
-                std::chrono::duration<double>(1.0 / static_cast<double>(config.maxFps))
+                std::chrono::duration<double>(1.0 / static_cast<double>(targetRenderHz))
             );
             const auto frameElapsed = std::chrono::high_resolution_clock::now() - frameStart;
             if (frameElapsed < targetFrameDuration) {
                 std::this_thread::sleep_for(targetFrameDuration - frameElapsed);
             }
         } else if (!config.vsync) {
-            // If uncapped, provide a tiny amount of breathing room to prevent 100% CPU usage
-            // on the main thread and allow the simulation thread to acquire the lock.
-            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            // If uncapped, avoid a fixed sleep which suffers from coarse OS timer resolution
+            // (causes dramatic FPS reductions). Yield the thread instead so the main loop
+            // can run as fast as possible while still allowing other threads to proceed.
+            std::this_thread::yield();
         }
 
         if (kRuntimeDebug) {
@@ -1568,8 +1659,13 @@ void Application::Cleanup() {
 }
 
 void Application::SimulationLoop() {
+    m_SimulationThreadId = static_cast<uint32_t>(GetCurrentThreadId());
+    m_SimulationAffinityApplied = ApplyCurrentThreadAffinity(static_cast<DWORD_PTR>(m_SimulationAffinityMask));
+
     auto lastTime = std::chrono::high_resolution_clock::now();
     float accumulator = 0.0f;
+    int steppedFrames = 0;
+    auto hzWindowStart = std::chrono::high_resolution_clock::now();
 
     while (m_IsRunning) {
         auto currentTime = std::chrono::high_resolution_clock::now();
@@ -1606,9 +1702,13 @@ void Application::SimulationLoop() {
 
         while (accumulator >= fixedDt && stepsThisFrame < maxStepsPerFrame) {
             if (!m_IsReplaying && !PhysicsSystem::simulationPaused && scene) {
+                const auto physStart = std::chrono::high_resolution_clock::now();
                 std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
                 scene->UpdatePhysics(fixedDt);
+                const auto physEnd = std::chrono::high_resolution_clock::now();
+                m_LastPhysicsStepMs = static_cast<float>(std::chrono::duration<double, std::milli>(physEnd - physStart).count());
                 stepped = true;
+                steppedFrames++;
             } else {
                 // If paused or replaying, just discard the time
                 accumulator = 0.0f;
@@ -1635,5 +1735,15 @@ void Application::SimulationLoop() {
         if (!stepped || accumulator < fixedDt) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
+
+        const auto hzNow = std::chrono::high_resolution_clock::now();
+        const float hzWindowSec = std::chrono::duration<float>(hzNow - hzWindowStart).count();
+        if (hzWindowSec >= 0.5f) {
+            m_SimulationActualHz = static_cast<float>(steppedFrames) / hzWindowSec;
+            steppedFrames = 0;
+            hzWindowStart = hzNow;
+        }
     }
 }
+
+// Networking runtime omitted (disabled per user request)
