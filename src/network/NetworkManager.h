@@ -64,6 +64,8 @@ struct RemotePeer {
 struct PendingConnection {
     SOCKET socket = INVALID_SOCKET;
     std::vector<uint8_t> buffer;
+    bool isOutgoing = false;    // true = we initiated this connect() (client side)
+    bool handshakeSent = false; // true = initial handshake already sent
 };
 
 class NetworkManager {
@@ -137,7 +139,10 @@ private:
     std::unordered_map<uint32_t, RemoteHistory> m_remoteHistories;
     std::mutex m_historyMutex;
     float m_playbackTime = 0.0f;
-    static constexpr float kInterpolationDelay = 0.15f; 
+    static constexpr float kInterpolationDelay = 0.15f;
+
+    // Connection retry state — member so Restart() resets it correctly
+    std::chrono::steady_clock::time_point m_lastConnectionAttempt{};
 
     // Internal Logic
     void ReceiveLoop();

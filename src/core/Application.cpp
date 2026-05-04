@@ -139,23 +139,14 @@ void Application::Run() {
 
     m_networkManager = std::make_unique<NetworkManager>();
     m_networkManager->SetDebugLogging(true);
-    uint16_t localPort = m_networkManager->Startup();
 
-    const unsigned int logicalCores = GetLogicalCoreCount();
-    uint16_t portOffset = (localPort >= 27015) ? (localPort - 27015) : 0;
-
-    m_RenderAffinityMask = static_cast<uint64_t>(BuildVisualCoreMask(logicalCores, portOffset));
-    m_SimulationAffinityMask = static_cast<uint64_t>(BuildSimulationCoreMask(logicalCores, portOffset));
-
-    m_RenderThreadId = static_cast<uint32_t>(GetCurrentThreadId());
-    m_RenderAffinityApplied = ApplyCurrentThreadAffinity(static_cast<DWORD_PTR>(m_RenderAffinityMask));
-
-    // Configure the mesh map (everyone needs to know the layout)
+    // Configure peer addresses before starting so the receive thread sees them immediately
     m_networkManager->ConfigurePeer(0, "127.0.0.1", 27015);
     m_networkManager->ConfigurePeer(1, "127.0.0.1", 27016);
     m_networkManager->ConfigurePeer(2, "127.0.0.1", 27017);
     m_networkManager->ConfigurePeer(3, "127.0.0.1", 27018);
 
+    // Register all callbacks before Startup() so no peer-join or reliable event is missed
     m_networkManager->SetReliableEventCallback([this](NetworkEventType type, const std::string& payload, uint32_t target) {
         if (type == NetworkEventType::SceneLoad) {
             std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
@@ -338,7 +329,17 @@ void Application::Run() {
         }
     };
 
-    m_networkManager->Startup();
+    // All callbacks registered — safe to start network threads now
+    uint16_t localPort = m_networkManager->Startup();
+
+    const unsigned int logicalCores = GetLogicalCoreCount();
+    uint16_t portOffset = (localPort >= 27015) ? (localPort - 27015) : 0;
+
+    m_RenderAffinityMask = static_cast<uint64_t>(BuildVisualCoreMask(logicalCores, portOffset));
+    m_SimulationAffinityMask = static_cast<uint64_t>(BuildSimulationCoreMask(logicalCores, portOffset));
+
+    m_RenderThreadId = static_cast<uint32_t>(GetCurrentThreadId());
+    m_RenderAffinityApplied = ApplyCurrentThreadAffinity(static_cast<DWORD_PTR>(m_RenderAffinityMask));
 
     std::string initialPath = editorUI->GetInitialScenePath();
     if (!initialPath.empty()) {

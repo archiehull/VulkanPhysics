@@ -17,6 +17,8 @@ NetworkManager::NetworkManager() {
     for (int i = 0; i < 4; ++i) {
         m_peers[i].id = i;
     }
+    // Push the timestamp back so the first reconnect attempt fires immediately
+    m_lastConnectionAttempt = std::chrono::steady_clock::now() - std::chrono::seconds(10);
 }
 
 NetworkManager::~NetworkManager() {
@@ -57,16 +59,22 @@ uint16_t NetworkManager::Startup(uint16_t basePort) {
         return 0;
     }
 
-    m_udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    m_tcpSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
     sockaddr_in localAddr{};
     localAddr.sin_family = AF_INET;
     localAddr.sin_addr.s_addr = INADDR_ANY;
 
     // --- Auto-Port Discovery ---
+    // Sockets are recreated on each attempt so a successful UDP bind on port p followed
+    // by a failed TCP bind does not leave the UDP socket stuck on p, blocking all further
+    // iterations from binding UDP to any other port.
     bool bound = false;
     for (uint16_t p = basePort; p < basePort + 10; ++p) {
+        if (m_udpSocket != INVALID_SOCKET) { closesocket(m_udpSocket); }
+        if (m_tcpSocket != INVALID_SOCKET) { closesocket(m_tcpSocket); }
+
+        m_udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        m_tcpSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
         localAddr.sin_port = htons(p);
         if (bind(m_udpSocket, (sockaddr*)&localAddr, sizeof(localAddr)) != SOCKET_ERROR) {
             if (bind(m_tcpSocket, (sockaddr*)&localAddr, sizeof(localAddr)) != SOCKET_ERROR) {
@@ -130,6 +138,9 @@ void NetworkManager::Shutdown() {
     if (m_udpSocket != INVALID_SOCKET) closesocket(m_udpSocket);
     if (m_tcpSocket != INVALID_SOCKET) closesocket(m_tcpSocket);
     WSACleanup();
+
+    // Reset retry timer so a subsequent Startup() (e.g. from Restart()) attempts immediately
+    m_lastConnectionAttempt = std::chrono::steady_clock::now() - std::chrono::seconds(10);
 }
 
 void NetworkManager::ReceiveLoop() {
@@ -186,6 +197,43 @@ void NetworkManager::ReceiveTCP() {
 
     // 1. Process Pending Handshakes (Wait for ID assignment or normal handshake)
     for (auto it = m_pendingConnections.begin(); it != m_pendingConnections.end(); ) {
+        // For outgoing (client) connections, the non-blocking connect() may still be
+        // in progress. Poll for write-readiness before attempting to send the handshake.
+        if (it->isOutgoing && !it->handshakeSent) {
+            fd_set writeSet, exceptSet;
+            FD_ZERO(&writeSet);
+            FD_ZERO(&exceptSet);
+            FD_SET(it->socket, &writeSet);
+            FD_SET(it->socket, &exceptSet);
+            timeval timeout = { 0, 0 }; // non-blocking poll
+            int ready = select(0, nullptr, &writeSet, &exceptSet, &timeout);
+
+            if (ready > 0 && FD_ISSET(it->socket, &exceptSet)) {
+                // Connection failed
+                if (m_debugLogging) std::cout << "[NetworkManager] Outgoing connection to anchor failed.\n";
+                closesocket(it->socket);
+                it = m_pendingConnections.erase(it);
+                continue;
+            }
+            if (ready > 0 && FD_ISSET(it->socket, &writeSet)) {
+                // Verify no socket-level error before sending
+                int sockErr = 0;
+                int errLen = sizeof(sockErr);
+                getsockopt(it->socket, SOL_SOCKET, SO_ERROR, (char*)&sockErr, &errLen);
+                if (sockErr != 0) {
+                    if (m_debugLogging) std::cout << "[NetworkManager] Outgoing connect() error: " << sockErr << "\n";
+                    closesocket(it->socket);
+                    it = m_pendingConnections.erase(it);
+                    continue;
+                }
+                // Connection established — safe to send the handshake now
+                SendHandshake(it->socket);
+                it->handshakeSent = true;
+            }
+            // Not yet connected — check again next tick
+            if (!it->handshakeSent) { ++it; continue; }
+        }
+
         int bytes = recv(it->socket, buffer, sizeof(buffer), 0);
         if (bytes > 0) {
             it->buffer.insert(it->buffer.end(), buffer, buffer + bytes);
@@ -274,7 +322,9 @@ void NetworkManager::ReceiveTCP() {
 }
 
 void NetworkManager::ReceiveUDP() {
-    char buffer[2048];
+    // 65507 is the maximum UDP payload size over IPv4. Using a smaller buffer causes
+    // recvfrom to return WSAEMSGSIZE and discard the entire datagram silently.
+    char buffer[65507];
     sockaddr_in from;
     int fromLen = sizeof(from);
     while (true) {
@@ -288,9 +338,8 @@ void NetworkManager::ReceiveUDP() {
 void NetworkManager::MaintainOutgoingConnections() {
     // Only search for anchor if we don't have an ID and aren't already waiting on a connection
     if (m_localPeerId.load() == -1 && m_pendingConnections.empty() && m_peerCount < 3) { // 4 PEER CAP
-        static auto lastAttempt = std::chrono::steady_clock::now();
-        if (std::chrono::steady_clock::now() - lastAttempt > std::chrono::seconds(2)) {
-            lastAttempt = std::chrono::steady_clock::now();
+        if (std::chrono::steady_clock::now() - m_lastConnectionAttempt > std::chrono::seconds(2)) {
+            m_lastConnectionAttempt = std::chrono::steady_clock::now();
 
             if (m_debugLogging) std::cout << "[NetworkManager] Searching for Anchor (Peer 0) on port 27015...\n";
 
@@ -305,14 +354,12 @@ void NetworkManager::MaintainOutgoingConnections() {
             u_long mode = 1;
             ioctlsocket(s, FIONBIO, &mode);
 
-            // Connect is non-blocking
+            // Non-blocking connect — returns WSAEWOULDBLOCK immediately on Windows.
+            // The handshake is deferred until the connection is confirmed write-ready
+            // in ReceiveTCP to avoid sending on a not-yet-connected socket.
             connect(s, (sockaddr*)&anchorAddr, sizeof(anchorAddr));
 
-            // Add to pending so we don't trigger this 'if' block again next frame
-            m_pendingConnections.push_back({ s, {} });
-
-            // Send our initial handshake identifying as -1
-            SendHandshake(s);
+            m_pendingConnections.push_back({ s, {}, true, false });
         }
     }
 }
@@ -603,11 +650,11 @@ void NetworkManager::UpdateInterpolation(Registry& registry, float dt) {
         // If it's too far behind, catch up. If it's too close, slow down.
         float currentLag = latestPacketTimestamp - (m_playbackTime - kInterpolationDelay);
 
-        if (currentLag > 0.3f) { // Too much lag (> 300ms), snap or speed up
-            m_playbackTime += dt * 5.0f; 
+        if (currentLag > 0.3f) { // Too much lag (> 300ms) — advance at 5x total speed
+            m_playbackTime += dt * 4.0f; // +4 on top of the dt already added = 5x total
         }
-        else if (currentLag < 0.05f) { // Too close to edge, slow down to avoid extrapolation
-            m_playbackTime -= dt * 0.5f;
+        else if (currentLag < 0.05f) { // Too close to edge — advance at 0.5x total speed
+            m_playbackTime -= dt * 0.5f; // -0.5 from the dt already added = 0.5x total
         }
     }
 
