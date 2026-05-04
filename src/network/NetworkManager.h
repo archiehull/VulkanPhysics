@@ -36,6 +36,7 @@ enum class NetworkEventType {
 
 using ReliableEventCallback = std::function<void(NetworkEventType, const std::string&, uint32_t)>;
 using PeerJoinedCallback = std::function<void(int)>;
+using PeerDisconnectedCallback = std::function<void(int)>;
 
 struct RemoteState {
     glm::vec3 position;
@@ -112,6 +113,7 @@ public:
     void SendReliableEvent(NetworkEventType type, const std::string& payload, uint32_t targetEntity = 0);
     void SetReliableEventCallback(ReliableEventCallback callback) { m_eventCallback = callback; }
     void SetPeerJoinedCallback(PeerJoinedCallback callback) { m_peerJoinedCallback = callback; }
+    void SetPeerDisconnectedCallback(PeerDisconnectedCallback callback) { m_peerDisconnectedCallback = callback; }
 
     void BroadcastState(Registry& registry, const std::vector<Entity>& locallyOwnedEntities);
     void BroadcastSingleEntity(Registry& registry, Entity entity);
@@ -159,6 +161,7 @@ public:
     PeerStatus GetPeerStatus(int peerId);
 
     void ClearHistory();
+    void ClearHistoryForEntity(Entity entity);
 
     void SetSimulationConditions(float latencyMs, float jitterMs, float packetLossPct);
     void SetLocalPeerId(int id);
@@ -194,6 +197,7 @@ private:
     SOCKET m_tcpSocket{ INVALID_SOCKET };
 
     PeerJoinedCallback m_peerJoinedCallback = nullptr;
+    PeerDisconnectedCallback m_peerDisconnectedCallback = nullptr;
 
     std::vector<RemotePeer> m_peers;
     std::vector<PendingConnection> m_pendingConnections;

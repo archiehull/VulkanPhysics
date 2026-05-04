@@ -377,9 +377,16 @@ void NetworkManager::ReceiveTCP() {
             else if (bytes == 0 || (bytes == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
                 if (m_debugLogging) std::cout << "[NetworkManager] Peer " << peer.id << " disconnected.\n";
                 peer.isConnected = false;
+
+                peer.port = 0;
+
                 closesocket(peer.tcpSocket);
                 peer.tcpSocket = INVALID_SOCKET;
                 m_peerCount--;
+
+                if (m_peerDisconnectedCallback) {
+                    m_peerDisconnectedCallback(peer.id);
+                }
             }
         }
     }
@@ -1152,6 +1159,11 @@ void NetworkManager::ClearHistory() {
         peer.hasTimestampOffset = false;
         peer.timestampOffset = 0.0f;
     }
+}
+
+void NetworkManager::ClearHistoryForEntity(Entity entity) {
+    std::lock_guard<std::mutex> lock(m_historyMutex);
+    m_remoteHistories.erase(entity);
 }
 
 void NetworkManager::SetSimulationConditions(float latencyMs, float jitterMs, float packetLossPct) {

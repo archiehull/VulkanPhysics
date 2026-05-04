@@ -335,6 +335,94 @@ void Application::Run() {
             });
         });
 
+    m_networkManager->SetPeerDisconnectedCallback([this](int disconnectedPeerId) {
+        // Queue this on the main thread so we safely access the ECS registry
+        std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
+        m_TaskQueue.push_back([this, disconnectedPeerId]() {
+            if (!scene) return;
+            std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
+
+            // 1. Determine who the new "Authority" is (Lowest surviving Peer ID)
+            int localId = m_networkManager->GetLocalPeerId();
+            int lowestSurvivingId = localId;
+            for (int i = 0; i < 4; ++i) {
+                if (i != disconnectedPeerId && m_networkManager->GetPeerStatus(i).connected) {
+                    if (i < lowestSurvivingId) {
+                        lowestSurvivingId = i; // Someone else with a lower ID is still alive
+                    }
+                }
+            }
+
+            // 2. If WE are the lowest surviving peer, we take ownership of the orphans
+            if (localId == lowestSurvivingId) {
+                auto& registry = scene->GetRegistry();
+                auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
+                const Entity entityCount = registry.GetEntityCount();
+
+                int orphanedCount = 0;
+                ObjectOwnershipType newOwnerType = static_cast<ObjectOwnershipType>(localId);
+
+                for (Entity e = 0; e < entityCount; ++e) {
+                    if (!registry.IsAlive(e)) continue;
+
+                    // --- 1. Migrate Standard Ownership (The Balls) ---
+                    if (ownershipArray->HasData(e)) {
+                        auto& ownership = ownershipArray->GetData(e);
+
+                        if (static_cast<int>(ownership.GetOwnerIndex()) == disconnectedPeerId) {
+
+                            // Reassign 
+                            ownership.owner = newOwnerType;
+                            scene->RegisterLocallyOwnedNetworkEntity(e);
+                            m_networkManager->ClearHistoryForEntity(e);
+                            orphanedCount++;
+
+                            // Update visual color so you can see it change ownership
+                            if (registry.HasComponent<RenderComponent>(e)) {
+                                auto& render = registry.GetComponent<RenderComponent>(e);
+                                render.useColorTint = true;
+                                render.tintColor = ownership.GetOwnerColor();
+                            }
+                        }
+                    }
+
+                    // --- 2. Migrate Spawner Authority ---
+                    if (registry.HasComponent<ObjectSpawnerComponent>(e)) {
+                        auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+
+                        // A) Reassign unowned spawners waiting for the dead peer to fire
+                        if (static_cast<int>(spawner.autofireAuthority) == disconnectedPeerId) {
+                            spawner.autofireAuthority = static_cast<uint8_t>(lowestSurvivingId);
+                        }
+
+                        // B) If the spawner cycles authority or ownership sequentially, it WILL hit 
+                        // the dead peer on the next tick and break. Force it to local host mode.
+                        spawner.rotateAuthority = false;
+                        if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
+                            spawner.assignedOwner = static_cast<uint8_t>(lowestSurvivingId);
+                        }
+
+                        // C) Fix spawners hardcoded to assign newly created objects to the dead peer
+                        if (spawner.assignedOwner < 4 && static_cast<int>(spawner.assignedOwner) == disconnectedPeerId) {
+                            spawner.assignedOwner = static_cast<uint8_t>(lowestSurvivingId);
+                        }
+
+                        // D) Spawner run states are strictly local. If the Host started a spawner, 
+                        // the client's version is asleep. Force it awake so it takes over.
+                        spawner.isRunning = true;
+                    }
+                }
+
+                if (orphanedCount > 0) {
+                    std::cout << "[Application] Peer " << localId
+                        << " assumed control of " << orphanedCount
+                        << " orphaned entities from dropped Peer "
+                        << disconnectedPeerId << std::endl;
+                }
+            }
+            });
+        });
+
     ObjectSpawnerSystem::onObjectSpawned = [this](const ObjectSpawnerSystem::SpawnEvent& ev) {
         if (m_networkManager && m_networkManager->IsRunning()) {
             // Build CSV: geo,px,py,pz,sx,sy,sz,tex,model,mass,vx,vy,vz,avx,avy,avz,owner,id,spawnTs
