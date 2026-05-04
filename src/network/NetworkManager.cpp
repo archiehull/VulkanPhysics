@@ -9,6 +9,23 @@
 #include "../systems/PhysicsSystem.h"
 #include "../core/Components.h"
 
+// Helper to ensure all bytes are pushed through a non-blocking TCP socket
+bool SendAllTCP(SOCKET s, const char* data, int length) {
+    int totalSent = 0;
+    while (totalSent < length) {
+        int sent = send(s, data + totalSent, length - totalSent, 0);
+        if (sent == SOCKET_ERROR) {
+            if (WSAGetLastError() == WSAEWOULDBLOCK) {
+                // Buffer full, yield briefly and try again
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+            return false; // Fatal socket error, connection dropped
+        }
+        totalSent += sent;
+    }
+    return true;
+}
 
 using namespace VulkanPhysics::Network;
 
@@ -188,7 +205,9 @@ void NetworkManager::AcceptIncomingConnections() {
         u_long mode = 1;
         ioctlsocket(s, FIONBIO, &mode);
         m_pendingConnections.push_back({ s, {} });
-        if (m_debugLogging) std::cout << "[NetworkManager] Accepted incoming TCP connection.\n";
+        if (m_debugLogging) {
+            std::cout << "[NetworkManager] Accepted incoming TCP connection (Socket: " << s << ")." << std::endl;
+        }
     }
 }
 
@@ -245,7 +264,19 @@ void NetworkManager::ReceiveTCP() {
 
                 // Check if the full packet has arrived
                 if (it->buffer.size() >= 4 + packetSize) {
-                    auto msg = GetNetworkMessage(it->buffer.data() + 4);
+
+                    // --- FlatBuffers Verification ---
+                    const uint8_t* fbData = it->buffer.data() + 4;
+                    flatbuffers::Verifier verifier(fbData, packetSize);
+
+                    if (!VerifyNetworkMessageBuffer(verifier)) {
+                        if (m_debugLogging) std::cout << "[NetworkManager] Dropped corrupted handshake packet.\n";
+                        // Erase the corrupted data and try to recover the stream
+                        it->buffer.erase(it->buffer.begin(), it->buffer.begin() + 4 + packetSize);
+                        continue;
+                    }
+
+                    auto msg = GetNetworkMessage(fbData);
 
                     // --- CLIENT LOGIC: Handle ID Assignment from Host ---
                     if (msg->payload_type() == Payload_ReliableEvent) {
@@ -271,6 +302,9 @@ void NetworkManager::ReceiveTCP() {
                     // --- MESH LOGIC: Process handshakes from ANY peer ---
                     // If we are Host(0) and sender is -1, it assigns an ID.
                     // If we are Peer 1 and sender is Peer 2, it establishes the P2P link.
+                    if (m_debugLogging) {
+                        std::cout << "[NetworkManager] Received Handshake from Peer " << msg->sender_peer_id() << " on socket " << it->socket << std::endl;
+                    }
                     HandleHandshake(it->socket, msg->sender_peer_id());
                     
                     it = m_pendingConnections.erase(it);
@@ -328,7 +362,14 @@ void NetworkManager::ReceiveUDP() {
     while (true) {
         int bytes = recvfrom(m_udpSocket, buffer, sizeof(buffer), 0, (sockaddr*)&from, &fromLen);
         if (bytes <= 0) break;
-        //if (m_debugLogging) std::cout << "[Network] Received UDP packet: " << bytes << " bytes.\n"; // ADD THIS
+        
+        static int udpCounter = 0;
+        if (m_debugLogging && (udpCounter++ % 100 == 0)) {
+            char ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &from.sin_addr, ip, INET_ADDRSTRLEN);
+            std::cout << "[NetworkManager] UDP Snapshot received (" << bytes << " bytes) from " << ip << ":" << ntohs(from.sin_port) << std::endl;
+        }
+
         PushInboundEvent(std::vector<uint8_t>(buffer, buffer + bytes));
     }
 }
@@ -411,8 +452,9 @@ void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
             b.Finish(msg);
 
             uint32_t size = b.GetSize();
-            send(s, (char*)&size, 4, 0);
-            send(s, (char*)b.GetBufferPointer(), size, 0);
+            if (SendAllTCP(s, (char*)&size, 4)) {
+                SendAllTCP(s, (char*)b.GetBufferPointer(), size);
+            }
 
             {
                 std::lock_guard<std::mutex> lock(m_peerMutex);
@@ -420,7 +462,9 @@ void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
                 m_peers[newId].isConnected = true;
             }
             m_peerCount++;
-            if (m_debugLogging) std::cout << "[NetworkManager] Peer " << newId << " joined the mesh.\n";
+            if (m_debugLogging) {
+                std::cout << "[NetworkManager] Peer " << newId << " joined the mesh (Assigned by Host). Mesh Size: " << m_peerCount.load() << "/4" << std::endl;
+            }
 
             if (m_peerJoinedCallback) {
                 m_peerJoinedCallback(newId);
@@ -436,6 +480,9 @@ void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
         m_peers[remoteId].tcpSocket = s;
         m_peers[remoteId].isConnected = true;
         m_peerCount++;
+        if (m_debugLogging) {
+            std::cout << "[NetworkManager] Peer " << remoteId << " established P2P link. Mesh Size: " << m_peerCount.load() << "/4" << std::endl;
+        }
     }
 }
 
@@ -446,8 +493,9 @@ void NetworkManager::SendHandshake(SOCKET s) {
     b.Finish(msg);
 
     uint32_t size = b.GetSize();
-    send(s, (char*)&size, 4, 0);
-    send(s, (char*)b.GetBufferPointer(), size, 0);
+    if (SendAllTCP(s, (char*)&size, 4)) {
+        SendAllTCP(s, (char*)b.GetBufferPointer(), size);
+    }
 }
 
 void NetworkManager::PushInboundEvent(const std::vector<uint8_t>& d) {
@@ -477,8 +525,9 @@ void NetworkManager::SendTCP(const std::vector<uint8_t>& d) {
     std::lock_guard<std::mutex> lock(m_peerMutex);
     for (auto& p : m_peers) {
         if (p.isConnected && p.tcpSocket != INVALID_SOCKET && p.id != m_localPeerId) {
-            send(p.tcpSocket, (char*)&size, 4, 0);
-            send(p.tcpSocket, (char*)d.data(), size, 0);
+            // Only send payload if the header successfully transmits
+            if (!SendAllTCP(p.tcpSocket, (char*)&size, 4)) continue;
+            SendAllTCP(p.tcpSocket, (char*)d.data(), size);
         }
     }
 }
@@ -570,12 +619,20 @@ void NetworkManager::SendReliableEvent(NetworkEventType type, const std::string&
 
 void NetworkManager::ProcessInboundPackets(Registry& registry) {
     std::vector<uint8_t> packet;
-
     auto transformArray = registry.GetComponentArray<TransformComponent>();
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
     auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
 
     while (PopInboundEvent(packet)) {
+        // --- FlatBuffers Verification ---
+        flatbuffers::Verifier verifier(packet.data(), packet.size());
+        if (!VerifyNetworkMessageBuffer(verifier)) {
+            if (m_debugLogging) {
+                std::cout << "[NetworkManager] WARNING: Dropped corrupted network packet!\n";
+            }
+            continue; // Safely skip this garbage packet
+        }
+        // It is now memory-safe to parse this message
         auto netMsg = GetNetworkMessage(packet.data());
 
         if (netMsg->payload_type() == Payload_PhysicsSnapshot) {
@@ -761,8 +818,8 @@ void NetworkManager::SendTCPTo(int targetPeerId, const std::vector<uint8_t>& dat
     if (targetPeerId >= 0 && targetPeerId < m_peers.size()) {
         auto& p = m_peers[targetPeerId];
         if (p.isConnected && p.tcpSocket != INVALID_SOCKET) {
-            send(p.tcpSocket, (char*)&size, 4, 0);
-            send(p.tcpSocket, (char*)data.data(), size, 0);
+            if (!SendAllTCP(p.tcpSocket, (char*)&size, 4)) return;
+            SendAllTCP(p.tcpSocket, (char*)data.data(), size);
         }
     }
 }
@@ -824,3 +881,17 @@ void NetworkManager::SendReliableEventTo(int targetPeerId, NetworkEventType type
 
     SendTCPTo(targetPeerId, data);
 }
+
+void NetworkManager::ClearHistory() {
+    std::lock_guard<std::mutex> lock(m_historyMutex);
+    m_remoteHistories.clear();
+    m_playbackTime = 0.0f; // Reset the interpolation clock
+
+    // Also reset peer timestamp offsets so they recalibrate to the new scene
+    std::lock_guard<std::mutex> pLock(m_peerMutex);
+    for (auto& peer : m_peers) {
+        peer.hasTimestampOffset = false;
+        peer.timestampOffset = 0.0f;
+    }
+}
+

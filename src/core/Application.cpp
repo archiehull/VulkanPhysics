@@ -436,8 +436,10 @@ void Application::InitVulkan() {
 
 void Application::LoadScene(const std::string& scenePath, bool broadcast) {
     if (broadcast && m_networkManager && m_networkManager->IsRunning()) {
+        std::cout << "[Application] Broadcasting SceneLoad: " << scenePath << std::endl;
         m_networkManager->SendReliableEvent(NetworkEventType::SceneLoad, scenePath);
     }
+    std::cout << "[Application] LoadScene Initiated: '" << scenePath << "' (Broadcast: " << (broadcast ? "Yes" : "No") << ")" << std::endl;
 
     // 1. Wait for GPU to finish current frames
     if (vulkanDevice) {
@@ -449,6 +451,10 @@ void Application::LoadScene(const std::string& scenePath, bool broadcast) {
     // 2. Clear current scene data
     if (scene) {
         scene->Clear();
+    }
+
+    if (m_networkManager) {
+        m_networkManager->ClearHistory();
     }
 
     // 3. Load new configuration
@@ -466,7 +472,7 @@ void Application::LoadScene(const std::string& scenePath, bool broadcast) {
 
     if (vulkanSwapChain && vulkanSwapChain->IsVSyncEnabled() != config.vsync) {
         vulkanSwapChain->SetVSyncEnabled(config.vsync);
-        RecreateSwapChain();
+        framebufferResized = true;
     }
     auto activeBindings = inputManager->LoadFromBindings(config.inputBindings);
     editorUI->SetInputBindings(activeBindings);
@@ -525,8 +531,8 @@ void Application::LoadScene(const std::string& scenePath, bool broadcast) {
         }
     }
 
-    if (kSceneDebug) {
-        std::cout << "Loaded Scene: " << scenePath << std::endl;
+    if (kSceneDebug && (m_networkManager)) {
+        std::cout << "[Application] LoadScene SUCCESS: " << scenePath << " (Entities: " << scene->GetRegistry().GetEntityCount() << ")" << std::endl;
     }
 }
 
@@ -1275,6 +1281,21 @@ void Application::MainLoop() {
         window->PollEvents();
         ProcessInput();
 
+        // 1. Process thread-safe tasks from the main thread
+        {
+            std::vector<std::function<void()>> tasksToRun;
+            {
+                std::unique_lock<std::mutex> taskLock(m_TaskQueueMutex);
+                tasksToRun = std::move(m_TaskQueue);
+            }
+
+            // Execute tasks. Note: individual tasks that touch the ECS now take the mutex themselves
+            // to prevent recursive deadlock with LoadScene or other locking methods.
+            for (auto& task : tasksToRun) {
+                task();
+            }
+        }
+
         if (framebufferResized) {
             RecreateSwapChain();
         }
@@ -1962,21 +1983,6 @@ void Application::SimulationLoop() {
 
         const float fixedDt = 1.0f / m_TargetSimFrequency.load();
 
-        // 1. Process thread-safe tasks from the main thread
-        {
-            std::vector<std::function<void()>> tasksToRun;
-            {
-                std::unique_lock<std::mutex> taskLock(m_TaskQueueMutex);
-                tasksToRun = std::move(m_TaskQueue);
-            }
-
-            // Execute tasks. Note: individual tasks that touch the ECS now take the mutex themselves
-            // to prevent recursive deadlock with LoadScene or other locking methods.
-            for (auto& task : tasksToRun) {
-                task();
-            }
-        }
-
         if (m_networkManager && m_IsRunning && scene) {
             // --- NEW: Detect ID assignment and configure ECS Partition ---
             static int lastConfiguredPeerId = -1;
@@ -1985,7 +1991,11 @@ void Application::SimulationLoop() {
                 std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
                 scene->GetRegistry().SetNetworkPartition(currentPeerId);
                 lastConfiguredPeerId = currentPeerId;
-                std::cout << "[Application] ECS Partition locked to Peer " << currentPeerId << std::endl;
+                PhysicsSystem::localPeerId = currentPeerId;
+                if (kRuntimeDebug) {
+                    std::cout << "[Application] NETWORK IDENTITY ESTABLISHED: Peer " << currentPeerId
+                        << " (Partition: " << (currentPeerId * 10000) << " - " << ((currentPeerId + 1) * 10000 - 1) << ")" << std::endl;
+                }
             }
             // -------------------------------------------------------------
 

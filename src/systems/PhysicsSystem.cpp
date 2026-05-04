@@ -30,6 +30,7 @@ float PhysicsSystem::linearDampingFactor = 0.98f;
 bool PhysicsSystem::applyQuadraticDrag = true;
 float PhysicsSystem::quadraticDragCoefficient = 0.01f;
 bool PhysicsSystem::simulationPaused = false;
+static int s_physicsFrameCount = 0;
 
 void PhysicsSystem::SetLinearDamping(bool enabled, float factor) {
     applyLinearDamping = enabled;
@@ -536,6 +537,30 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
                 transform.matrix = translation * rotationMat * scaleMat;
             }
         }
+    }
+
+    // Periodic ownership distribution logging (every 60 frames)
+    if (++s_physicsFrameCount % 60 == 0) {
+        int localCount = 0;
+        int remoteCount = 0;
+        int staticCount = 0;
+        auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
+        auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+        for (Entity e = 0; e < entityCount; ++e) {
+            if (!registry.IsAlive(e)) continue;
+            if (physicsArray->HasData(e) && physicsArray->GetData(e).isStatic) {
+                staticCount++;
+            } else if (ownershipArray->HasData(e)) {
+                if (static_cast<int>(ownershipArray->GetData(e).GetOwnerIndex()) == localPeerId) {
+                    localCount++;
+                } else {
+                    remoteCount++;
+                }
+            }
+        }
+        // std::cout << "[PhysicsSystem] Frame " << s_physicsFrameCount << " Distribution: Local=" << localCount 
+        //           << " Remote=" << remoteCount << " Static=" << staticCount 
+        //           << " (LocalPeerID: " << localPeerId << ")" << std::endl;
     }
 }
 

@@ -105,7 +105,6 @@ public:
     void SetReliableEventCallback(ReliableEventCallback callback) { m_eventCallback = callback; }
     void SetPeerJoinedCallback(PeerJoinedCallback callback) { m_peerJoinedCallback = callback; }
 
-
     void BroadcastState(Registry& registry, const std::vector<Entity>& locallyOwnedEntities);
     void ProcessInboundPackets(Registry& registry);
     void UpdateInterpolation(Registry& registry, float dt);
@@ -126,6 +125,7 @@ public:
     };
     PeerStatus GetPeerStatus(int peerId);
 
+    void ClearHistory();
 private:
     std::atomic<bool> m_isRunning{ false };
     std::atomic<int> m_localPeerId{ -1 };

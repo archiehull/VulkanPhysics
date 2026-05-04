@@ -173,12 +173,14 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
             // All peers run this loop so their timers and authority counters stay in sync.
             if (!spawnerIsOwned) {
                 if (localId == static_cast<int>(spawner.autofireAuthority)) {
+                    //std::cout << "[ObjectSpawnerSystem] Peer " << localId << " triggering unowned spawner " << e << " (Authority Match)" << std::endl;
                     SpawnObjectFromSpawner(scene, e);
                 }
                 if (spawner.rotateAuthority) {
                     spawner.autofireAuthority = (spawner.autofireAuthority + 1) % 4;
                 }
             } else {
+                //std::cout << "[ObjectSpawnerSystem] Peer " << localId << " triggering owned spawner " << e << std::endl;
                 SpawnObjectFromSpawner(scene, e);
             }
 
@@ -497,6 +499,8 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     ObjectOwnershipType ownerType = static_cast<ObjectOwnershipType>(std::min(objectOwner, (uint8_t)3));
     OwnershipComponent ownComp{ ownerType };
     registry.AddComponent<OwnershipComponent>(spawnedEntity, ownComp);
+    
+    //std::cout << "[ObjectSpawnerSystem] Spawned Entity: " << spawnedEntity << " (" << geometryType << ") Owner: " << (int)ownerType << " Name: " << spawnedName << std::endl;
 
     // --- NEW: Register with Scene for optimized broadcast ---
     if (static_cast<int>(ownerType) == PhysicsSystem::localPeerId) {
