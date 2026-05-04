@@ -753,8 +753,9 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
         pco.receiveShadows = renderComp.receiveShadows ? 1 : 0;
         pco.layerMask = renderComp.layerMask;
         pco.burnFactor = 0.0f;
-        pco.debugOverlay = renderComp.useDebugOverlay ? 1 : (renderComp.useColorTint ? 2 : 0);
-        pco.debugColor = renderComp.useDebugOverlay ? renderComp.debugOverlayColor : (renderComp.useColorTint ? renderComp.tintColor : glm::vec4(0.0f));
+        bool applyTint = renderComp.useColorTint && scene.GetColorByOwnership();
+        pco.debugOverlay = renderComp.useDebugOverlay ? 1 : (applyTint ? 2 : 0);
+        pco.debugColor = renderComp.useDebugOverlay ? renderComp.debugOverlayColor : (applyTint ? renderComp.tintColor : glm::vec4(0.0f));
         pco.opacity = renderComp.opacity;
 
         vkCmdPushConstants(cmd, graphicsPipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);
@@ -848,8 +849,9 @@ void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLay
         pco.receiveShadows = renderComp.receiveShadows ? 1 : 0;
         pco.layerMask = renderComp.layerMask;
         pco.burnFactor = burnFactor;
-        pco.debugOverlay = renderComp.useDebugOverlay ? 1 : (renderComp.useColorTint ? 2 : 0);
-        pco.debugColor = renderComp.useDebugOverlay ? renderComp.debugOverlayColor : (renderComp.useColorTint ? renderComp.tintColor : glm::vec4(0.0f));
+        bool applyTint = renderComp.useColorTint && scene.GetColorByOwnership();
+        pco.debugOverlay = renderComp.useDebugOverlay ? 1 : (applyTint ? 2 : 0);
+        pco.debugColor = renderComp.useDebugOverlay ? renderComp.debugOverlayColor : (applyTint ? renderComp.tintColor : glm::vec4(0.0f));
         pco.opacity = renderComp.opacity;
 
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantObject), &pco);

@@ -36,6 +36,9 @@ NetworkManager::NetworkManager() {
     }
     // Push the timestamp back so the first reconnect attempt fires immediately
     m_lastConnectionAttempt = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+    for (auto& attempt : m_lastP2PAttempt) {
+        attempt = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+    }
 }
 
 NetworkManager::~NetworkManager() {
@@ -158,6 +161,9 @@ void NetworkManager::Shutdown() {
 
     // Reset retry timer so a subsequent Startup() (e.g. from Restart()) attempts immediately
     m_lastConnectionAttempt = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+    for (auto& attempt : m_lastP2PAttempt) {
+        attempt = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+    }
 }
 
 void NetworkManager::ReceiveLoop() {
@@ -377,9 +383,10 @@ void NetworkManager::ReceiveUDP() {
 void NetworkManager::MaintainOutgoingConnections() {
     // Only search for anchor if we don't have an ID and aren't already waiting on a connection
     if (m_localPeerId.load() == -1 && m_pendingConnections.empty() && m_peerCount < 3) { // 4 PEER CAP
-        if (std::chrono::steady_clock::now() - m_lastConnectionAttempt > std::chrono::seconds(2)) {
-            m_lastConnectionAttempt = std::chrono::steady_clock::now();
+        if (std::chrono::steady_clock::now() - m_lastConnectionAttempt < std::chrono::seconds(2)) {
+            return;
         }
+        m_lastConnectionAttempt = std::chrono::steady_clock::now();
     }
 
     int localId = m_localPeerId.load();
@@ -413,6 +420,10 @@ void NetworkManager::MaintainOutgoingConnections() {
         // This prevents P1 and P2 from cross-connecting simultaneously and creating duplicate sockets.
         for (int targetId = 0; targetId < localId; ++targetId) {
             if (!m_peers[targetId].isConnected && m_peers[targetId].port != 0) {
+                if (std::chrono::steady_clock::now() - m_lastP2PAttempt[targetId] < std::chrono::seconds(2)) {
+                    continue;
+                }
+                m_lastP2PAttempt[targetId] = std::chrono::steady_clock::now();
                 if (m_debugLogging) std::cout << "[NetworkManager] Attempting P2P link to Peer " << targetId << "...\n";
                 
                 SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -540,10 +551,7 @@ void NetworkManager::BroadcastState(Registry& registry, const std::vector<Entity
     flatbuffers::FlatBufferBuilder builder(4096);
     std::vector<flatbuffers::Offset<EntityState>> entityStates;
 
-    // Static counter for sequence numbers
-    static uint32_t sequenceCounter = 0;
-    static auto startTime = std::chrono::steady_clock::now();
-    float timestamp = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
+    float timestamp = std::chrono::duration<float>(std::chrono::steady_clock::now() - m_broadcastStartTime).count();
 
     entityStates.reserve(std::min((Entity)locallyOwnedEntities.size(), (Entity)512));
 
@@ -576,7 +584,7 @@ void NetworkManager::BroadcastState(Registry& registry, const std::vector<Entity
 
     // Create the PhysicsSnapshot (The UDP Payload)
     auto statesVector = builder.CreateVector(entityStates);
-    auto snapshot = CreatePhysicsSnapshot(builder, sequenceCounter++, static_cast<uint64_t>(timestamp * 1000.0f), statesVector);
+    auto snapshot = CreatePhysicsSnapshot(builder, m_broadcastSequence++, static_cast<uint64_t>(timestamp * 1000.0f), statesVector);
 
     // Wrap it in the Root NetworkMessage
     auto msg = CreateNetworkMessage(
@@ -595,6 +603,34 @@ void NetworkManager::BroadcastState(Registry& registry, const std::vector<Entity
         std::lock_guard<std::mutex> lock(m_outboundMutex);
         m_outboundQueue.push(std::move(data));
     }
+}
+
+void NetworkManager::BroadcastSingleEntity(Registry& registry, Entity entity) {
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto physicsArray   = registry.GetComponentArray<PhysicsComponent>();
+    if (!transformArray->HasData(entity) || !physicsArray->HasData(entity)) return;
+
+    auto& t = transformArray->GetData(entity);
+    auto& p = physicsArray->GetData(entity);
+
+    float timestamp = std::chrono::duration<float>(std::chrono::steady_clock::now() - m_broadcastStartTime).count();
+
+    flatbuffers::FlatBufferBuilder builder(256);
+    Vec3 pos(t.position.x, t.position.y, t.position.z);
+    Vec3 rot(t.rotation.x, t.rotation.y, t.rotation.z);
+    Vec3 linVel(p.velocity.x, p.velocity.y, p.velocity.z);
+    Vec3 angVel(p.angularVelocity.x, p.angularVelocity.y, p.angularVelocity.z);
+
+    const int8_t localId = static_cast<int8_t>(m_localPeerId.load());
+    auto state    = CreateEntityState(builder, static_cast<uint32_t>(entity), localId, &pos, &rot, &linVel, &angVel);
+    auto statesVec = builder.CreateVector(std::vector<flatbuffers::Offset<EntityState>>{ state });
+    auto snapshot = CreatePhysicsSnapshot(builder, m_broadcastSequence++, static_cast<uint64_t>(timestamp * 1000.0f), statesVec);
+    auto msg      = CreateNetworkMessage(builder, localId, Payload_PhysicsSnapshot, snapshot.Union());
+    builder.Finish(msg);
+
+    std::vector<uint8_t> data(builder.GetBufferPointer(), builder.GetBufferPointer() + builder.GetSize());
+    std::lock_guard<std::mutex> lock(m_outboundMutex);
+    m_outboundQueue.push(std::move(data));
 }
 
 void NetworkManager::SendReliableEvent(NetworkEventType type, const std::string& payload, uint32_t targetEntity) {
@@ -681,11 +717,46 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
                         rs.timestamp = normalizedTimestamp;
 
                         if (history.states.empty() || rs.timestamp > history.states.back().timestamp) {
-                            if (m_playbackTime == 0.0f) m_playbackTime = rs.timestamp;
+                            if (m_playbackTime == 0.0f) {
+                                m_playbackTime = rs.timestamp;
+                                // Retroactively anchor any seeds that were queued before the clock was established.
+                                // They were stored with timestamp 0 as a sentinel; place them just behind the cursor.
+                                int anchored = 0;
+                                for (auto& [eid, h] : m_remoteHistories) {
+                                    if (!h.states.empty() && h.states.front().timestamp == 0.0f) {
+                                        h.states.front().timestamp = m_playbackTime - kInterpolationDelay;
+                                        ++anchored;
+                                    }
+                                }
+                                if (m_debugLogging && anchored > 0) {
+                                    std::cout << "[NetSpawn] Clock established at " << m_playbackTime
+                                        << " - anchored " << anchored << " sentinel seed(s) to cursor "
+                                        << (m_playbackTime - kInterpolationDelay) << "\n";
+                                }
+                            }
+
+                            if (m_debugLogging && history.states.size() <= 1) {
+                                // Log the first real UDP state received for this entity
+                                std::cout << "[NetSpawn] First UDP state for entity " << id
+                                    << "  normalizedTs=" << rs.timestamp
+                                    << "  cursor=" << (m_playbackTime - kInterpolationDelay)
+                                    << "  tsAheadOfCursor=" << (rs.timestamp - (m_playbackTime - kInterpolationDelay))
+                                    << "  pos=(" << rs.position.x << "," << rs.position.y << "," << rs.position.z << ")"
+                                    << "  vel=(" << rs.velocity.x << "," << rs.velocity.y << "," << rs.velocity.z << ")";
+                                if (!history.states.empty())
+                                    std::cout << "  seedTs=" << history.states.back().timestamp
+                                        << "  gapToSeed=" << (rs.timestamp - history.states.back().timestamp);
+                                std::cout << "\n";
+                            }
+
                             history.states.push_back(rs);
                             if (history.states.size() > RemoteHistory::MAX_HISTORY) {
                                 history.states.pop_front();
                             }
+                        } else if (m_debugLogging) {
+                            std::cout << "[NetSpawn] UDP state DROPPED for entity " << id
+                                << "  ts=" << rs.timestamp
+                                << " <= lastTs=" << history.states.back().timestamp << "\n";
                         }
 
                         // --- NEW: Ensure visual sync even if OwnershipComponent arrived late ---
@@ -793,12 +864,29 @@ void NetworkManager::UpdateInterpolation(Registry& registry, float dt) {
             t.rotation = glm::mix(s0->rotation, s1->rotation, t_blend);
             p.velocity = s1->velocity;
             t.UpdateMatrix();
+
+            if (m_debugLogging && history.states.size() <= 2) {
+                std::cout << "[Interp] entity=" << id << " INTERPOLATING"
+                    << "  blend=" << t_blend
+                    << "  s0Ts=" << s0->timestamp << "  s1Ts=" << s1->timestamp
+                    << "  cursor=" << targetPlaybackTime
+                    << "  pos=(" << t.position.x << "," << t.position.y << "," << t.position.z << ")"
+                    << "  s0pos=(" << s0->position.x << "," << s0->position.y << "," << s0->position.z << ")"
+                    << "  s1pos=(" << s1->position.x << "," << s1->position.y << "," << s1->position.z << ")\n";
+            }
         }
         else if (s1) {
             t.position = s1->position;
             t.rotation = s1->rotation;
             p.velocity = s1->velocity;
             t.UpdateMatrix();
+
+            if (m_debugLogging && history.states.size() <= 2) {
+                std::cout << "[Interp] entity=" << id << " CLAMPED TO FUTURE STATE"
+                    << "  s1Ts=" << s1->timestamp << "  cursor=" << targetPlaybackTime
+                    << "  cursorBehindByMs=" << (s1->timestamp - targetPlaybackTime) * 1000.0f
+                    << "  pos=(" << t.position.x << "," << t.position.y << "," << t.position.z << ")\n";
+            }
         }
         else {
             // Extrapolate
@@ -808,6 +896,14 @@ void NetworkManager::UpdateInterpolation(Registry& registry, float dt) {
             t.rotation = last.rotation;
             p.velocity = last.velocity;
             t.UpdateMatrix();
+
+            if (m_debugLogging && history.states.size() <= 2) {
+                std::cout << "[Interp] entity=" << id << " EXTRAPOLATING"
+                    << "  lastTs=" << last.timestamp << "  cursor=" << targetPlaybackTime
+                    << "  extrapolationTime=" << extrapolationTime
+                    << "  pos=(" << t.position.x << "," << t.position.y << "," << t.position.z << ")"
+                    << "  vel=(" << last.velocity.x << "," << last.velocity.y << "," << last.velocity.z << ")\n";
+            }
         }
         ++it;
     }
@@ -826,22 +922,60 @@ void NetworkManager::SendTCPTo(int targetPeerId, const std::vector<uint8_t>& dat
 }
 
 
-void NetworkManager::SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, glm::vec3 rot) {
+void NetworkManager::SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, glm::vec3 rot, float normalizedSpawnTs) {
     std::lock_guard<std::mutex> lock(m_historyMutex);
     auto& history = m_remoteHistories[id];
     if (!history.states.empty()) return; // Already has real data
-
-    // Without an established timeline the seed timestamp is meaningless — skip it.
-    // Once the timeline is running, place the seed at the current render cursor so
-    // the entity is immediately extrapolatable with its spawn velocity.
-    if (m_playbackTime <= 0.0f) return;
 
     RemoteState rs;
     rs.position = pos;
     rs.rotation = rot;
     rs.velocity = vel;
-    rs.timestamp = m_playbackTime - kInterpolationDelay;
+
+    const char* tsSource = "cursor-based heuristic";
+    bool seedClamped = false;
+    float clampDelta = 0.0f;
+    if (normalizedSpawnTs >= 0.0f) {
+        // Use the actual spawn time propagated in the TCP message.
+        // Clamp to the cursor so newly spawned objects do not hover in a future state.
+        if (m_playbackTime > 0.0f) {
+            float cursorTs = m_playbackTime - kInterpolationDelay;
+            float clampedTs = std::min(normalizedSpawnTs, cursorTs);
+            float rewind = clampedTs - normalizedSpawnTs;
+            rs.timestamp = clampedTs;
+            rs.position = pos + vel * rewind;
+            seedClamped = (clampedTs != normalizedSpawnTs);
+            clampDelta = clampedTs - normalizedSpawnTs;
+            tsSource = seedClamped ? "clamped to cursor" : "propagated spawn timestamp";
+        } else {
+            rs.timestamp = normalizedSpawnTs;
+            tsSource = "propagated spawn timestamp";
+        }
+    } else if (m_playbackTime > 0.0f) {
+        rs.timestamp = m_playbackTime - kInterpolationDelay;
+    } else {
+        // Clock not established yet — use sentinel 0; ProcessInboundPackets will anchor it.
+        rs.timestamp = 0.0f;
+        tsSource = "SENTINEL (clock not ready)";
+    }
+
     history.states.push_back(rs);
+
+    if (m_debugLogging) {
+        std::cout << "[NetSpawn] Seed created for entity " << id
+            << "  playbackTime=" << m_playbackTime
+            << "  seedTimestamp=" << rs.timestamp
+            << "  source=" << tsSource
+            << "  cursorGap=" << (m_playbackTime - kInterpolationDelay - rs.timestamp)
+            << "  pos=(" << pos.x << "," << pos.y << "," << pos.z << ")"
+            << "  vel=(" << vel.x << "," << vel.y << "," << vel.z << ")\n";
+        if (seedClamped) {
+            std::cout << "[NetSpawn] Seed clamped for entity " << id
+                << "  clampDelta=" << clampDelta
+                << "  cursor=" << (m_playbackTime - kInterpolationDelay)
+                << "  normalizedSpawnTs=" << normalizedSpawnTs << "\n";
+        }
+    }
 }
 
 int NetworkManager::GetRemoteEntityCount() {

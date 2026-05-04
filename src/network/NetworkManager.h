@@ -17,6 +17,7 @@
 #include <deque>
 #include <unordered_map>
 #include <vector>
+#include <array>
 #include <string>
 #include <iostream>
 #include <thread>
@@ -106,11 +107,33 @@ public:
     void SetPeerJoinedCallback(PeerJoinedCallback callback) { m_peerJoinedCallback = callback; }
 
     void BroadcastState(Registry& registry, const std::vector<Entity>& locallyOwnedEntities);
+    void BroadcastSingleEntity(Registry& registry, Entity entity);
     void ProcessInboundPackets(Registry& registry);
     void UpdateInterpolation(Registry& registry, float dt);
 
-    // Seeds the remote history for a newly spawned entity so interpolation starts immediately
-    void SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, glm::vec3 rot);
+    // Seeds the remote history for a newly spawned entity so interpolation starts immediately.
+    // normalizedSpawnTs: the spawning peer's broadcast timestamp after applying the peer offset.
+    // Pass -1 (default) to fall back to the cursor-based heuristic.
+    void SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, glm::vec3 rot, float normalizedSpawnTs = -1.0f);
+
+    // Returns the raw broadcast timestamp for the local peer (seconds since NetworkManager started).
+    float GetCurrentBroadcastTimestamp() const {
+        return std::chrono::duration<float>(std::chrono::steady_clock::now() - m_broadcastStartTime).count();
+    }
+
+    // Returns the timestamp offset applied to packets from the given peer, and whether it is calibrated.
+    float GetPeerTimestampOffset(int peerId) const {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        if (peerId >= 0 && peerId < static_cast<int>(m_peers.size()))
+            return m_peers[peerId].timestampOffset;
+        return 0.0f;
+    }
+    bool PeerHasTimestampOffset(int peerId) const {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        if (peerId >= 0 && peerId < static_cast<int>(m_peers.size()))
+            return m_peers[peerId].hasTimestampOffset;
+        return false;
+    }
 
     // Telemetry accessors (approximate, not strictly thread-safe — for debug display only)
     float GetPlaybackTime() const { return m_playbackTime; }
@@ -141,7 +164,7 @@ private:
 
     std::vector<RemotePeer> m_peers;
     std::vector<PendingConnection> m_pendingConnections;
-    std::mutex m_peerMutex;
+    mutable std::mutex m_peerMutex;
 
     std::mutex m_inboundMutex;
     std::queue<std::vector<uint8_t>> m_inboundQueue;
@@ -158,10 +181,15 @@ private:
     std::unordered_map<uint32_t, RemoteHistory> m_remoteHistories;
     std::mutex m_historyMutex;
     float m_playbackTime = 0.0f;
-    static constexpr float kInterpolationDelay = 0.15f;
+    static constexpr float kInterpolationDelay = 0.12f;
+
+    // Shared broadcast sequence counter and start time for all outgoing UDP snapshots
+    uint32_t m_broadcastSequence = 0;
+    std::chrono::steady_clock::time_point m_broadcastStartTime = std::chrono::steady_clock::now();
 
     // Connection retry state — member so Restart() resets it correctly
     std::chrono::steady_clock::time_point m_lastConnectionAttempt{};
+    std::array<std::chrono::steady_clock::time_point, 4> m_lastP2PAttempt{};
 
     // Internal Logic
     void ReceiveLoop();

@@ -912,6 +912,12 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
             for (int i = 0; i < 4; ++i) {
                 ImGui::TextColored(playerColors[i], "%s: %d objects", playerNames[i], ownerCount[i]);
             }
+
+            ImGui::Spacing();
+            bool colorByOwner = scene.GetColorByOwnership();
+            if (ImGui::Checkbox("Colour by Ownership", &colorByOwner)) {
+                scene.SetColorByOwnership(colorByOwner);
+            }
         }
 
         ImGui::Separator();

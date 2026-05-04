@@ -201,6 +201,9 @@ public:
     void SetRegionsOnlyDebugView(bool enabled) { m_RegionsOnlyDebugView = enabled; }
     bool GetRegionsOnlyDebugView() const { return m_RegionsOnlyDebugView; }
 
+    bool GetColorByOwnership() const { return m_ColorByOwnership; }
+    void SetColorByOwnership(bool enabled) { m_ColorByOwnership = enabled; }
+
     void SetSpringVisualizationEnabled(bool enabled);
     bool GetSpringVisualizationEnabled() const { return m_ShowSpringVisuals; }
     void SetSpawnerVisualizationEnabled(bool enabled);
@@ -267,6 +270,7 @@ private:
     bool m_ShowSpawnerVisuals = false;
     bool m_IsLookaheadMode = false;
     bool m_RegionsOnlyDebugView = false;
+    bool m_ColorByOwnership = true;
     float m_ElapsedTime = 0.0f;
     int globalShadingMode = 1;
 

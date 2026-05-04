@@ -170,7 +170,7 @@ void Application::Run() {
                 std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
 
                 try {
-                    // Parse CSV payload: geo,px,py,pz,sx,sy,sz,tex,model,mass,vx,vy,vz,avx,avy,avz,owner,id
+                    // Parse CSV payload: geo,px,py,pz,sx,sy,sz,tex,model,mass,vx,vy,vz,avx,avy,avz,owner,id[,spawnTs]
                     std::vector<std::string> tokens;
                     std::stringstream ss(payload);
                     std::string item;
@@ -189,6 +189,18 @@ void Application::Run() {
                     glm::vec3 angVel(std::stof(tokens[13]), std::stof(tokens[14]), std::stof(tokens[15]));
                     uint8_t ownerId = static_cast<uint8_t>(std::stoi(tokens[16]));
                     Entity id = static_cast<Entity>(std::stoul(tokens[17]));
+
+                    // Normalise the spawn timestamp from the owning peer's broadcast clock so the seed
+                    // is anchored at the actual spawn moment rather than kInterpolationDelay in the past.
+                    float normalizedSpawnTs = -1.0f;
+                    if (tokens.size() >= 19) {
+                        float rawSpawnTs = std::stof(tokens[18]);
+                        int senderPeerId = static_cast<int>(ownerId);
+                        if (m_networkManager->PeerHasTimestampOffset(senderPeerId)) {
+                            normalizedSpawnTs = rawSpawnTs + m_networkManager->GetPeerTimestampOffset(senderPeerId);
+                        }
+                        // If offset not calibrated yet, fall back to -1 and let SeedRemoteState use the heuristic.
+                    }
 
                     if (scene->GetRegistry().IsAlive(id)) return; // Already exists
 
@@ -232,9 +244,10 @@ void Application::Run() {
                             render.tintColor.a = 1.0f;
                         }
 
-                        // Seed interpolation history so the object moves immediately
-                        // without waiting for the first UDP snapshot to arrive
-                        m_networkManager->SeedRemoteState(spawned, pos, vel, glm::vec3(0.0f));
+                        // Seed interpolation history anchored at the actual spawn time.
+                        // normalizedSpawnTs aligns the seed with the real physics elapsed time,
+                        // eliminating the position snap when the first UDP snapshot arrives.
+                        m_networkManager->SeedRemoteState(spawned, pos, vel, glm::vec3(0.0f), normalizedSpawnTs);
                     }
                 } catch (const std::exception& e) {
                     std::cerr << "[Network] Failed to parse SpawnObject event: " << e.what() << std::endl;
@@ -319,7 +332,8 @@ void Application::Run() {
 
     ObjectSpawnerSystem::onObjectSpawned = [this](const ObjectSpawnerSystem::SpawnEvent& ev) {
         if (m_networkManager && m_networkManager->IsRunning()) {
-            // Build CSV: geo,px,py,pz,sx,sy,sz,tex,model,mass,vx,vy,vz,avx,avy,avz,owner,id
+            // Build CSV: geo,px,py,pz,sx,sy,sz,tex,model,mass,vx,vy,vz,avx,avy,avz,owner,id,spawnTs
+            // spawnTs is the raw broadcast clock at spawn time so receivers can anchor the seed correctly.
             std::stringstream ss;
             ss << ev.geometryType << ","
                 << ev.position.x << "," << ev.position.y << "," << ev.position.z << ","
@@ -328,7 +342,8 @@ void Application::Run() {
                 << ev.mass << ","
                 << ev.velocity.x << "," << ev.velocity.y << "," << ev.velocity.z << ","
                 << ev.angularVelocity.x << "," << ev.angularVelocity.y << "," << ev.angularVelocity.z << ","
-                << (int)ev.ownerId << "," << ev.entityId;
+                << (int)ev.ownerId << "," << ev.entityId << ","
+                << m_networkManager->GetCurrentBroadcastTimestamp();
 
             m_networkManager->SendReliableEvent(NetworkEventType::SpawnObject, ss.str());
         }
