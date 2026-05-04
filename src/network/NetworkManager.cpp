@@ -538,20 +538,41 @@ void NetworkManager::SendHandshake(SOCKET s) {
 }
 
 void NetworkManager::PushInboundEvent(const std::vector<uint8_t>& d, bool isUDP) {
-    // ONLY drop UDP packets! 
-    // TCP handles its own loss via the OS. Dropping TCP here permanently deletes PINGs!
+    // 1. Packet Loss (UDP ONLY)
     if (isUDP && m_simulatedPacketLoss > 0.0f) {
         float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-        if (r < m_simulatedPacketLoss) return; // Drop UDP packet
+        if (r < m_simulatedPacketLoss) return;
     }
 
     std::lock_guard<std::mutex> lock(m_inboundMutex);
 
-    // Latency applies to ALL packets to simulate network distance
-    if (m_simulatedLatencyMs > 0.0f) {
+    if (m_simulatedLatencyMs > 0.0f || m_simulatedJitterMs > 0.0f) {
+        float actualLatency = m_simulatedLatencyMs;
+
+        // 2. Jitter (UDP ONLY - TCP guarantees in-order delivery via the OS)
+        if (isUDP && m_simulatedJitterMs > 0.0f) {
+            float jitter = ((static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f) * m_simulatedJitterMs;
+            actualLatency += jitter;
+            if (actualLatency < 0.0f) actualLatency = 0.0f;
+        }
+
         auto deliveryTime = std::chrono::steady_clock::now() +
-            std::chrono::milliseconds(static_cast<int>(m_simulatedLatencyMs));
-        m_delayedInboundQueue.push_back({ deliveryTime, d });
+            std::chrono::milliseconds(static_cast<int>(actualLatency));
+
+        // 3. TCP Strict FIFO Guarantee
+        // If this is a TCP packet, ensure it NEVER arrives before a previously queued TCP packet
+        if (!isUDP && !m_delayedInboundQueue.empty()) {
+            for (auto it = m_delayedInboundQueue.rbegin(); it != m_delayedInboundQueue.rend(); ++it) {
+                if (!it->isUDP) {
+                    if (deliveryTime < it->deliveryTime) {
+                        deliveryTime = it->deliveryTime + std::chrono::milliseconds(1);
+                    }
+                    break; // Only need to check the most recently added TCP packet
+                }
+            }
+        }
+
+        m_delayedInboundQueue.push_back({ deliveryTime, d, isUDP });
     }
     else {
         m_inboundQueue.push(d);
@@ -801,14 +822,14 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
                                 int anchored = 0;
                                 for (auto& [eid, h] : m_remoteHistories) {
                                     if (!h.states.empty() && h.states.front().timestamp == 0.0f) {
-                                        h.states.front().timestamp = m_playbackTime - kInterpolationDelay;
+                                        h.states.front().timestamp = m_playbackTime - m_interpolationDelay;
                                         ++anchored;
                                     }
                                 }
                                 if (m_spawnLogging && anchored > 0) {
                                     std::cout << "[NetSpawn] Clock established at " << m_playbackTime
                                         << " - anchored " << anchored << " sentinel seed(s) to cursor "
-                                        << (m_playbackTime - kInterpolationDelay) << "\n";
+                                        << (m_playbackTime - m_interpolationDelay) << "\n";
                                 }
                             }
 
@@ -816,8 +837,8 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
                                 // Log the first real UDP state received for this entity
                                 std::cout << "[NetSpawn] First UDP state for entity " << id
                                     << "  normalizedTs=" << rs.timestamp
-                                    << "  cursor=" << (m_playbackTime - kInterpolationDelay)
-                                    << "  tsAheadOfCursor=" << (rs.timestamp - (m_playbackTime - kInterpolationDelay))
+                                    << "  cursor=" << (m_playbackTime - m_interpolationDelay)
+                                    << "  tsAheadOfCursor=" << (rs.timestamp - (m_playbackTime - m_interpolationDelay))
                                     << "  pos=(" << rs.position.x << "," << rs.position.y << "," << rs.position.z << ")"
                                     << "  vel=(" << rs.velocity.x << "," << rs.velocity.y << "," << rs.velocity.z << ")";
                                 if (!history.states.empty())
@@ -910,9 +931,9 @@ void NetworkManager::UpdateInterpolation(Registry& registry, float dt) {
     }
 
     if (latestPacketTimestamp > 0.0f) {
-        // We want targetPlaybackTime to be roughly (kInterpolationDelay) behind the latest packet.
+        // We want targetPlaybackTime to be roughly (m_interpolationDelay) behind the latest packet.
         // If it's too far behind, catch up. If it's too close, slow down.
-        float currentLag = latestPacketTimestamp - (m_playbackTime - kInterpolationDelay);
+        float currentLag = latestPacketTimestamp - (m_playbackTime - m_interpolationDelay);
 
         if (currentLag > 0.3f) { // Too much lag (> 300ms) — advance at 5x total speed
             m_playbackTime += dt * 4.0f; // +4 on top of the dt already added = 5x total
@@ -922,7 +943,7 @@ void NetworkManager::UpdateInterpolation(Registry& registry, float dt) {
         }
     }
 
-    float targetPlaybackTime = m_playbackTime - kInterpolationDelay;
+    float targetPlaybackTime = m_playbackTime - m_interpolationDelay;
 
     // 3. Process Interpolation and Cleanup Stale History
     for (auto it = m_remoteHistories.begin(); it != m_remoteHistories.end(); ) {
@@ -1035,7 +1056,7 @@ void NetworkManager::SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, gl
         // Use the actual spawn time propagated in the TCP message.
         // Clamp to the cursor so newly spawned objects do not hover in a future state.
         if (m_playbackTime > 0.0f) {
-            float cursorTs = m_playbackTime - kInterpolationDelay;
+            float cursorTs = m_playbackTime - m_interpolationDelay;
             float clampedTs = std::min(normalizedSpawnTs, cursorTs);
             float rewind = clampedTs - normalizedSpawnTs;
             rs.timestamp = clampedTs;
@@ -1048,7 +1069,7 @@ void NetworkManager::SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, gl
             tsSource = "propagated spawn timestamp";
         }
     } else if (m_playbackTime > 0.0f) {
-        rs.timestamp = m_playbackTime - kInterpolationDelay;
+        rs.timestamp = m_playbackTime - m_interpolationDelay;
     } else {
         // Clock not established yet — use sentinel 0; ProcessInboundPackets will anchor it.
         rs.timestamp = 0.0f;
@@ -1062,13 +1083,13 @@ void NetworkManager::SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, gl
             << "  playbackTime=" << m_playbackTime
             << "  seedTimestamp=" << rs.timestamp
             << "  source=" << tsSource
-            << "  cursorGap=" << (m_playbackTime - kInterpolationDelay - rs.timestamp)
+            << "  cursorGap=" << (m_playbackTime - m_interpolationDelay - rs.timestamp)
             << "  pos=(" << pos.x << "," << pos.y << "," << pos.z << ")"
             << "  vel=(" << vel.x << "," << vel.y << "," << vel.z << ")\n";
         if (seedClamped) {
             std::cout << "[NetSpawn] Seed clamped for entity " << id
                 << "  clampDelta=" << clampDelta
-                << "  cursor=" << (m_playbackTime - kInterpolationDelay)
+                << "  cursor=" << (m_playbackTime - m_interpolationDelay)
                 << "  normalizedSpawnTs=" << normalizedSpawnTs << "\n";
         }
     }
@@ -1133,8 +1154,9 @@ void NetworkManager::ClearHistory() {
     }
 }
 
-void NetworkManager::SetSimulationConditions(float latencyMs, float packetLossPct) {
+void NetworkManager::SetSimulationConditions(float latencyMs, float jitterMs, float packetLossPct) {
     m_simulatedLatencyMs = std::max(0.0f, latencyMs);
+    m_simulatedJitterMs = std::max(0.0f, jitterMs);
     m_simulatedPacketLoss = std::clamp(packetLossPct, 0.0f, 1.0f);
 }
 

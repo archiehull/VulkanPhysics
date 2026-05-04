@@ -14,6 +14,9 @@ struct NetworkSettingsRequest {
     float latencyMs = 0.0f;
     float packetLoss = 0.0f;
     bool applyRequested = false;
+    float jitterMs = 0.0f;
+    float interpolationDelayMs = 250.0f;
+    float broadcastIntervalMs = 33.0f;
 };
 
 struct NetworkTelemetry {
@@ -24,6 +27,7 @@ struct NetworkTelemetry {
 
     float simulatedLatencyMs = 0.0f;
     float simulatedPacketLoss = 0.0f;
+    float broadcastIntervalMs = 33.0f;
 
     // Interpolation timing
     float playbackTime = 0.0f;

@@ -144,7 +144,8 @@ public:
 
     // Telemetry accessors (approximate, not strictly thread-safe — for debug display only)
     float GetPlaybackTime() const { return m_playbackTime; }
-    static constexpr float GetInterpolationDelay() { return kInterpolationDelay; }
+    float GetInterpolationDelay() const { return m_interpolationDelay; }
+    void SetInterpolationDelay(float delaySec) { m_interpolationDelay = delaySec; }
     int GetRemoteEntityCount();
     float GetLatestRemoteTimestamp();
 
@@ -159,7 +160,7 @@ public:
 
     void ClearHistory();
 
-    void SetSimulationConditions(float latencyMs, float packetLossPct);
+    void SetSimulationConditions(float latencyMs, float jitterMs, float packetLossPct);
     void SetLocalPeerId(int id);
     void ReconfigurePeer(int peerId, const std::string& ip, uint16_t port);
 
@@ -170,11 +171,13 @@ private:
     struct DelayedPacket {
         std::chrono::steady_clock::time_point deliveryTime;
         std::vector<uint8_t> data;
+        bool isUDP = false;
     };
     std::vector<DelayedPacket> m_delayedInboundQueue;
 
     float m_simulatedLatencyMs = 0.0f;
     float m_simulatedPacketLoss = 0.0f;
+    float m_simulatedJitterMs = 0.0f;
 
     std::atomic<bool> m_isRunning{ false };
     std::atomic<int> m_localPeerId{ -1 };
@@ -211,7 +214,7 @@ private:
     std::unordered_map<uint32_t, RemoteHistory> m_remoteHistories;
     std::mutex m_historyMutex;
     float m_playbackTime = 0.0f;
-    static constexpr float kInterpolationDelay = 0.12f;
+    float m_interpolationDelay = 0.25f;
 
     // Shared broadcast sequence counter and start time for all outgoing UDP snapshots
     uint32_t m_broadcastSequence = 0;

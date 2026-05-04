@@ -100,6 +100,7 @@ private:
 
     std::atomic<float> deltaTime = 0.0f;
     std::atomic<float> timeScale = 1.0f;
+	std::atomic<float> m_BroadcastInterval = 0.033f; // Default 30Hz broadcast
 
     uint32_t currentFrame = 0;
     bool framebufferResized = false;

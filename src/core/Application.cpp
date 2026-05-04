@@ -1410,7 +1410,9 @@ void Application::MainLoop() {
         auto netReq = editorUI->ConsumeNetworkSettingsRequest();
         if (netReq.applyRequested && m_networkManager) {
             // 1. Update Simulation Conditions
-            m_networkManager->SetSimulationConditions(netReq.latencyMs, netReq.packetLoss);
+            m_networkManager->SetSimulationConditions(netReq.latencyMs, netReq.jitterMs, netReq.packetLoss);
+            m_networkManager->SetInterpolationDelay(netReq.interpolationDelayMs / 1000.0f);
+            m_BroadcastInterval.store(netReq.broadcastIntervalMs / 1000.0f);
 
             // 2. Update Peer Targets
             for (int i = 0; i < 4; ++i) {
@@ -1715,9 +1717,10 @@ void Application::MainLoop() {
             network.localPort = m_networkManager->GetLocalPort();
             network.simulatedLatencyMs = m_networkManager->GetSimulatedLatency();
             network.simulatedPacketLoss = m_networkManager->GetSimulatedPacketLoss();
+            network.broadcastIntervalMs = m_BroadcastInterval.load() * 1000.0f;
             network.connectedPeers = m_networkManager->GetPeerCount();
             network.playbackTime = m_networkManager->GetPlaybackTime();
-            network.interpolationDelay = NetworkManager::GetInterpolationDelay();
+            network.interpolationDelay = m_networkManager->GetInterpolationDelay();
             network.latestRemoteTimestamp = m_networkManager->GetLatestRemoteTimestamp();
             network.remoteEntityCount = m_networkManager->GetRemoteEntityCount();
             for (int i = 0; i < 4; ++i) {
@@ -2008,8 +2011,6 @@ void Application::SimulationLoop() {
     int steppedFrames = 0;
     auto hzWindowStart = std::chrono::high_resolution_clock::now();
 
-	// Broadcast throttling (seconds) - adjust as needed (0.0 = every physics step) (TODO: expose in UI)
-    const float kBroadcastInterval = 0.1f; // 10 Hz
     float broadcastAccumulator = 0.0f;
 
     while (m_IsRunning) {
@@ -2074,7 +2075,7 @@ void Application::SimulationLoop() {
                 // Network broadcast of authoritative state (throttled)
                 if (m_networkManager) {
                     broadcastAccumulator += fixedDt;
-                    if (broadcastAccumulator >= kBroadcastInterval) {
+                    if (broadcastAccumulator >= m_BroadcastInterval.load()) {
                         broadcastAccumulator = 0.0f;
                         std::shared_lock<std::shared_mutex> ecsReadLock(m_RegistryMutex);
                         m_networkManager->BroadcastState(scene->GetRegistry(), scene->GetLocallyOwnedNetworkEntities());

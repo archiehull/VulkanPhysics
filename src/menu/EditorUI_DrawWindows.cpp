@@ -281,6 +281,7 @@ void EditorUI::DrawNetworkWindow() {
         ImGui::Text("Local Port: %u", net.localPort);
         ImGui::Text("Active Latency: %.1f ms", net.simulatedLatencyMs);
         ImGui::Text("Active Packet Loss: %.1f%%", net.simulatedPacketLoss * 100.0f);
+        ImGui::Text("Broadcast Rate: %.0f ms (%.1f Hz)", net.broadcastIntervalMs, 1000.0f / net.broadcastIntervalMs);
 
         ImGui::Spacing();
         if (ImGui::BeginTable("LivePeersTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
@@ -381,7 +382,11 @@ void EditorUI::DrawNetworkWindow() {
         ImGui::Spacing();
         ImGui::Text("Network Simulation");
         ImGui::SliderFloat("Latency (ms)", &m_PendingNetworkSettings.latencyMs, 0.0f, 500.0f, "%.1f ms");
+        ImGui::SliderFloat("Jitter (ms)", &m_PendingNetworkSettings.jitterMs, 0.0f, 100.0f, "+/- %.1f ms");
         ImGui::SliderFloat("Packet Loss", &m_PendingNetworkSettings.packetLoss, 0.0f, 1.0f, "%.2f%%");
+        ImGui::SliderFloat("Interp Buffer", &m_PendingNetworkSettings.interpolationDelayMs, 50.0f, 500.0f, "%.0f ms");
+        ImGui::SliderFloat("Broadcast Interval", &m_PendingNetworkSettings.broadcastIntervalMs, 10.0f, 200.0f, "%.0f ms");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("16ms = ~60Hz, 33ms = ~30Hz, 100ms = 10Hz");
 
         ImGui::Spacing();
         if (ImGui::Button("Apply Configuration", ImVec2(-1, 0))) {
