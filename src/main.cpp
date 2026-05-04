@@ -1,3 +1,7 @@
+#ifdef APIENTRY // hide warning
+#undef APIENTRY
+#endif
+
 #include "core/Application.h"
 #include <iostream>
 #include <stdexcept>

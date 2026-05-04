@@ -1725,6 +1725,8 @@ void Application::MainLoop() {
                 network.peers[i].connected = ps.connected;
                 network.peers[i].port = ps.port;
                 network.peers[i].ip = ps.ip;
+                network.peers[i].pingMs = ps.pingMs;
+                network.peers[i].packetLossPct = ps.packetLossPct;
             }
             editorUI->SetNetworkTelemetry(network);
         }

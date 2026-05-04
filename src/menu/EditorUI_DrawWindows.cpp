@@ -283,10 +283,12 @@ void EditorUI::DrawNetworkWindow() {
         ImGui::Text("Active Packet Loss: %.1f%%", net.simulatedPacketLoss * 100.0f);
 
         ImGui::Spacing();
-        if (ImGui::BeginTable("LivePeersTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+        if (ImGui::BeginTable("LivePeersTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("Peer ID", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-            ImGui::TableSetupColumn("Endpoint (IP:Port)", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableSetupColumn("Endpoint", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Ping", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("Loss", ImGuiTableColumnFlags_WidthFixed, 60.0f);
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < 4; ++i) {
@@ -307,11 +309,34 @@ void EditorUI::DrawNetworkWindow() {
 
                 ImGui::TableNextColumn();
                 if (i == net.localPeerId) {
-                    // Local binds to INADDR_ANY (0.0.0.0)
                     ImGui::Text("0.0.0.0:%u", net.localPort);
                 }
                 else if (net.peers[i].connected) {
                     ImGui::Text("%s:%u", net.peers[i].ip.c_str(), net.peers[i].port);
+                }
+                else {
+                    ImGui::TextDisabled("-");
+                }
+
+                ImGui::TableNextColumn();
+                if (net.peers[i].connected && i != net.localPeerId) {
+                    // Color code the ping (Green < 50ms, Yellow < 150ms, Red > 150ms)
+                    ImVec4 pingCol = (net.peers[i].pingMs < 50.0f) ? ImVec4(0.2f, 1.0f, 0.2f, 1.0f) :
+                        (net.peers[i].pingMs < 150.0f) ? ImVec4(1.0f, 1.0f, 0.2f, 1.0f) :
+                        ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
+                    ImGui::TextColored(pingCol, "%.0f ms", net.peers[i].pingMs);
+                }
+                else {
+                    ImGui::TextDisabled("-");
+                }
+
+                ImGui::TableNextColumn();
+                if (net.peers[i].connected && i != net.localPeerId) {
+                    // Color code packet loss
+                    ImVec4 lossCol = (net.peers[i].packetLossPct < 0.02f) ? ImVec4(0.2f, 1.0f, 0.2f, 1.0f) :
+                        (net.peers[i].packetLossPct < 0.1f) ? ImVec4(1.0f, 1.0f, 0.2f, 1.0f) :
+                        ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
+                    ImGui::TextColored(lossCol, "%.1f%%", net.peers[i].packetLossPct * 100.0f);
                 }
                 else {
                     ImGui::TextDisabled("-");

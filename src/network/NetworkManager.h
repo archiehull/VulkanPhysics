@@ -63,6 +63,13 @@ struct RemotePeer {
     // Added to each sender's raw tick_index timestamps so all peers share one timeline
     float timestampOffset = 0.0f;
     bool hasTimestampOffset = false;
+
+    float rttMs = 0.0f;
+    std::chrono::steady_clock::time_point lastPingSent;
+
+    uint32_t packetsReceived = 0;
+    uint32_t packetsLost = 0;
+    float actualPacketLossPct = 0.0f;
 };
 
 struct PendingConnection {
@@ -93,7 +100,7 @@ public:
     void ConfigurePeer(int peerId, const std::string& ip, uint16_t port);
 
     // Data Flow
-    void PushInboundEvent(const std::vector<uint8_t>& data);
+    void PushInboundEvent(const std::vector<uint8_t>& data, bool isUDP = false);
     bool PopInboundEvent(std::vector<uint8_t>& outData);
 
     void SendUDP(const std::vector<uint8_t>& data);
@@ -145,6 +152,8 @@ public:
         bool connected = false;
         uint16_t port = 0;
         std::string ip;
+        float pingMs = 0.0f;        
+        float packetLossPct = 0.0f;
     };
     PeerStatus GetPeerStatus(int peerId);
 

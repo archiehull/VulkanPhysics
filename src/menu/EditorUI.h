@@ -35,6 +35,8 @@ struct NetworkTelemetry {
         bool connected = false;
         uint16_t port = 0;
         std::string ip;
+        float pingMs = 0.0f;
+        float packetLossPct = 0.0f;
     };
     std::array<PeerInfo, 4> peers;
 };

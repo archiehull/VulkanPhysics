@@ -176,8 +176,34 @@ void NetworkManager::ReceiveLoop() {
 }
 
 void NetworkManager::SendLoop() {
+    auto lastPingTime = std::chrono::steady_clock::now();
+
     while (m_isRunning.load()) {
         MaintainOutgoingConnections();
+
+        auto now = std::chrono::steady_clock::now();
+        if (now - lastPingTime > std::chrono::seconds(1)) {
+            lastPingTime = now;
+
+            for (int i = 0; i < 4; ++i) {
+                if (i == m_localPeerId.load()) continue;
+
+                bool shouldPing = false;
+                // 1. Lock briefly just to check status and set the timestamp
+                {
+                    std::lock_guard<std::mutex> lock(m_peerMutex);
+                    if (m_peers[i].isConnected) {
+                        m_peers[i].lastPingSent = now;
+                        shouldPing = true;
+                    }
+                } // Mutex unlocks here
+
+                // 2. Send the event safely OUTSIDE the lock
+                if (shouldPing) {
+                    SendReliableEventTo(i, NetworkEventType::SceneLoad, "__PING__", 0);
+                }
+            }
+        }
 
         // Step 9: Outbound queue processing
         std::vector<uint8_t> packet;
@@ -344,7 +370,7 @@ void NetworkManager::ReceiveTCP() {
                     if (peer.tcpBuffer.size() < 4 + packetSize) break;
 
                     std::vector<uint8_t> packetData(peer.tcpBuffer.begin() + 4, peer.tcpBuffer.begin() + 4 + packetSize);
-                    PushInboundEvent(packetData);
+                    PushInboundEvent(packetData, false);
                     peer.tcpBuffer.erase(peer.tcpBuffer.begin(), peer.tcpBuffer.begin() + 4 + packetSize);
                 }
             }
@@ -378,7 +404,7 @@ void NetworkManager::ReceiveUDP() {
         }
 
         // 3. Use iterators (.begin()) instead of trying to add to the vector itself
-        PushInboundEvent(std::vector<uint8_t>(buffer.begin(), buffer.begin() + bytes));
+        PushInboundEvent(std::vector<uint8_t>(buffer.begin(), buffer.begin() + bytes), true);
     }
 }
 
@@ -511,16 +537,17 @@ void NetworkManager::SendHandshake(SOCKET s) {
     }
 }
 
-void NetworkManager::PushInboundEvent(const std::vector<uint8_t>& d) {
-    // 1. Simulate Packet Loss (for UDP/unreliable traffic only usually, but applied here globally for testing)
-    if (m_simulatedPacketLoss > 0.0f) {
+void NetworkManager::PushInboundEvent(const std::vector<uint8_t>& d, bool isUDP) {
+    // ONLY drop UDP packets! 
+    // TCP handles its own loss via the OS. Dropping TCP here permanently deletes PINGs!
+    if (isUDP && m_simulatedPacketLoss > 0.0f) {
         float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-        if (r < m_simulatedPacketLoss) return; // Drop packet
+        if (r < m_simulatedPacketLoss) return; // Drop UDP packet
     }
 
     std::lock_guard<std::mutex> lock(m_inboundMutex);
 
-    // 2. Simulate Latency
+    // Latency applies to ALL packets to simulate network distance
     if (m_simulatedLatencyMs > 0.0f) {
         auto deliveryTime = std::chrono::steady_clock::now() +
             std::chrono::milliseconds(static_cast<int>(m_simulatedLatencyMs));
@@ -704,22 +731,39 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
         if (netMsg->payload_type() == Payload_PhysicsSnapshot) {
             auto snapshot = netMsg->payload_as_PhysicsSnapshot();
             int senderId = netMsg->sender_peer_id();
-
             float rawTimestamp = static_cast<float>(snapshot->tick_index()) / 1000.0f;
             float normalizedTimestamp = rawTimestamp;
 
             {
                 std::lock_guard<std::mutex> pLock(m_peerMutex);
                 if (senderId >= 0 && senderId < 4) {
-                    if (snapshot->sequence_number() <= m_peers[senderId].lastReceivedSequence && m_peers[senderId].lastReceivedSequence != 0) {
+                    auto& peer = m_peers[senderId]; // Declare this FIRST
+
+                    if (snapshot->sequence_number() <= peer.lastReceivedSequence && peer.lastReceivedSequence != 0) {
                         continue;
                     }
-                    m_peers[senderId].lastReceivedSequence = snapshot->sequence_number();
+
+                    // --- PACKET LOSS CALCULATION ---
+                    if (peer.lastReceivedSequence != 0) {
+                        uint32_t expected = peer.lastReceivedSequence + 1;
+                        if (snapshot->sequence_number() > expected) {
+                            peer.packetsLost += (snapshot->sequence_number() - expected);
+                        }
+                    }
+                    peer.packetsReceived++;
+                    peer.lastReceivedSequence = snapshot->sequence_number();
+
+                    // Update moving average every 100 packets
+                    uint32_t totalPackets = peer.packetsReceived + peer.packetsLost;
+                    if (totalPackets >= 100) {
+                        peer.actualPacketLossPct = static_cast<float>(peer.packetsLost) / totalPackets;
+                        peer.packetsReceived = 0;
+                        peer.packetsLost = 0;
+                    }
+                    // -------------------------------
 
                     // On first packet from this sender, compute an offset so their timestamps
-                    // align with our local playback timeline.  This prevents peers that started
-                    // at different wall-clock times from drifting apart and causing object freezes.
-                    auto& peer = m_peers[senderId];
+                    // align with our local playback timeline.
                     if (!peer.hasTimestampOffset && m_playbackTime > 0.0f) {
                         peer.timestampOffset = m_playbackTime - rawTimestamp;
                         peer.hasTimestampOffset = true;
@@ -729,6 +773,9 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
             }
 
             std::lock_guard<std::mutex> hLock(m_historyMutex);
+
+            if (snapshot->states() == nullptr) continue;
+
             for (auto state : *snapshot->states()) {
                 Entity id = static_cast<Entity>(state->entity_id());
 
@@ -805,6 +852,25 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
         }
         else if (netMsg->payload_type() == Payload_ReliableEvent) {
             auto ev = netMsg->payload_as_ReliableEvent();
+            std::string payloadStr = ev->string_payload() ? ev->string_payload()->str() : "";
+
+            // --- PING INTERCEPTION ---
+            if (ev->event_type() == EventType_SceneLoad) {
+                if (payloadStr == "__PING__") {
+                    SendReliableEventTo(netMsg->sender_peer_id(), NetworkEventType::SceneLoad, "__PONG__", 0);
+                    continue; // Stop processing, don't pass to game
+                }
+                else if (payloadStr == "__PONG__") {
+                    int sender = netMsg->sender_peer_id();
+                    std::lock_guard<std::mutex> pLock(m_peerMutex);
+                    if (sender >= 0 && sender < 4) {
+                        auto rtt = std::chrono::steady_clock::now() - m_peers[sender].lastPingSent;
+                        m_peers[sender].rttMs = std::chrono::duration<float, std::milli>(rtt).count();
+                    }
+                    continue; // Stop processing, don't pass to game
+                }
+            }
+
             if (m_eventCallback) {
                 NetworkEventType type;
                 bool valid = true;
@@ -1024,8 +1090,15 @@ float NetworkManager::GetLatestRemoteTimestamp() {
 
 NetworkManager::PeerStatus NetworkManager::GetPeerStatus(int peerId) {
     std::lock_guard<std::mutex> lock(m_peerMutex);
-    if (peerId >= 0 && peerId < static_cast<int>(m_peers.size()))
-        return { m_peers[peerId].isConnected, m_peers[peerId].port, m_peers[peerId].ip };
+    if (peerId >= 0 && peerId < static_cast<int>(m_peers.size())) {
+        return {
+            m_peers[peerId].isConnected,
+            m_peers[peerId].port,
+            m_peers[peerId].ip,
+            m_peers[peerId].rttMs,               
+            m_peers[peerId].actualPacketLossPct  
+        };
+    }
     return {};
 }
 
