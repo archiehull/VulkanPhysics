@@ -408,9 +408,9 @@ void Application::Run() {
                             spawner.assignedOwner = static_cast<uint8_t>(lowestSurvivingId);
                         }
 
-                        // D) Spawner run states are strictly local. If the Host started a spawner, 
-                        // the client's version is asleep. Force it awake so it takes over.
-                        spawner.isRunning = true;
+                        // D) Preserve dormant spawners. Only keep running if already active
+                        // or configured to auto-run.
+                        spawner.isRunning = spawner.isRunning || spawner.alwaysOn || spawner.triggerOnStartup;
                     }
                 }
 
@@ -1496,6 +1496,7 @@ void Application::GenerateLookahead(float timeframe) {
                     eSnap.pathCurrentTime = path.currentTime;
                     eSnap.pathPlaybackDirection = path.playbackDirection;
                     eSnap.pathIsPlaying = path.isPlaying;
+                    eSnap.pathRotationSpinTime = path.rotationSpinTime;
                 }
 
                 snapshot.entities[e] = eSnap;
@@ -1890,9 +1891,14 @@ void Application::MainLoop() {
                 if (!m_ReplayFrames.empty() && m_CurrentReplayFrame >= 0 && m_CurrentReplayFrame < m_ReplayFrames.size()) {
                     const auto& snapshot = m_ReplayFrames[m_CurrentReplayFrame];
                     auto& registry = scene->GetRegistry();
+                    const Entity replayCameraEntity = cameraController->GetActiveCameraEntity();
+                    const bool allowReplayFreeRoam = editorUI->GetReplayFreeRoam();
                     const Entity entityCount = registry.GetEntityCount();
 
                     for (Entity e = 0; e < entityCount; ++e) {
+                        if (allowReplayFreeRoam && e == replayCameraEntity) {
+                            continue;
+                        }
                         if (registry.HasComponent<TransformComponent>(e)) {
                             auto it = snapshot.entities.find(e);
                             if (it != snapshot.entities.end()) {
@@ -1926,9 +1932,13 @@ void Application::MainLoop() {
                                     path.currentTime = it->second.pathCurrentTime;
                                     path.playbackDirection = it->second.pathPlaybackDirection;
                                     path.isPlaying = it->second.pathIsPlaying;
+                                    path.rotationSpinTime = it->second.pathRotationSpinTime;
                                 }
                             }
                             else {
+                                if (allowReplayFreeRoam && e == replayCameraEntity) {
+                                    continue;
+                                }
                                 if (registry.HasComponent<RenderComponent>(e)) {
                                     registry.GetComponent<RenderComponent>(e).visible = false;
                                 }
@@ -1953,7 +1963,11 @@ void Application::MainLoop() {
 
             {
                 std::unique_lock<std::shared_mutex> visualLock(m_RegistryMutex);
-                scene->UpdateVisuals(0.0f);
+                float replayVisualDelta = 0.0f;
+                if (editorUI->IsReplayPlaying()) {
+                    replayVisualDelta = editorUI->GetReplayFrameDuration() * editorUI->GetReplayPlaybackSpeed();
+                }
+                scene->UpdateVisuals(replayVisualDelta);
             }
 
         } else {

@@ -51,6 +51,7 @@ struct EntitySnapshot {
     float pathCurrentTime = 0.0f;
     int pathPlaybackDirection = 1;
     bool pathIsPlaying = false;
+    float pathRotationSpinTime = 0.0f;
 };
 
 struct FrameSnapshot {

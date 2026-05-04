@@ -309,6 +309,9 @@ public:
     int GetReplayFrame() const { return m_CurrentReplayFrame; }
     void SetReplayFrame(int frame) { m_CurrentReplayFrame = frame; }
     void SetMaxReplayFrames(int maxFrames) { m_MaxReplayFrames = maxFrames; }
+    bool IsReplayPlaying() const { return m_ReplayPlaying; }
+    float GetReplayPlaybackSpeed() const { return m_ReplayPlaybackSpeed; }
+    float GetReplayFrameDuration() const { return m_StepSize; }
 
 private:
     bool m_ShowNetworkWindow = false;
