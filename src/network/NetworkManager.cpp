@@ -360,15 +360,16 @@ void NetworkManager::ReceiveTCP() {
 }
 
 void NetworkManager::ReceiveUDP() {
-    // 65507 is the maximum UDP payload size over IPv4. Using a smaller buffer causes
-    // recvfrom to return WSAEMSGSIZE and discard the entire datagram silently.
-    char buffer[65507];
+    // 1. Use uint8_t directly to perfectly match PushInboundEvent
+    std::vector<uint8_t> buffer(65507);
     sockaddr_in from;
     int fromLen = sizeof(from);
+
     while (true) {
-        int bytes = recvfrom(m_udpSocket, buffer, sizeof(buffer), 0, (sockaddr*)&from, &fromLen);
+        // 2. Cast buffer.data() to char* just for the Windows API
+        int bytes = recvfrom(m_udpSocket, reinterpret_cast<char*>(buffer.data()), static_cast<int>(buffer.size()), 0, (sockaddr*)&from, &fromLen);
         if (bytes <= 0) break;
-        
+
         static int udpCounter = 0;
         if (m_debugLogging && (udpCounter++ % 100 == 0)) {
             char ip[INET_ADDRSTRLEN];
@@ -376,7 +377,8 @@ void NetworkManager::ReceiveUDP() {
             std::cout << "[NetworkManager] UDP Snapshot received (" << bytes << " bytes) from " << ip << ":" << ntohs(from.sin_port) << std::endl;
         }
 
-        PushInboundEvent(std::vector<uint8_t>(buffer, buffer + bytes));
+        // 3. Use iterators (.begin()) instead of trying to add to the vector itself
+        PushInboundEvent(std::vector<uint8_t>(buffer.begin(), buffer.begin() + bytes));
     }
 }
 
@@ -510,12 +512,40 @@ void NetworkManager::SendHandshake(SOCKET s) {
 }
 
 void NetworkManager::PushInboundEvent(const std::vector<uint8_t>& d) {
+    // 1. Simulate Packet Loss (for UDP/unreliable traffic only usually, but applied here globally for testing)
+    if (m_simulatedPacketLoss > 0.0f) {
+        float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+        if (r < m_simulatedPacketLoss) return; // Drop packet
+    }
+
     std::lock_guard<std::mutex> lock(m_inboundMutex);
-    m_inboundQueue.push(d);
+
+    // 2. Simulate Latency
+    if (m_simulatedLatencyMs > 0.0f) {
+        auto deliveryTime = std::chrono::steady_clock::now() +
+            std::chrono::milliseconds(static_cast<int>(m_simulatedLatencyMs));
+        m_delayedInboundQueue.push_back({ deliveryTime, d });
+    }
+    else {
+        m_inboundQueue.push(d);
+    }
 }
 
 bool NetworkManager::PopInboundEvent(std::vector<uint8_t>& out) {
     std::lock_guard<std::mutex> lock(m_inboundMutex);
+
+    // Process delayed queue
+    auto now = std::chrono::steady_clock::now();
+    for (auto it = m_delayedInboundQueue.begin(); it != m_delayedInboundQueue.end(); ) {
+        if (now >= it->deliveryTime) {
+            m_inboundQueue.push(std::move(it->data));
+            it = m_delayedInboundQueue.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+
     if (m_inboundQueue.empty()) return false;
     out = std::move(m_inboundQueue.front());
     m_inboundQueue.pop();
@@ -728,14 +758,14 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
                                         ++anchored;
                                     }
                                 }
-                                if (m_debugLogging && anchored > 0) {
+                                if (m_spawnLogging && anchored > 0) {
                                     std::cout << "[NetSpawn] Clock established at " << m_playbackTime
                                         << " - anchored " << anchored << " sentinel seed(s) to cursor "
                                         << (m_playbackTime - kInterpolationDelay) << "\n";
                                 }
                             }
 
-                            if (m_debugLogging && history.states.size() <= 1) {
+                            if (m_spawnLogging && history.states.size() <= 1) {
                                 // Log the first real UDP state received for this entity
                                 std::cout << "[NetSpawn] First UDP state for entity " << id
                                     << "  normalizedTs=" << rs.timestamp
@@ -865,7 +895,7 @@ void NetworkManager::UpdateInterpolation(Registry& registry, float dt) {
             p.velocity = s1->velocity;
             t.UpdateMatrix();
 
-            if (m_debugLogging && history.states.size() <= 2) {
+            if (m_interpLogging && history.states.size() <= 2) {
                 std::cout << "[Interp] entity=" << id << " INTERPOLATING"
                     << "  blend=" << t_blend
                     << "  s0Ts=" << s0->timestamp << "  s1Ts=" << s1->timestamp
@@ -881,7 +911,7 @@ void NetworkManager::UpdateInterpolation(Registry& registry, float dt) {
             p.velocity = s1->velocity;
             t.UpdateMatrix();
 
-            if (m_debugLogging && history.states.size() <= 2) {
+            if (m_interpLogging && history.states.size() <= 2) {
                 std::cout << "[Interp] entity=" << id << " CLAMPED TO FUTURE STATE"
                     << "  s1Ts=" << s1->timestamp << "  cursor=" << targetPlaybackTime
                     << "  cursorBehindByMs=" << (s1->timestamp - targetPlaybackTime) * 1000.0f
@@ -897,7 +927,7 @@ void NetworkManager::UpdateInterpolation(Registry& registry, float dt) {
             p.velocity = last.velocity;
             t.UpdateMatrix();
 
-            if (m_debugLogging && history.states.size() <= 2) {
+            if (m_interpLogging && history.states.size() <= 2) {
                 std::cout << "[Interp] entity=" << id << " EXTRAPOLATING"
                     << "  lastTs=" << last.timestamp << "  cursor=" << targetPlaybackTime
                     << "  extrapolationTime=" << extrapolationTime
@@ -961,7 +991,7 @@ void NetworkManager::SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, gl
 
     history.states.push_back(rs);
 
-    if (m_debugLogging) {
+    if (m_spawnLogging) {
         std::cout << "[NetSpawn] Seed created for entity " << id
             << "  playbackTime=" << m_playbackTime
             << "  seedTimestamp=" << rs.timestamp
@@ -1030,3 +1060,30 @@ void NetworkManager::ClearHistory() {
     }
 }
 
+void NetworkManager::SetSimulationConditions(float latencyMs, float packetLossPct) {
+    m_simulatedLatencyMs = std::max(0.0f, latencyMs);
+    m_simulatedPacketLoss = std::clamp(packetLossPct, 0.0f, 1.0f);
+}
+
+void NetworkManager::SetLocalPeerId(int id) {
+    m_localPeerId.store(id);
+    // Your Application::SimulationLoop already detects this and updates ECS partitions!
+}
+
+void NetworkManager::ReconfigurePeer(int peerId, const std::string& ip, uint16_t port) {
+    std::lock_guard<std::mutex> lock(m_peerMutex);
+    if (peerId >= 0 && peerId < 4) {
+        // If changing an active peer, disconnect them first
+        if (m_peers[peerId].isConnected && m_peers[peerId].tcpSocket != INVALID_SOCKET) {
+            closesocket(m_peers[peerId].tcpSocket);
+            m_peers[peerId].tcpSocket = INVALID_SOCKET;
+            m_peers[peerId].isConnected = false;
+            m_peerCount--;
+        }
+        m_peers[peerId].ip = ip;
+        m_peers[peerId].port = port;
+        m_peers[peerId].udpAddr.sin_family = AF_INET;
+        m_peers[peerId].udpAddr.sin_port = htons(port);
+        inet_pton(AF_INET, ip.c_str(), &m_peers[peerId].udpAddr.sin_addr);
+    }
+}

@@ -7,11 +7,23 @@
 #include "../rendering/Scene.h"
 #include <chrono>
 
+struct NetworkSettingsRequest {
+    std::array<std::string, 4> peerIps = { "127.0.0.1", "127.0.0.1", "127.0.0.1", "127.0.0.1" };
+    std::array<int, 4> peerPorts = { 27015, 27016, 27017, 27018 };
+    int localPeerId = -1; // -1 means auto-assign
+    float latencyMs = 0.0f;
+    float packetLoss = 0.0f;
+    bool applyRequested = false;
+};
+
 struct NetworkTelemetry {
     int localPeerId = -1;
     int connectedPeers = 0;
     uint16_t localPort = 0;
     bool isRunning = false;
+
+    float simulatedLatencyMs = 0.0f;
+    float simulatedPacketLoss = 0.0f;
 
     // Interpolation timing
     float playbackTime = 0.0f;
@@ -73,6 +85,8 @@ public:
 
     const float* GetClearColor() const { return m_ClearColor; }
 
+    NetworkSettingsRequest ConsumeNetworkSettingsRequest();
+
     Entity ConsumeViewRequest() {
         Entity req = m_ViewRequested;
         m_ViewRequested = MAX_ENTITIES;
@@ -83,10 +97,10 @@ public:
 
     struct ProceduralTextureRequest {
         std::string name;
-        ProcTexType type;
-        glm::vec4 color1;
-        glm::vec4 color2;
-        int cellSize;
+        ProcTexType type = ProcTexType::SOLID; // Add default
+        glm::vec4 color1 = glm::vec4(1.0f);    // Add default
+        glm::vec4 color2 = glm::vec4(1.0f);    // Add default
+        int cellSize = 0;                      // Add default
     };
 
     std::vector<ProceduralTextureRequest> ConsumeTextureRequests() {
@@ -97,7 +111,7 @@ public:
 
     // --- GEOMETRY CHANGE SYSTEM ---
     struct GeometryChangeRequest {
-        Entity entity;
+        Entity entity = MAX_ENTITIES;
         std::string type;
         std::string path;
     };
@@ -291,6 +305,10 @@ public:
     void SetMaxReplayFrames(int maxFrames) { m_MaxReplayFrames = maxFrames; }
 
 private:
+    bool m_ShowNetworkWindow = false;
+    NetworkSettingsRequest m_PendingNetworkSettings;
+    void DrawNetworkWindow();
+
     void DrawMainMenuSection(float deltaTime, float currentTemp, const std::string& seasonName, Scene& scene, Entity activeOrbitTarget, std::string& sceneToLoad, Entity& entityToDelete);
     void DrawLoadSceneMenu(std::string& sceneToLoad);
     void DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& entityToDelete);

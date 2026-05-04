@@ -149,13 +149,34 @@ public:
     PeerStatus GetPeerStatus(int peerId);
 
     void ClearHistory();
+
+    void SetSimulationConditions(float latencyMs, float packetLossPct);
+    void SetLocalPeerId(int id);
+    void ReconfigurePeer(int peerId, const std::string& ip, uint16_t port);
+
+    float GetSimulatedLatency() const { return m_simulatedLatencyMs; }
+    float GetSimulatedPacketLoss() const { return m_simulatedPacketLoss; }
+
 private:
+    struct DelayedPacket {
+        std::chrono::steady_clock::time_point deliveryTime;
+        std::vector<uint8_t> data;
+    };
+    std::vector<DelayedPacket> m_delayedInboundQueue;
+
+    float m_simulatedLatencyMs = 0.0f;
+    float m_simulatedPacketLoss = 0.0f;
+
     std::atomic<bool> m_isRunning{ false };
     std::atomic<int> m_localPeerId{ -1 };
     std::atomic<int> m_peerCount{ 0 };
 
     uint16_t m_localPort{ 0 };
     bool m_debugLogging{ true };
+    bool m_interpLogging{ false };
+    bool m_spawnLogging{ false };
+
+
 
     SOCKET m_udpSocket{ INVALID_SOCKET };
     SOCKET m_tcpSocket{ INVALID_SOCKET };

@@ -265,6 +265,107 @@ if (m_ShowRuntimeWindow) {
 
 }
 
+void EditorUI::DrawNetworkWindow() {
+    if (!m_ShowNetworkWindow) return;
+
+    ImGui::SetNextWindowSize(ImVec2(480, 600), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Networking Configuration", &m_ShowNetworkWindow)) {
+
+        // ---------------------------------------------------------
+        // SECTION 1: LIVE STATE VERIFICATION
+        // ---------------------------------------------------------
+        const auto& net = m_Profiler.network;
+
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "--- LIVE NETWORK STATE ---");
+        ImGui::Text("Local Identity: Peer %d", net.localPeerId);
+        ImGui::Text("Local Port: %u", net.localPort);
+        ImGui::Text("Active Latency: %.1f ms", net.simulatedLatencyMs);
+        ImGui::Text("Active Packet Loss: %.1f%%", net.simulatedPacketLoss * 100.0f);
+
+        ImGui::Spacing();
+        if (ImGui::BeginTable("LivePeersTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("Peer ID", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn("Endpoint (IP:Port)", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
+
+            for (int i = 0; i < 4; ++i) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("Peer %d", i);
+
+                ImGui::TableNextColumn();
+                if (i == net.localPeerId) {
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Local");
+                }
+                else if (net.peers[i].connected) {
+                    ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "Connected");
+                }
+                else {
+                    ImGui::TextDisabled("Offline");
+                }
+
+                ImGui::TableNextColumn();
+                if (i == net.localPeerId) {
+                    // Local binds to INADDR_ANY (0.0.0.0)
+                    ImGui::Text("0.0.0.0:%u", net.localPort);
+                }
+                else if (net.peers[i].connected) {
+                    ImGui::Text("%s:%u", net.peers[i].ip.c_str(), net.peers[i].port);
+                }
+                else {
+                    ImGui::TextDisabled("-");
+                }
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // ---------------------------------------------------------
+        // SECTION 2: PENDING CONFIGURATION
+        // ---------------------------------------------------------
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "--- PENDING CONFIGURATION ---");
+
+        ImGui::Text("Local Identity Override");
+        const char* peerRoles[] = { "Auto (Wait for Host)", "Peer 0 (Host)", "Peer 1", "Peer 2", "Peer 3" };
+        int roleIdx = m_PendingNetworkSettings.localPeerId + 1;
+        if (ImGui::Combo("Force Local ID", &roleIdx, peerRoles, 5)) {
+            m_PendingNetworkSettings.localPeerId = roleIdx - 1;
+        }
+
+        ImGui::Spacing();
+        ImGui::Text("Peer Targets");
+        for (int i = 0; i < 4; ++i) {
+            ImGui::PushID(i);
+            ImGui::Text("Peer %d", i);
+
+            char ipBuf[64];
+            strncpy_s(ipBuf, m_PendingNetworkSettings.peerIps[i].c_str(), sizeof(ipBuf));
+            if (ImGui::InputText("IP", ipBuf, sizeof(ipBuf))) {
+                m_PendingNetworkSettings.peerIps[i] = ipBuf;
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(80.0f);
+            ImGui::InputInt("Port", &m_PendingNetworkSettings.peerPorts[i]);
+            ImGui::PopID();
+        }
+
+        ImGui::Spacing();
+        ImGui::Text("Network Simulation");
+        ImGui::SliderFloat("Latency (ms)", &m_PendingNetworkSettings.latencyMs, 0.0f, 500.0f, "%.1f ms");
+        ImGui::SliderFloat("Packet Loss", &m_PendingNetworkSettings.packetLoss, 0.0f, 1.0f, "%.2f%%");
+
+        ImGui::Spacing();
+        if (ImGui::Button("Apply Configuration", ImVec2(-1, 0))) {
+            m_PendingNetworkSettings.applyRequested = true;
+        }
+    }
+    ImGui::End();
+}
+
 void EditorUI::DrawPropertyWindowsSection(Scene& scene, Entity& entityToDelete) {
     // ADD THIS LINE
     std::vector<Entity> popoutRequests;

@@ -1,6 +1,11 @@
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_  // Prevent inclusion of winsock.h by windows.h
+
+#ifdef APIENTRY // hide warning
+#undef APIENTRY
+#endif
+
 #include <winsock2.h>
 #include <ws2ipdef.h>
 #include <ws2tcpip.h>
@@ -1402,6 +1407,26 @@ void Application::MainLoop() {
                 sleepTangentialThreshold);
         }
 
+        auto netReq = editorUI->ConsumeNetworkSettingsRequest();
+        if (netReq.applyRequested && m_networkManager) {
+            // 1. Update Simulation Conditions
+            m_networkManager->SetSimulationConditions(netReq.latencyMs, netReq.packetLoss);
+
+            // 2. Update Peer Targets
+            for (int i = 0; i < 4; ++i) {
+                m_networkManager->ReconfigurePeer(i, netReq.peerIps[i], static_cast<uint16_t>(netReq.peerPorts[i]));
+            }
+
+            // 3. Update Local ID (if manually overridden)
+            if (netReq.localPeerId != m_networkManager->GetLocalPeerId()) {
+                m_networkManager->SetLocalPeerId(netReq.localPeerId);
+            }
+
+            if (kRuntimeDebug) {
+                std::cout << "[Application] Applied new networking configuration from UI." << std::endl;
+            }
+        }
+
         int colliderVisMode = 0;
         if (editorUI->ConsumeColliderVisualizationRequest(colliderVisMode)) {
             renderer->colliderVisMode = static_cast<ColliderVisMode>(colliderVisMode);
@@ -1688,6 +1713,8 @@ void Application::MainLoop() {
             network.isRunning = m_networkManager->IsRunning();
             network.localPeerId = m_networkManager->GetLocalPeerId();
             network.localPort = m_networkManager->GetLocalPort();
+            network.simulatedLatencyMs = m_networkManager->GetSimulatedLatency();
+            network.simulatedPacketLoss = m_networkManager->GetSimulatedPacketLoss();
             network.connectedPeers = m_networkManager->GetPeerCount();
             network.playbackTime = m_networkManager->GetPlaybackTime();
             network.interpolationDelay = NetworkManager::GetInterpolationDelay();

@@ -27,6 +27,13 @@ void EditorUI::Initialize(const std::string& configPath, const std::string& defa
     RefreshModelList();
 }
 
+NetworkSettingsRequest EditorUI::ConsumeNetworkSettingsRequest() {
+    NetworkSettingsRequest req = m_PendingNetworkSettings;
+    // Reset the flag so we don't apply it every single frame
+    m_PendingNetworkSettings.applyRequested = false;
+    return req;
+}
+
 void EditorUI::RefreshModelList() {
     m_AvailableModels.clear();
     namespace fs = std::filesystem;
@@ -119,6 +126,8 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
     // Post main-menu section performs cleanup actions such as handling entity deletions
     DrawPostMainMenuSection(scene, entityToDelete);
+
+    DrawNetworkWindow();
 
     if (m_IsReplaying) {
         DrawReplayEditor(scene);
