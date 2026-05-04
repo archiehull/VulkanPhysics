@@ -223,13 +223,17 @@ void Application::Run() {
                         auto ownType = static_cast<ObjectOwnershipType>(ownerId);
                         reg.AddComponent<OwnershipComponent>(spawned, { ownType });
 
-                        // --- NEW: Apply Owner-specific visual feedback for remote spawns ---
+                        // Apply owner-specific visual feedback for remote spawns
                         if (reg.HasComponent<RenderComponent>(spawned)) {
                             auto& render = reg.GetComponent<RenderComponent>(spawned);
                             render.useDebugOverlay = true;
                             render.debugOverlayColor = OwnershipComponent{ ownType }.GetOwnerColor();
-                            render.debugOverlayColor.a = 1.0f; 
+                            render.debugOverlayColor.a = 1.0f;
                         }
+
+                        // Seed interpolation history so the object moves immediately
+                        // without waiting for the first UDP snapshot to arrive
+                        m_networkManager->SeedRemoteState(spawned, pos, vel, glm::vec3(0.0f));
                     }
                 } catch (const std::exception& e) {
                     std::cerr << "[Network] Failed to parse SpawnObject event: " << e.what() << std::endl;
@@ -1648,6 +1652,16 @@ void Application::MainLoop() {
             network.localPeerId = m_networkManager->GetLocalPeerId();
             network.localPort = m_networkManager->GetLocalPort();
             network.connectedPeers = m_networkManager->GetPeerCount();
+            network.playbackTime = m_networkManager->GetPlaybackTime();
+            network.interpolationDelay = NetworkManager::GetInterpolationDelay();
+            network.latestRemoteTimestamp = m_networkManager->GetLatestRemoteTimestamp();
+            network.remoteEntityCount = m_networkManager->GetRemoteEntityCount();
+            for (int i = 0; i < 4; ++i) {
+                auto ps = m_networkManager->GetPeerStatus(i);
+                network.peers[i].connected = ps.connected;
+                network.peers[i].port = ps.port;
+                network.peers[i].ip = ps.ip;
+            }
             editorUI->SetNetworkTelemetry(network);
         }
 
@@ -2008,7 +2022,7 @@ void Application::SimulationLoop() {
                     if (broadcastAccumulator >= kBroadcastInterval) {
                         broadcastAccumulator = 0.0f;
                         std::shared_lock<std::shared_mutex> ecsReadLock(m_RegistryMutex);
-                        m_networkManager->BroadcastState(scene->GetRegistry());
+                        m_networkManager->BroadcastState(scene->GetRegistry(), scene->GetLocallyOwnedNetworkEntities());
                     }
                 }
             } else {

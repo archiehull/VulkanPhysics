@@ -25,8 +25,7 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-// Forward declaration to avoid header dependency
-class Registry;
+#include "../core/ECS.h"
 
 enum class NetworkEventType {
     SceneLoad,
@@ -59,6 +58,10 @@ struct RemotePeer {
     bool isConnected = false;
     std::vector<uint8_t> tcpBuffer;
     uint32_t lastReceivedSequence = 0;
+
+    // Added to each sender's raw tick_index timestamps so all peers share one timeline
+    float timestampOffset = 0.0f;
+    bool hasTimestampOffset = false;
 };
 
 struct PendingConnection {
@@ -103,9 +106,25 @@ public:
     void SetPeerJoinedCallback(PeerJoinedCallback callback) { m_peerJoinedCallback = callback; }
 
 
-    void BroadcastState(Registry& registry);
+    void BroadcastState(Registry& registry, const std::vector<Entity>& locallyOwnedEntities);
     void ProcessInboundPackets(Registry& registry);
     void UpdateInterpolation(Registry& registry, float dt);
+
+    // Seeds the remote history for a newly spawned entity so interpolation starts immediately
+    void SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, glm::vec3 rot);
+
+    // Telemetry accessors (approximate, not strictly thread-safe — for debug display only)
+    float GetPlaybackTime() const { return m_playbackTime; }
+    static constexpr float GetInterpolationDelay() { return kInterpolationDelay; }
+    int GetRemoteEntityCount();
+    float GetLatestRemoteTimestamp();
+
+    struct PeerStatus {
+        bool connected = false;
+        uint16_t port = 0;
+        std::string ip;
+    };
+    PeerStatus GetPeerStatus(int peerId);
 
 private:
     std::atomic<bool> m_isRunning{ false };

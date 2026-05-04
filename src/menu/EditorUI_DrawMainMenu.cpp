@@ -23,6 +23,16 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         }
         return s.empty() ? std::string("[None]") : s;
         };
+    // Tint the entire menu bar with the local peer colour when networking is active
+    bool menuBarColoured = false;
+    if (m_Profiler.network.isRunning && m_Profiler.network.localPeerId >= 0) {
+        auto ownType = static_cast<ObjectOwnershipType>(std::min(m_Profiler.network.localPeerId, 3));
+        glm::vec4 c = OwnershipComponent{ ownType }.GetOwnerColor();
+        ImGui::PushStyleColor(ImGuiCol_MenuBarBg,    ImVec4(c.r * 0.22f, c.g * 0.22f, c.b * 0.22f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_PopupBg,      ImVec4(0.12f, 0.12f, 0.12f, 0.97f));
+        menuBarColoured = true;
+    }
+
     if (ImGui::BeginMainMenuBar()) {
 
     if (ImGui::BeginMenu("#")) {
@@ -1272,6 +1282,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
     ImGui::EndMainMenuBar();
 }
 
+    if (menuBarColoured) ImGui::PopStyleColor(2);
 }
 
 void EditorUI::DrawLoadSceneMenu(std::string& sceneToLoad) {
@@ -1301,21 +1312,38 @@ void EditorUI::DrawLoadSceneMenu(std::string& sceneToLoad) {
 
 void EditorUI::DrawMainMenuStatusBar(float deltaTime) {
     std::string currentSceneName = m_SceneOptions.empty() ? "None" : m_SceneOptions[m_SelectedSceneIndex].name;
-    std::string activeSceneStr = "Active Scene: " + currentSceneName;
     std::string fpsStr = std::to_string((int)(1.0f / deltaTime)) + " FPS";
 
-    float spacing = 20.0f;
-    float totalRightWidth = ImGui::CalcTextSize(activeSceneStr.c_str()).x +
-        ImGui::CalcTextSize(fpsStr.c_str()).x +
-        spacing + 40.0f;
+    // Build the peer badge string (only shown when networking is active)
+    std::string peerStr;
+    ImVec4 peerCol(0.7f, 0.7f, 0.7f, 1.0f);
+    bool showPeer = m_Profiler.network.isRunning && m_Profiler.network.localPeerId >= 0;
+    if (showPeer) {
+        peerStr = "Peer " + std::to_string(m_Profiler.network.localPeerId);
+        auto ownType = static_cast<ObjectOwnershipType>(std::min(m_Profiler.network.localPeerId, 3));
+        glm::vec4 c = OwnershipComponent{ ownType }.GetOwnerColor();
+        peerCol = ImVec4(c.r, c.g, c.b, 1.0f);
+    }
 
-    ImGui::SameLine(ImGui::GetWindowWidth() - totalRightWidth);
+    float peerWidth  = showPeer ? (ImGui::CalcTextSize(peerStr.c_str()).x + 12.0f) : 0.0f;
+    float sceneWidth = ImGui::CalcTextSize(("Scene: " + currentSceneName).c_str()).x + 10.0f;
+    float fpsWidth   = ImGui::CalcTextSize(fpsStr.c_str()).x + 20.0f;
+    float totalWidth = peerWidth + sceneWidth + fpsWidth + 20.0f;
 
-    ImGui::TextDisabled("Active Scene: ");
+    ImGui::SameLine(ImGui::GetWindowWidth() - totalWidth);
+
+    if (showPeer) {
+        ImGui::TextColored(peerCol, "%s", peerStr.c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("|");
+        ImGui::SameLine();
+    }
+
+    ImGui::TextDisabled("Scene: ");
     ImGui::SameLine();
     ImGui::Text("%s", currentSceneName.c_str());
 
-    ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(fpsStr.c_str()).x - 20.0f);
+    ImGui::SameLine(ImGui::GetWindowWidth() - fpsWidth);
     ImGui::TextDisabled("%s", fpsStr.c_str());
 }
 

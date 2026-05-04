@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <array>
 #include "../core/Config.h"
 #include "../rendering/Scene.h"
 #include <chrono>
@@ -11,6 +12,19 @@ struct NetworkTelemetry {
     int connectedPeers = 0;
     uint16_t localPort = 0;
     bool isRunning = false;
+
+    // Interpolation timing
+    float playbackTime = 0.0f;
+    float interpolationDelay = 0.15f;
+    float latestRemoteTimestamp = 0.0f;
+    int remoteEntityCount = 0;
+
+    struct PeerInfo {
+        bool connected = false;
+        uint16_t port = 0;
+        std::string ip;
+    };
+    std::array<PeerInfo, 4> peers;
 };
 
 struct UIProfiler {

@@ -351,6 +351,13 @@ struct ObjectSpawnerComponent {
     uint8_t assignedOwner = OWNER_LOCAL;      // Default to the person who spawned it
     uint8_t nextSequentialOwner = 0; // For SEQUENTIAL: tracks next player to own
 
+    // For unowned auto-fire spawners: which peer is currently responsible for firing.
+    // Only that peer fires; others tick the timer to stay in sync.  Default = Peer 0.
+    uint8_t autofireAuthority = 0;
+    // When true, authority rotates 0→1→2→3→0 after each auto-fire shot so all peers
+    // advance in lock-step and take turns spawning.
+    bool rotateAuthority = false;
+
     std::string spawnGeometryType = "Sphere"; // Sphere, Cube, Model
     std::string spawnModelPath = "";
     std::string spawnTexturePath = "textures/default.jpg";

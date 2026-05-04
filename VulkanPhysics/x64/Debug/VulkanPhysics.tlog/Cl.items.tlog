@@ -16,6 +16,7 @@ C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\OBJLoader.cpp;C:\Users\E
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\geometry\SJGLoader.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\SJGLoader.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\main.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\main.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\core\FlatBufferSceneLoader.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\FlatBufferSceneLoader.obj
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\network\NetworkManager.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\NetworkManager.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\EditorUI.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI_DrawMainMenu.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\EditorUI_DrawMainMenu.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\menu\EditorUI_DrawWindows.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\EditorUI_DrawWindows.obj

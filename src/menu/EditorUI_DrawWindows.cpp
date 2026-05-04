@@ -139,6 +139,19 @@ if (m_Profiler.showProfiler) {
 
 // Dedicated Runtime window for compliance indicators
 if (m_ShowRuntimeWindow) {
+    // Tint the window title bar with the local peer colour when networking is active
+    const auto& net = m_Profiler.network;
+    bool hasNetColor = net.isRunning && net.localPeerId >= 0;
+    ImVec4 peerCol(0.7f, 0.7f, 0.7f, 1.0f);
+    if (hasNetColor) {
+        auto ownType = static_cast<ObjectOwnershipType>(std::min(net.localPeerId, 3));
+        glm::vec4 c = OwnershipComponent{ ownType }.GetOwnerColor();
+        peerCol = ImVec4(c.r, c.g, c.b, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_TitleBg,       ImVec4(c.r * 0.35f, c.g * 0.35f, c.b * 0.35f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImVec4(c.r * 0.55f, c.g * 0.55f, c.b * 0.55f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Border,        ImVec4(c.r * 0.6f,  c.g * 0.6f,  c.b * 0.6f,  0.8f));
+    }
+
     ImGui::SetNextWindowSize(ImVec2(420, 180), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Runtime", &m_ShowRuntimeWindow)) {
         ImGui::Text("Runtime Targets: Render %.1f Hz | Sim %.1f Hz", m_Profiler.targetRenderHz, m_Profiler.targetSimulationHz);
@@ -167,27 +180,87 @@ if (m_ShowRuntimeWindow) {
         }
 
         ImGui::Separator();
-        ImGui::TextDisabled("Networking");
-        if (m_Profiler.network.isRunning) {
-            ImGui::Text("Status: Running");
-            
-            // --- NEW: Peer-specific color for ID feedback ---
-            ObjectOwnershipType ownType = static_cast<ObjectOwnershipType>(std::max(0, std::min(m_Profiler.network.localPeerId, 3)));
-            OwnershipComponent tempOwn{ ownType };
-            glm::vec4 peerCol = tempOwn.GetOwnerColor();
-            
-            ImGui::Text("Local Peer ID: ");
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(peerCol.r, peerCol.g, peerCol.b, 1.0f), "%d", m_Profiler.network.localPeerId);
-            
-            ImGui::Text("Local Port: %u", m_Profiler.network.localPort);
-            ImGui::Text("Connected Peers: %d / 3", m_Profiler.network.connectedPeers);
-        }
-        else {
-            ImGui::Text("Status: Disconnected / Not Running");
+        ImGui::PushStyleColor(ImGuiCol_Text, peerCol);
+        ImGui::TextUnformatted("Networking");
+        ImGui::PopStyleColor();
+
+        if (net.isRunning) {
+            ImGui::Text("Status: "); ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Running");
+
+            ImGui::Text("Local Peer: "); ImGui::SameLine();
+            ImGui::TextColored(peerCol, "Peer %d", net.localPeerId);
+            ImGui::SameLine(); ImGui::TextDisabled("|"); ImGui::SameLine();
+            ImGui::TextColored(peerCol, "Port %u", net.localPort);
+
+            // Per-peer status table
+            static ImGuiTableFlags tFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
+            if (ImGui::BeginTable("PeerTable", 3, tFlags)) {
+                ImGui::TableSetupColumn("Peer",   ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Port",   ImGuiTableColumnFlags_WidthFixed, 55.0f);
+                ImGui::TableHeadersRow();
+
+                for (int i = 0; i < 4; ++i) {
+                    auto rowOwnType = static_cast<ObjectOwnershipType>(i);
+                    glm::vec4 rc = OwnershipComponent{ rowOwnType }.GetOwnerColor();
+                    ImVec4 rowCol(rc.r, rc.g, rc.b, 1.0f);
+
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    if (i == net.localPeerId)
+                        ImGui::TextColored(rowCol, "Peer %d (me)", i);
+                    else
+                        ImGui::TextColored(rowCol, "Peer %d", i);
+
+                    ImGui::TableNextColumn();
+                    if (i == net.localPeerId) {
+                        ImGui::TextColored(rowCol, "LOCAL");
+                    } else if (net.peers[i].connected) {
+                        ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "Connected");
+                    } else {
+                        ImGui::TextDisabled("--");
+                    }
+
+                    ImGui::TableNextColumn();
+                    if (i == net.localPeerId)
+                        ImGui::Text("%u", net.localPort);
+                    else if (net.peers[i].connected)
+                        ImGui::Text("%u", net.peers[i].port);
+                    else
+                        ImGui::TextDisabled("--");
+                }
+                ImGui::EndTable();
+            }
+
+            // Interpolation timing
+            ImGui::Separator();
+            ImGui::TextDisabled("Interpolation");
+
+            float bufferLag = net.latestRemoteTimestamp - (net.playbackTime - net.interpolationDelay);
+            ImVec4 lagCol = (bufferLag < 0.03f) ? ImVec4(0.9f, 0.4f, 0.1f, 1.0f)
+                          : (bufferLag > 0.35f) ? ImVec4(0.9f, 0.2f, 0.2f, 1.0f)
+                          :                       ImVec4(0.2f, 0.9f, 0.2f, 1.0f);
+
+            ImGui::Text("Playback:  %.3f s", net.playbackTime);
+            ImGui::Text("Latest pkt: %.3f s", net.latestRemoteTimestamp);
+            ImGui::Text("Buffer lag: "); ImGui::SameLine();
+            ImGui::TextColored(lagCol, "%.1f ms  (target %.0f ms)",
+                bufferLag * 1000.0f, net.interpolationDelay * 1000.0f);
+            ImGui::Text("Remote entities: %d", net.remoteEntityCount);
+
+            // Visual buffer-health bar
+            float barFill = (net.interpolationDelay > 0.0f)
+                ? std::min(bufferLag / (net.interpolationDelay * 2.0f), 1.0f) : 0.0f;
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, lagCol);
+            ImGui::ProgressBar(barFill, ImVec2(-1.0f, 5.0f), "");
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Status: Disconnected / Not Running");
         }
     }
     ImGui::End();
+    if (hasNetColor) ImGui::PopStyleColor(3);
 }
 
 }
@@ -1819,6 +1892,32 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
                     if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
                         ImGui::TextDisabled("Next Sequential: Player %d", spawner.nextSequentialOwner + 1);
+                    }
+
+                    // Auto-fire authority — only relevant for unowned (no OwnershipComponent) spawners
+                    if (!registry.HasComponent<OwnershipComponent>(e)) {
+                        ImGui::Separator();
+                        ImGui::TextDisabled("Auto-Fire Authority");
+
+                        const char* peerNames[] = { "Peer 0", "Peer 1", "Peer 2", "Peer 3" };
+                        int authIdx = std::min((int)spawner.autofireAuthority, 3);
+
+                        // Draw the combo with the current authority peer's colour
+                        {
+                            auto authOwnType = static_cast<ObjectOwnershipType>(authIdx);
+                            glm::vec4 ac = OwnershipComponent{ authOwnType }.GetOwnerColor();
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(ac.r, ac.g, ac.b, 1.0f));
+                        }
+                        if (ImGui::Combo("Autofire Peer##auth", &authIdx, peerNames, 4)) {
+                            spawner.autofireAuthority = static_cast<uint8_t>(authIdx);
+                        }
+                        ImGui::PopStyleColor();
+
+                        ImGui::Checkbox("Rotate Authority Each Shot##rot", &spawner.rotateAuthority);
+                        if (spawner.rotateAuthority) {
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("(0→1→2→3→0)");
+                        }
                     }
 
                     ImGui::Separator();

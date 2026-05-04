@@ -253,8 +253,8 @@ void NetworkManager::ReceiveTCP() {
                         if (ev->event_type() == EventType_IdAssignment) {
                             int assignedId = std::stoi(ev->string_payload()->str());
                             m_localPeerId = assignedId;
-                            PhysicsSystem::localPeerId = assignedId; // Update ECS Authority[cite: 1]
-
+                            PhysicsSystem::localPeerId = assignedId; // Update ECS Authority
+                            
                             // Link this socket as our connection to the Host (Peer 0)
                             {
                                 std::lock_guard<std::mutex> lock(m_peerMutex);
@@ -262,19 +262,17 @@ void NetworkManager::ReceiveTCP() {
                                 m_peers[0].isConnected = true;
                             }
                             m_peerCount++;
-
                             if (m_debugLogging) std::cout << "[NetworkManager] Successfully joined as Peer " << assignedId << "\n";
-
                             it = m_pendingConnections.erase(it);
                             continue;
                         }
                     }
 
-                    // --- HOST LOGIC: Process handshake from new client ---
-                    if (m_localPeerId == 0) {
-                        HandleHandshake(it->socket, msg->sender_peer_id());
-                    }
-
+                    // --- MESH LOGIC: Process handshakes from ANY peer ---
+                    // If we are Host(0) and sender is -1, it assigns an ID.
+                    // If we are Peer 1 and sender is Peer 2, it establishes the P2P link.
+                    HandleHandshake(it->socket, msg->sender_peer_id());
+                    
                     it = m_pendingConnections.erase(it);
                     continue;
                 }
@@ -340,17 +338,21 @@ void NetworkManager::MaintainOutgoingConnections() {
     if (m_localPeerId.load() == -1 && m_pendingConnections.empty() && m_peerCount < 3) { // 4 PEER CAP
         if (std::chrono::steady_clock::now() - m_lastConnectionAttempt > std::chrono::seconds(2)) {
             m_lastConnectionAttempt = std::chrono::steady_clock::now();
+        }
+    }
 
-            if (m_debugLogging) std::cout << "[NetworkManager] Searching for Anchor (Peer 0) on port 27015...\n";
+    int localId = m_localPeerId.load();
 
-            sockaddr_in anchorAddr{};
-            anchorAddr.sin_family = AF_INET;
-            anchorAddr.sin_port = htons(27015);
-            inet_pton(AF_INET, "127.0.0.1", &anchorAddr.sin_addr);
+    // 1. If we don't have an ID, look for the Anchor (Peer 0)
+    if (localId == -1 && m_pendingConnections.empty() && m_peerCount < 3) {
+        if (m_debugLogging) std::cout << "[NetworkManager] Searching for Anchor (Peer 0) on port 27015...\n";
+        sockaddr_in anchorAddr{};
+        anchorAddr.sin_family = AF_INET;
+        anchorAddr.sin_port = htons(27015);
+        inet_pton(AF_INET, "127.0.0.1", &anchorAddr.sin_addr);
 
-            SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-            if (s == INVALID_SOCKET) return;
-
+        SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (s != INVALID_SOCKET) {
             u_long mode = 1;
             ioctlsocket(s, FIONBIO, &mode);
 
@@ -360,6 +362,35 @@ void NetworkManager::MaintainOutgoingConnections() {
             connect(s, (sockaddr*)&anchorAddr, sizeof(anchorAddr));
 
             m_pendingConnections.push_back({ s, {}, true, false });
+        }
+    }
+    // 2. If we DO have an ID, ensure we are connected to all other peers to form the Full Mesh
+    else if (localId > 0 && m_peerCount < 3) {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        
+        // Rule: A peer only initiates TCP connections to peers with a LOWER ID than itself.
+        // This prevents P1 and P2 from cross-connecting simultaneously and creating duplicate sockets.
+        for (int targetId = 0; targetId < localId; ++targetId) {
+            if (!m_peers[targetId].isConnected && m_peers[targetId].port != 0) {
+                if (m_debugLogging) std::cout << "[NetworkManager] Attempting P2P link to Peer " << targetId << "...\n";
+                
+                SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+                if (s != INVALID_SOCKET) {
+                    u_long mode = 1;
+                    ioctlsocket(s, FIONBIO, &mode);
+                    // In this engine, TCP and UDP share the same port assignment
+                    connect(s, (sockaddr*)&m_peers[targetId].udpAddr, sizeof(sockaddr_in)); 
+                    
+                    // --- THE FIX IS HERE ---
+                    // Active outbound connections to known peers bypass the pending list.
+                    // We instantly register them as active connections!
+                    m_peers[targetId].tcpSocket = s;
+                    m_peers[targetId].isConnected = true;
+                    m_peerCount++;
+                    
+                    SendHandshake(s); // Send our ID so the receiving peer can register us
+                }
+            }
         }
     }
 }
@@ -452,7 +483,7 @@ void NetworkManager::SendTCP(const std::vector<uint8_t>& d) {
     }
 }
 
-void NetworkManager::BroadcastState(Registry& registry) {
+void NetworkManager::BroadcastState(Registry& registry, const std::vector<Entity>& locallyOwnedEntities) {
     auto transformArray = registry.GetComponentArray<TransformComponent>();
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
     auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
@@ -465,34 +496,30 @@ void NetworkManager::BroadcastState(Registry& registry) {
     static auto startTime = std::chrono::steady_clock::now();
     float timestamp = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 
-    // Cache the entity count once outside the loop to avoid thousands of mutex locks!
-    const Entity count = registry.GetEntityCount();
-    entityStates.reserve(std::min(count, static_cast<Entity>(512))); // Reasonable starting guess
+    entityStates.reserve(std::min((Entity)locallyOwnedEntities.size(), (Entity)512));
 
-    for (Entity i = 0; i < count; ++i) {
-        // Check if we have the necessary components and if we OWN this entity
-        if (transformArray->HasData(i) && physicsArray->HasData(i) && ownershipArray->HasData(i)) {
-            auto& ownership = ownershipArray->GetData(i);
+    const int8_t localId = static_cast<int8_t>(m_localPeerId.load());
 
-            if (static_cast<int>(ownership.GetOwnerIndex()) == m_localPeerId) {
-                auto& t = transformArray->GetData(i);
-                auto& p = physicsArray->GetData(i);
+    for (Entity i : locallyOwnedEntities) {
+        // Double check component availability just in case, though they should be present
+        if (transformArray->HasData(i) && physicsArray->HasData(i)) {
+            auto& t = transformArray->GetData(i);
+            auto& p = physicsArray->GetData(i);
 
-                // Build the math primitives
-                Vec3 pos(t.position.x, t.position.y, t.position.z);
-                Vec3 rot(t.rotation.x, t.rotation.y, t.rotation.z);
-                Vec3 linVel(p.velocity.x, p.velocity.y, p.velocity.z);
-                Vec3 angVel(p.angularVelocity.x, p.angularVelocity.y, p.angularVelocity.z); 
+            // Build the math primitives
+            Vec3 pos(t.position.x, t.position.y, t.position.z);
+            Vec3 rot(t.rotation.x, t.rotation.y, t.rotation.z);
+            Vec3 linVel(p.velocity.x, p.velocity.y, p.velocity.z);
+            Vec3 angVel(p.angularVelocity.x, p.angularVelocity.y, p.angularVelocity.z);
 
-                // Create the EntityState table
-                auto state = CreateEntityState(
-                    builder,
-                    static_cast<uint32_t>(i),
-                    static_cast<int8_t>(m_localPeerId),
-                    &pos, &rot, &linVel, &angVel
-                );
-                entityStates.push_back(state);
-            }
+            // Create the EntityState table
+            auto state = CreateEntityState(
+                builder,
+                static_cast<uint32_t>(i),
+                localId,
+                &pos, &rot, &linVel, &angVel
+            );
+            entityStates.push_back(state);
         }
     }
 
@@ -505,17 +532,16 @@ void NetworkManager::BroadcastState(Registry& registry) {
     // Wrap it in the Root NetworkMessage
     auto msg = CreateNetworkMessage(
         builder,
-        static_cast<int8_t>(m_localPeerId.load()),
+        localId,
         Payload_PhysicsSnapshot,
         snapshot.Union()
     );
 
     builder.Finish(msg);
 
-    // Broadcast via UDP (MODIFIED FOR STEP 9)
+    // Broadcast via UDP
     std::vector<uint8_t> data(builder.GetBufferPointer(), builder.GetBufferPointer() + builder.GetSize());
-
-    // Pass off to the dedicated Send Thread instead of blocking the simulation thread
+    
     {
         std::lock_guard<std::mutex> lock(m_outboundMutex);
         m_outboundQueue.push(std::move(data));
@@ -556,6 +582,9 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
             auto snapshot = netMsg->payload_as_PhysicsSnapshot();
             int senderId = netMsg->sender_peer_id();
 
+            float rawTimestamp = static_cast<float>(snapshot->tick_index()) / 1000.0f;
+            float normalizedTimestamp = rawTimestamp;
+
             {
                 std::lock_guard<std::mutex> pLock(m_peerMutex);
                 if (senderId >= 0 && senderId < 4) {
@@ -563,6 +592,16 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
                         continue;
                     }
                     m_peers[senderId].lastReceivedSequence = snapshot->sequence_number();
+
+                    // On first packet from this sender, compute an offset so their timestamps
+                    // align with our local playback timeline.  This prevents peers that started
+                    // at different wall-clock times from drifting apart and causing object freezes.
+                    auto& peer = m_peers[senderId];
+                    if (!peer.hasTimestampOffset && m_playbackTime > 0.0f) {
+                        peer.timestampOffset = m_playbackTime - rawTimestamp;
+                        peer.hasTimestampOffset = true;
+                    }
+                    normalizedTimestamp = rawTimestamp + peer.timestampOffset;
                 }
             }
 
@@ -582,7 +621,7 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
                         rs.position = glm::vec3(state->position()->x(), state->position()->y(), state->position()->z());
                         rs.rotation = glm::vec3(state->rotation()->x(), state->rotation()->y(), state->rotation()->z());
                         rs.velocity = glm::vec3(state->linear_velocity()->x(), state->linear_velocity()->y(), state->linear_velocity()->z());
-                        rs.timestamp = static_cast<float>(snapshot->tick_index()) / 1000.0f;
+                        rs.timestamp = normalizedTimestamp;
 
                         if (history.states.empty() || rs.timestamp > history.states.back().timestamp) {
                             if (m_playbackTime == 0.0f) m_playbackTime = rs.timestamp;
@@ -728,6 +767,45 @@ void NetworkManager::SendTCPTo(int targetPeerId, const std::vector<uint8_t>& dat
     }
 }
 
+
+void NetworkManager::SeedRemoteState(Entity id, glm::vec3 pos, glm::vec3 vel, glm::vec3 rot) {
+    std::lock_guard<std::mutex> lock(m_historyMutex);
+    auto& history = m_remoteHistories[id];
+    if (!history.states.empty()) return; // Already has real data
+
+    // Without an established timeline the seed timestamp is meaningless — skip it.
+    // Once the timeline is running, place the seed at the current render cursor so
+    // the entity is immediately extrapolatable with its spawn velocity.
+    if (m_playbackTime <= 0.0f) return;
+
+    RemoteState rs;
+    rs.position = pos;
+    rs.rotation = rot;
+    rs.velocity = vel;
+    rs.timestamp = m_playbackTime - kInterpolationDelay;
+    history.states.push_back(rs);
+}
+
+int NetworkManager::GetRemoteEntityCount() {
+    std::lock_guard<std::mutex> lock(m_historyMutex);
+    return static_cast<int>(m_remoteHistories.size());
+}
+
+float NetworkManager::GetLatestRemoteTimestamp() {
+    std::lock_guard<std::mutex> lock(m_historyMutex);
+    float latest = 0.0f;
+    for (const auto& [id, h] : m_remoteHistories)
+        if (!h.states.empty())
+            latest = std::max(latest, h.states.back().timestamp);
+    return latest;
+}
+
+NetworkManager::PeerStatus NetworkManager::GetPeerStatus(int peerId) {
+    std::lock_guard<std::mutex> lock(m_peerMutex);
+    if (peerId >= 0 && peerId < static_cast<int>(m_peers.size()))
+        return { m_peers[peerId].isConnected, m_peers[peerId].port, m_peers[peerId].ip };
+    return {};
+}
 
 void NetworkManager::SendReliableEventTo(int targetPeerId, NetworkEventType type, const std::string& payload, uint32_t targetEntity) {
     flatbuffers::FlatBufferBuilder builder(512);

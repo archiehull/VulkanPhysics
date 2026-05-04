@@ -351,6 +351,10 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
         if (simObj) {
             ObjectOwnershipType ownerType = static_cast<ObjectOwnershipType>(simObj->owner());
             scene.GetRegistry().AddComponent<OwnershipComponent>(entity, { ownerType });
+
+            if (static_cast<int>(ownerType) == PhysicsSystem::localPeerId) {
+                scene.RegisterLocallyOwnedNetworkEntity(entity);
+            }
         }
     }
 

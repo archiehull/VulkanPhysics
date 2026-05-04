@@ -94,22 +94,20 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
         auto& spawner = spawnerArray->GetData(e);
         auto& transform = transformArray->GetData(e);
 
-        // --- NEW: Ownership check for the spawner itself ---
-        // If the spawner has an OwnershipComponent, only the owner runs the spawn logic.
-        // This prevents multiple peers from spawning duplicates of the same object.
         int localId = PhysicsSystem::localPeerId;
         if (localId == -1) continue; // Waiting for network handshake, don't spawn yet!
 
-        if (registry.HasComponent<OwnershipComponent>(e)) {
+        const bool spawnerIsOwned = registry.HasComponent<OwnershipComponent>(e);
+
+        if (spawnerIsOwned) {
+            // Explicitly-owned spawner: only the assigned peer runs any of the logic.
             auto& spawnerOwnership = registry.GetComponent<OwnershipComponent>(e);
             if (static_cast<int>(spawnerOwnership.GetOwnerIndex()) != localId) {
-                continue; 
+                continue;
             }
         }
-        else if (localId != 0) {
-            // Unowned spawners default to Peer 0 (Host) authority
-            continue;
-        }
+        // Unowned spawner: all peers tick the timer below so they stay in sync,
+        // but only the current autofireAuthority peer actually calls SpawnObjectFromSpawner.
 
         if (spawner.attachToTarget) {
             Entity targetEnt = MAX_ENTITIES;
@@ -170,7 +168,20 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
             }
 
             spawner.spawnTimer -= interval;
-            SpawnObjectFromSpawner(scene, e);
+
+            // For unowned spawners, only the authority peer fires to avoid duplicates.
+            // All peers run this loop so their timers and authority counters stay in sync.
+            if (!spawnerIsOwned) {
+                if (localId == static_cast<int>(spawner.autofireAuthority)) {
+                    SpawnObjectFromSpawner(scene, e);
+                }
+                if (spawner.rotateAuthority) {
+                    spawner.autofireAuthority = (spawner.autofireAuthority + 1) % 4;
+                }
+            } else {
+                SpawnObjectFromSpawner(scene, e);
+            }
+
             ++spawnsThisFrame;
         }
 
@@ -192,8 +203,15 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
 }
 
 void ObjectSpawnerSystem::FireOnce(Scene& scene, Entity spawnerEntity) {
-    if (!IsValidSpawner(scene, spawnerEntity)) {
-        return;
+    if (!IsValidSpawner(scene, spawnerEntity)) return;
+
+    int localId = PhysicsSystem::localPeerId;
+    auto& registry = scene.GetRegistry();
+    if (localId != -1) {
+        if (registry.HasComponent<OwnershipComponent>(spawnerEntity)) {
+            if (static_cast<int>(registry.GetComponent<OwnershipComponent>(spawnerEntity).GetOwnerIndex()) != localId) return;
+        }
+        // Unowned spawners may be fired by any peer
     }
 
     SpawnObjectFromSpawner(scene, spawnerEntity);
@@ -209,10 +227,17 @@ void ObjectSpawnerSystem::FireGroup(Scene& scene, const std::string& group) {
             !registry.HasComponent<TransformComponent>(e)) {
             continue;
         }
-
         auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
         if (NormalizeSpawnerGroup(spawner.group) != normalizedGroup) {
             continue;
+        }
+
+        int localId = PhysicsSystem::localPeerId;
+        if (localId != -1) {
+            if (registry.HasComponent<OwnershipComponent>(e)) {
+                if (static_cast<int>(registry.GetComponent<OwnershipComponent>(e).GetOwnerIndex()) != localId) continue;
+            }
+            // Unowned spawners may be fired by any peer
         }
 
         SpawnObjectFromSpawner(scene, e);
@@ -472,6 +497,11 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     ObjectOwnershipType ownerType = static_cast<ObjectOwnershipType>(std::min(objectOwner, (uint8_t)3));
     OwnershipComponent ownComp{ ownerType };
     registry.AddComponent<OwnershipComponent>(spawnedEntity, ownComp);
+
+    // --- NEW: Register with Scene for optimized broadcast ---
+    if (static_cast<int>(ownerType) == PhysicsSystem::localPeerId) {
+        scene.RegisterLocallyOwnedNetworkEntity(spawnedEntity);
+    }
 
     // --- NEW: Apply Owner-specific visual feedback ---
     if (registry.HasComponent<RenderComponent>(spawnedEntity)) {

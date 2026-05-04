@@ -139,6 +139,10 @@ public:
     const Registry& GetRegistry() const { return m_Registry; }
     Registry& GetRegistry() { return m_Registry; }
     const std::vector<Entity>& GetRenderableEntities() const { return m_RenderableEntities; }
+    const std::vector<Entity>& GetLocallyOwnedNetworkEntities() const { return m_LocallyOwnedNetworkEntities; }
+
+    void RegisterLocallyOwnedNetworkEntity(Entity entity);
+    void UnregisterLocallyOwnedNetworkEntity(Entity entity);
 
     Entity GetEnvironmentEntity() const { return m_EnvironmentEntity; }
 
@@ -222,6 +226,7 @@ private:
     std::vector<std::unique_ptr<class ISystem>> m_Systems;
     std::unordered_map<std::string, Entity> m_EntityMap;
     std::vector<Entity> m_RenderableEntities;
+    std::vector<Entity> m_LocallyOwnedNetworkEntities;
 
     Entity m_EnvironmentEntity = MAX_ENTITIES;
 

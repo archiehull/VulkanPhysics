@@ -141,6 +141,19 @@ void Scene::CreateEnvironment(const std::string& name) {
     m_EntityMap[name] = m_EnvironmentEntity;
 }
 
+void Scene::RegisterLocallyOwnedNetworkEntity(Entity entity) {
+    if (std::find(m_LocallyOwnedNetworkEntities.begin(), m_LocallyOwnedNetworkEntities.end(), entity) == m_LocallyOwnedNetworkEntities.end()) {
+        m_LocallyOwnedNetworkEntities.push_back(entity);
+    }
+}
+
+void Scene::UnregisterLocallyOwnedNetworkEntity(Entity entity) {
+    auto it = std::find(m_LocallyOwnedNetworkEntities.begin(), m_LocallyOwnedNetworkEntities.end(), entity);
+    if (it != m_LocallyOwnedNetworkEntities.end()) {
+        m_LocallyOwnedNetworkEntities.erase(it);
+    }
+}
+
 void Scene::RegisterRenderableEntity(Entity entity) {
     if (std::find(m_RenderableEntities.begin(), m_RenderableEntities.end(), entity) == m_RenderableEntities.end()) {
         m_RenderableEntities.push_back(entity);
@@ -337,6 +350,8 @@ void Scene::DeleteEntity(Entity entity) {
     if (itR != m_RenderableEntities.end()) {
         m_RenderableEntities.erase(itR);
     }
+
+    UnregisterLocallyOwnedNetworkEntity(entity);
 
     // Optimization: Spring visuals never have linked shadows, so skip the expensive O(N) scan
     if (!m_Registry.HasComponent<SpringVisualComponent>(entity)) {
@@ -1741,6 +1756,7 @@ void Scene::Clear() {
     // 3. Clear all scene-side tracking lists
     m_EntityMap.clear();
     m_RenderableEntities.clear();
+    m_LocallyOwnedNetworkEntities.clear();
     particleSystems.clear();
     m_SpringVisualEntitiesList.clear();
     m_PathVisualEntitiesList.clear();
