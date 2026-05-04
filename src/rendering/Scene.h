@@ -65,7 +65,8 @@ public:
     Entity AddCapsule(const std::string& name, float radius, float height, int radialSegments, int rings, 
                       const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath = "");
 
-    Entity AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable = false);
+    Entity AddObjectExplicit(Entity id, const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable);
+    Entity AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable, Entity explicitId = MAX_ENTITIES);
 
     Entity AddLight(const std::string& name, const glm::vec3& position, const glm::vec3& color, float intensity, int type);
     Entity CreateCameraEntity(const std::string& name, const glm::vec3& pos, const std::string& type);
@@ -110,6 +111,10 @@ public:
     void UpdatePhysics(float deltaTime);
     void UpdateVisuals(float deltaTime);
     void ResetEnvironment();
+
+    // Deletion callback for network synchronization
+    using EntityDeletedCallback = std::function<void(Entity)>;
+    void SetEntityDeletedCallback(EntityDeletedCallback callback) { m_EntityDeletedCallback = callback; }
 
     // Return smoothed per-system timings (thread-safe copy)
     std::vector<std::pair<std::string, float>> GetSmoothedSystemTimings() const;
@@ -220,7 +225,9 @@ private:
 
     Entity m_EnvironmentEntity = MAX_ENTITIES;
 
-    Entity AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable);
+    EntityDeletedCallback m_EntityDeletedCallback = nullptr;
+
+    Entity AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable, Entity explicitId = MAX_ENTITIES);
     void CreateSimpleShadowEntity(Entity targetEntity);
 
     int m_RainEmitterId = -1;

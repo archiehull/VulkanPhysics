@@ -8,8 +8,9 @@
 #include <unordered_set>
 
 void EditorUI::DrawPostMainMenuSection(Scene& scene, Entity entityToDelete) {
-if (entityToDelete != MAX_ENTITIES) {
-    scene.DeleteEntity(entityToDelete);
+    if (entityToDelete != MAX_ENTITIES) {
+        m_DespawnRequests.push_back(entityToDelete);
+        scene.DeleteEntity(entityToDelete);
 
     if (m_ViewRequested == entityToDelete) {
         m_ViewRequested = MAX_ENTITIES;
@@ -163,6 +164,27 @@ if (m_ShowRuntimeWindow) {
             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "Affinity mapping: Compliant");
         } else {
             ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), "Affinity mapping: Non-compliant");
+        }
+
+        ImGui::Separator();
+        ImGui::TextDisabled("Networking");
+        if (m_Profiler.network.isRunning) {
+            ImGui::Text("Status: Running");
+            
+            // --- NEW: Peer-specific color for ID feedback ---
+            ObjectOwnershipType ownType = static_cast<ObjectOwnershipType>(std::max(0, std::min(m_Profiler.network.localPeerId, 3)));
+            OwnershipComponent tempOwn{ ownType };
+            glm::vec4 peerCol = tempOwn.GetOwnerColor();
+            
+            ImGui::Text("Local Peer ID: ");
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(peerCol.r, peerCol.g, peerCol.b, 1.0f), "%d", m_Profiler.network.localPeerId);
+            
+            ImGui::Text("Local Port: %u", m_Profiler.network.localPort);
+            ImGui::Text("Connected Peers: %d / 3", m_Profiler.network.connectedPeers);
+        }
+        else {
+            ImGui::Text("Status: Disconnected / Not Running");
         }
     }
     ImGui::End();
@@ -433,11 +455,21 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     entityName = registry.GetComponent<NameComponent>(e).name + " (ID: " + std::to_string(e) + ")";
                 }
 
+                // --- NEW: Color-code by ownership ---
+                ImVec4 textColor(1.0f, 1.0f, 1.0f, 1.0f);
+                if (registry.HasComponent<OwnershipComponent>(e)) {
+                    glm::vec4 ownCol = registry.GetComponent<OwnershipComponent>(e).GetOwnerColor();
+                    textColor = ImVec4(ownCol.r, ownCol.g, ownCol.b, 1.0f);
+                }
+
                 if (registry.HasComponent<ClothComponent>(e)) {
                     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
                     if (it->selectedEntity == e) flags |= ImGuiTreeNodeFlags_Selected;
                     
+                    ImGui::PushStyleColor(ImGuiCol_Text, textColor);
                     bool expanded = ImGui::TreeNodeEx((void*)(intptr_t)e, flags, "%s", entityName.c_str());
+                    ImGui::PopStyleColor();
+
                     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
                         it->selectedEntity = e;
                     }
@@ -447,17 +479,23 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         for(Entity p : comp.particles) {
                             std::string pName = "  Particle " + std::to_string(p);
                             bool pSelected = (it->selectedEntity == p);
+                            
+                            // Particles usually inherit cloth owner color
+                            ImGui::PushStyleColor(ImGuiCol_Text, textColor);
                             if (ImGui::Selectable(pName.c_str(), pSelected)) {
                                 it->selectedEntity = p;
                             }
+                            ImGui::PopStyleColor();
                         }
                         ImGui::TreePop();
                     }
                 } else {
                     bool isSelected = (it->selectedEntity == e);
+                    ImGui::PushStyleColor(ImGuiCol_Text, textColor);
                     if (ImGui::Selectable(entityName.c_str(), isSelected)) {
                         it->selectedEntity = e;
                     }
+                    ImGui::PopStyleColor();
                 }
             }
 

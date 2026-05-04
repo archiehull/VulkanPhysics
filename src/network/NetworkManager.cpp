@@ -1,3 +1,9 @@
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
 #include "NetworkManager.h"
 #include "NetworkSchema_generated.h" 
 #include "../systems/PhysicsSystem.h"
@@ -18,6 +24,7 @@ NetworkManager::~NetworkManager() {
 }
 
 void NetworkManager::ConfigurePeer(int peerId, const std::string& ip, uint16_t port) {
+    std::lock_guard<std::mutex> lock(m_peerMutex);
     if (peerId >= 0 && peerId < 4) {
         m_peers[peerId].ip = ip;
         m_peers[peerId].port = port;
@@ -34,6 +41,7 @@ void NetworkManager::Restart() {
 }
 
 int NetworkManager::GetNextAvailableId() {
+    std::lock_guard<std::mutex> lock(m_peerMutex);
     // Peer 0 is always the host. Check which slots 1-3 are not connected.
     for (int i = 1; i < 4; ++i) {
         if (!m_peers[i].isConnected) return i;
@@ -45,7 +53,9 @@ uint16_t NetworkManager::Startup(uint16_t basePort) {
     if (m_isRunning.load()) return m_localPort;
 
     WSADATA wsaData;
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        return 0;
+    }
 
     m_udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     m_tcpSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -100,13 +110,16 @@ void NetworkManager::Shutdown() {
     if (m_receiveThread.joinable()) m_receiveThread.join();
     if (m_sendThread.joinable()) m_sendThread.join();
 
-    for (auto& p : m_peers) {
-        if (p.tcpSocket != INVALID_SOCKET) {
-            closesocket(p.tcpSocket);
-            p.tcpSocket = INVALID_SOCKET;
+    {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        for (auto& p : m_peers) {
+            if (p.tcpSocket != INVALID_SOCKET) {
+                closesocket(p.tcpSocket);
+                p.tcpSocket = INVALID_SOCKET;
+            }
+            p.isConnected = false;
+            p.tcpBuffer.clear();
         }
-        p.isConnected = false;
-        p.tcpBuffer.clear();
     }
 
     for (auto& pending : m_pendingConnections) {
@@ -131,8 +144,28 @@ void NetworkManager::ReceiveLoop() {
 void NetworkManager::SendLoop() {
     while (m_isRunning.load()) {
         MaintainOutgoingConnections();
-        // Step 9 will implement the outbound queue processing here[cite: 2]
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        // Step 9: Outbound queue processing
+        std::vector<uint8_t> packet;
+        bool hasPacket = false;
+
+        {
+            std::lock_guard<std::mutex> lock(m_outboundMutex);
+            if (!m_outboundQueue.empty()) {
+                packet = std::move(m_outboundQueue.front());
+                m_outboundQueue.pop();
+                hasPacket = true;
+            }
+        }
+
+        if (hasPacket) {
+            // Execute the actual socket send on the dedicated network thread
+            SendUDP(packet);
+        }
+        else {
+            // Only yield/sleep if we have an empty queue to maintain high throughput
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
     }
 }
 
@@ -175,8 +208,11 @@ void NetworkManager::ReceiveTCP() {
                             PhysicsSystem::localPeerId = assignedId; // Update ECS Authority[cite: 1]
 
                             // Link this socket as our connection to the Host (Peer 0)
-                            m_peers[0].tcpSocket = it->socket;
-                            m_peers[0].isConnected = true;
+                            {
+                                std::lock_guard<std::mutex> lock(m_peerMutex);
+                                m_peers[0].tcpSocket = it->socket;
+                                m_peers[0].isConnected = true;
+                            }
                             m_peerCount++;
 
                             if (m_debugLogging) std::cout << "[NetworkManager] Successfully joined as Peer " << assignedId << "\n";
@@ -208,28 +244,31 @@ void NetworkManager::ReceiveTCP() {
     }
 
     // 2. Process Established Peers (Standard reliable traffic)
-    for (auto& peer : m_peers) {
-        if (!peer.isConnected || peer.id == m_localPeerId.load()) continue;
+    {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        for (auto& peer : m_peers) {
+            if (!peer.isConnected || peer.id == m_localPeerId.load()) continue;
 
-        int bytes = recv(peer.tcpSocket, buffer, sizeof(buffer), 0);
-        if (bytes > 0) {
-            peer.tcpBuffer.insert(peer.tcpBuffer.end(), buffer, buffer + bytes);
-            while (peer.tcpBuffer.size() >= 4) {
-                uint32_t packetSize;
-                memcpy(&packetSize, peer.tcpBuffer.data(), 4);
-                if (peer.tcpBuffer.size() < 4 + packetSize) break;
+            int bytes = recv(peer.tcpSocket, buffer, sizeof(buffer), 0);
+            if (bytes > 0) {
+                peer.tcpBuffer.insert(peer.tcpBuffer.end(), buffer, buffer + bytes);
+                while (peer.tcpBuffer.size() >= 4) {
+                    uint32_t packetSize;
+                    memcpy(&packetSize, peer.tcpBuffer.data(), 4);
+                    if (peer.tcpBuffer.size() < 4 + packetSize) break;
 
-                std::vector<uint8_t> packetData(peer.tcpBuffer.begin() + 4, peer.tcpBuffer.begin() + 4 + packetSize);
-                PushInboundEvent(packetData);
-                peer.tcpBuffer.erase(peer.tcpBuffer.begin(), peer.tcpBuffer.begin() + 4 + packetSize);
+                    std::vector<uint8_t> packetData(peer.tcpBuffer.begin() + 4, peer.tcpBuffer.begin() + 4 + packetSize);
+                    PushInboundEvent(packetData);
+                    peer.tcpBuffer.erase(peer.tcpBuffer.begin(), peer.tcpBuffer.begin() + 4 + packetSize);
+                }
             }
-        }
-        else if (bytes == 0 || (bytes == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
-            if (m_debugLogging) std::cout << "[NetworkManager] Peer " << peer.id << " disconnected.\n";
-            peer.isConnected = false;
-            closesocket(peer.tcpSocket);
-            peer.tcpSocket = INVALID_SOCKET;
-            m_peerCount--;
+            else if (bytes == 0 || (bytes == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
+                if (m_debugLogging) std::cout << "[NetworkManager] Peer " << peer.id << " disconnected.\n";
+                peer.isConnected = false;
+                closesocket(peer.tcpSocket);
+                peer.tcpSocket = INVALID_SOCKET;
+                m_peerCount--;
+            }
         }
     }
 }
@@ -297,10 +336,17 @@ void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
             send(s, (char*)&size, 4, 0);
             send(s, (char*)b.GetBufferPointer(), size, 0);
 
-            m_peers[newId].tcpSocket = s;
-            m_peers[newId].isConnected = true;
+            {
+                std::lock_guard<std::mutex> lock(m_peerMutex);
+                m_peers[newId].tcpSocket = s;
+                m_peers[newId].isConnected = true;
+            }
             m_peerCount++;
             if (m_debugLogging) std::cout << "[NetworkManager] Peer " << newId << " joined the mesh.\n";
+
+            if (m_peerJoinedCallback) {
+                m_peerJoinedCallback(newId);
+            }
         }
         else {
             if (m_debugLogging) std::cout << "[NetworkManager] Mesh is full (4/4). Rejecting connection.\n";
@@ -308,6 +354,7 @@ void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
         }
     }
     else if (remoteId >= 0 && remoteId < 4) {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
         m_peers[remoteId].tcpSocket = s;
         m_peers[remoteId].isConnected = true;
         m_peerCount++;
@@ -339,6 +386,7 @@ bool NetworkManager::PopInboundEvent(std::vector<uint8_t>& out) {
 }
 
 void NetworkManager::SendUDP(const std::vector<uint8_t>& d) {
+    std::lock_guard<std::mutex> lock(m_peerMutex);
     for (auto& p : m_peers) {
         if (p.isConnected && p.id != m_localPeerId.load()) {
             sendto(m_udpSocket, (char*)d.data(), (int)d.size(), 0, (sockaddr*)&p.udpAddr, sizeof(p.udpAddr));
@@ -348,6 +396,7 @@ void NetworkManager::SendUDP(const std::vector<uint8_t>& d) {
 
 void NetworkManager::SendTCP(const std::vector<uint8_t>& d) {
     uint32_t size = (uint32_t)d.size();
+    std::lock_guard<std::mutex> lock(m_peerMutex);
     for (auto& p : m_peers) {
         if (p.isConnected && p.tcpSocket != INVALID_SOCKET && p.id != m_localPeerId) {
             send(p.tcpSocket, (char*)&size, 4, 0);
@@ -361,13 +410,19 @@ void NetworkManager::BroadcastState(Registry& registry) {
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
     auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
 
-    flatbuffers::FlatBufferBuilder builder(2048);
+    flatbuffers::FlatBufferBuilder builder(4096);
     std::vector<flatbuffers::Offset<EntityState>> entityStates;
 
     // Static counter for sequence numbers
     static uint32_t sequenceCounter = 0;
+    static auto startTime = std::chrono::steady_clock::now();
+    float timestamp = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 
-    for (Entity i = 0; i < registry.GetEntityCount(); ++i) {
+    // Cache the entity count once outside the loop to avoid thousands of mutex locks!
+    const Entity count = registry.GetEntityCount();
+    entityStates.reserve(std::min(count, static_cast<Entity>(512))); // Reasonable starting guess
+
+    for (Entity i = 0; i < count; ++i) {
         // Check if we have the necessary components and if we OWN this entity
         if (transformArray->HasData(i) && physicsArray->HasData(i) && ownershipArray->HasData(i)) {
             auto& ownership = ownershipArray->GetData(i);
@@ -380,7 +435,7 @@ void NetworkManager::BroadcastState(Registry& registry) {
                 Vec3 pos(t.position.x, t.position.y, t.position.z);
                 Vec3 rot(t.rotation.x, t.rotation.y, t.rotation.z);
                 Vec3 linVel(p.velocity.x, p.velocity.y, p.velocity.z);
-                Vec3 angVel(0.0f, 0.0f, 0.0f); // Add angular if your PhysicsComponent has it
+                Vec3 angVel(p.angularVelocity.x, p.angularVelocity.y, p.angularVelocity.z); 
 
                 // Create the EntityState table
                 auto state = CreateEntityState(
@@ -398,7 +453,7 @@ void NetworkManager::BroadcastState(Registry& registry) {
 
     // Create the PhysicsSnapshot (The UDP Payload)
     auto statesVector = builder.CreateVector(entityStates);
-    auto snapshot = CreatePhysicsSnapshot(builder, sequenceCounter++, 0, statesVector);
+    auto snapshot = CreatePhysicsSnapshot(builder, sequenceCounter++, static_cast<uint64_t>(timestamp * 1000.0f), statesVector);
 
     // Wrap it in the Root NetworkMessage
     auto msg = CreateNetworkMessage(
@@ -410,67 +465,237 @@ void NetworkManager::BroadcastState(Registry& registry) {
 
     builder.Finish(msg);
 
-    // Broadcast via UDP
+    // Broadcast via UDP (MODIFIED FOR STEP 9)
     std::vector<uint8_t> data(builder.GetBufferPointer(), builder.GetBufferPointer() + builder.GetSize());
-    SendUDP(data);
 
-    if (m_debugLogging && !entityStates.empty()) {
-        //std::cout << "[Network] Broadcasting " << entityStates.size() << " objects via UDP.\n";
+    // Pass off to the dedicated Send Thread instead of blocking the simulation thread
+    {
+        std::lock_guard<std::mutex> lock(m_outboundMutex);
+        m_outboundQueue.push(std::move(data));
     }
+}
+
+void NetworkManager::SendReliableEvent(NetworkEventType type, const std::string& payload, uint32_t targetEntity) {
+    flatbuffers::FlatBufferBuilder builder(512);
+
+    EventType fbType;
+    switch (type) {
+    case NetworkEventType::SceneLoad: fbType = EventType_SceneLoad; break;
+    case NetworkEventType::SpawnObject: fbType = EventType_SpawnObject; break;
+    case NetworkEventType::DespawnObject: fbType = EventType_DespawnObject; break;
+    default: return;
+    }
+
+    auto payloadStr = builder.CreateString(payload);
+    auto ev = CreateReliableEvent(builder, fbType, payloadStr, targetEntity);
+    auto msg = CreateNetworkMessage(builder, static_cast<int8_t>(m_localPeerId.load()), Payload_ReliableEvent, ev.Union());
+    builder.Finish(msg);
+
+    std::vector<uint8_t> data(builder.GetBufferPointer(), builder.GetBufferPointer() + builder.GetSize());
+    SendTCP(data);
 }
 
 void NetworkManager::ProcessInboundPackets(Registry& registry) {
     std::vector<uint8_t> packet;
 
-    // Fetch components for updating
     auto transformArray = registry.GetComponentArray<TransformComponent>();
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
     auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
 
-    // Empty the queue
     while (PopInboundEvent(packet)) {
         auto netMsg = GetNetworkMessage(packet.data());
 
-        // Handle UDP Physics Snapshots
         if (netMsg->payload_type() == Payload_PhysicsSnapshot) {
-            if (m_debugLogging) { std::cout << "[Network] Processing Physics Snapshot...\n"; }
             auto snapshot = netMsg->payload_as_PhysicsSnapshot();
+            int senderId = netMsg->sender_peer_id();
 
-            // TODO: Optional - Check snapshot->sequence_number() 
-            // to ignore older packets that arrived out-of-order.
+            {
+                std::lock_guard<std::mutex> pLock(m_peerMutex);
+                if (senderId >= 0 && senderId < 4) {
+                    if (snapshot->sequence_number() <= m_peers[senderId].lastReceivedSequence && m_peers[senderId].lastReceivedSequence != 0) {
+                        continue;
+                    }
+                    m_peers[senderId].lastReceivedSequence = snapshot->sequence_number();
+                }
+            }
 
+            std::lock_guard<std::mutex> hLock(m_historyMutex);
             for (auto state : *snapshot->states()) {
                 Entity id = static_cast<Entity>(state->entity_id());
 
-                // Safety check: ensure the entity exists locally
                 if (transformArray->HasData(id) && physicsArray->HasData(id)) {
-                    if (m_debugLogging) { std::cout << "[Network] Snapping Entity " << id << "\n"; }
-
-
-                    // Logic: Only update if we DON'T own it
                     bool isMine = false;
                     if (ownershipArray->HasData(id)) {
                         isMine = (static_cast<int>(ownershipArray->GetData(id).GetOwnerIndex()) == m_localPeerId);
                     }
 
                     if (!isMine) {
-                        auto& t = transformArray->GetData(id);
-                        auto& p = physicsArray->GetData(id);
+                        auto& history = m_remoteHistories[id];
+                        RemoteState rs;
+                        rs.position = glm::vec3(state->position()->x(), state->position()->y(), state->position()->z());
+                        rs.rotation = glm::vec3(state->rotation()->x(), state->rotation()->y(), state->rotation()->z());
+                        rs.velocity = glm::vec3(state->linear_velocity()->x(), state->linear_velocity()->y(), state->linear_velocity()->z());
+                        rs.timestamp = static_cast<float>(snapshot->tick_index()) / 1000.0f;
 
-                        // Snap position and velocity to match the owner
-                        t.position = glm::vec3(state->position()->x(), state->position()->y(), state->position()->z());
-                        t.rotation = glm::vec3(state->rotation()->x(), state->rotation()->y(), state->rotation()->z());
-                        p.velocity = glm::vec3(state->linear_velocity()->x(), state->linear_velocity()->y(), state->linear_velocity()->z());
+                        if (history.states.empty() || rs.timestamp > history.states.back().timestamp) {
+                            if (m_playbackTime == 0.0f) m_playbackTime = rs.timestamp;
+                            history.states.push_back(rs);
+                            if (history.states.size() > RemoteHistory::MAX_HISTORY) {
+                                history.states.pop_front();
+                            }
+                        }
+
+                        // --- NEW: Ensure visual sync even if OwnershipComponent arrived late ---
+                        if (registry.HasComponent<RenderComponent>(id) && ownershipArray->HasData(id)) {
+                            auto& render = registry.GetComponent<RenderComponent>(id);
+                            if (!render.useDebugOverlay) {
+                                render.useDebugOverlay = true;
+                                render.debugOverlayColor = ownershipArray->GetData(id).GetOwnerColor();
+                                render.debugOverlayColor.a = 1.0f;
+                            }
+                        }
                     }
-                }
-                else {
-                    std::cout << "[Network] ERROR: Received data for Entity " << id << " but it doesn't exist here!\n";
                 }
             }
         }
-        // Handle TCP Reliable Events (Scene loads, etc.)
         else if (netMsg->payload_type() == Payload_ReliableEvent) {
-            // (Handle SceneLoad or Spawning here)
+            auto ev = netMsg->payload_as_ReliableEvent();
+            if (m_eventCallback) {
+                NetworkEventType type;
+                bool valid = true;
+                switch (ev->event_type()) {
+                case EventType_SceneLoad: type = NetworkEventType::SceneLoad; break;
+                case EventType_SpawnObject: type = NetworkEventType::SpawnObject; break;
+                case EventType_DespawnObject: type = NetworkEventType::DespawnObject; break;
+                default: valid = false; break;
+                }
+
+                if (valid) {
+                    m_eventCallback(type, ev->string_payload() ? ev->string_payload()->str() : "", ev->target_entity_id());
+                }
+            }
         }
     }
+}
+
+void NetworkManager::UpdateInterpolation(Registry& registry, float dt) {
+    if (m_playbackTime == 0.0f) return;
+
+    // 1. Advance Playback Clock
+    m_playbackTime += dt;
+
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+
+    std::lock_guard<std::mutex> hLock(m_historyMutex);
+
+    // 2. Clock Synchronization & Management
+    // Find the latest timestamp received across all remote objects
+    float latestPacketTimestamp = 0.0f;
+    for (const auto& [id, history] : m_remoteHistories) {
+        if (!history.states.empty()) {
+            latestPacketTimestamp = std::max(latestPacketTimestamp, history.states.back().timestamp);
+        }
+    }
+
+    if (latestPacketTimestamp > 0.0f) {
+        // We want targetPlaybackTime to be roughly (kInterpolationDelay) behind the latest packet.
+        // If it's too far behind, catch up. If it's too close, slow down.
+        float currentLag = latestPacketTimestamp - (m_playbackTime - kInterpolationDelay);
+
+        if (currentLag > 0.3f) { // Too much lag (> 300ms), snap or speed up
+            m_playbackTime += dt * 5.0f; 
+        }
+        else if (currentLag < 0.05f) { // Too close to edge, slow down to avoid extrapolation
+            m_playbackTime -= dt * 0.5f;
+        }
+    }
+
+    float targetPlaybackTime = m_playbackTime - kInterpolationDelay;
+
+    // 3. Process Interpolation and Cleanup Stale History
+    for (auto it = m_remoteHistories.begin(); it != m_remoteHistories.end(); ) {
+        uint32_t id = it->first;
+        auto& history = it->second;
+
+        // Cleanup: If the entity was deleted from the registry, remove its network history
+        if (!transformArray->HasData(id) || !physicsArray->HasData(id)) {
+            it = m_remoteHistories.erase(it);
+            continue;
+        }
+
+        auto& t = transformArray->GetData(id);
+        auto& p = physicsArray->GetData(id);
+
+        if (history.states.empty()) {
+            ++it;
+            continue;
+        }
+
+        RemoteState* s0 = nullptr;
+        RemoteState* s1 = nullptr;
+
+        for (size_t i = 0; i < history.states.size(); ++i) {
+            if (history.states[i].timestamp > targetPlaybackTime) {
+                s1 = &history.states[i];
+                if (i > 0) s0 = &history.states[i - 1];
+                break;
+            }
+        }
+
+        if (s0 && s1) {
+            float t_blend = (targetPlaybackTime - s0->timestamp) / (s1->timestamp - s0->timestamp);
+            t.position = glm::mix(s0->position, s1->position, t_blend);
+            t.rotation = glm::mix(s0->rotation, s1->rotation, t_blend);
+            p.velocity = s1->velocity;
+            t.UpdateMatrix();
+        }
+        else if (s1) {
+            t.position = s1->position;
+            t.rotation = s1->rotation;
+            p.velocity = s1->velocity;
+            t.UpdateMatrix();
+        }
+        else {
+            // Extrapolate
+            const auto& last = history.states.back();
+            float extrapolationTime = std::min(targetPlaybackTime - last.timestamp, 0.5f);
+            t.position = last.position + last.velocity * extrapolationTime;
+            t.rotation = last.rotation;
+            p.velocity = last.velocity;
+            t.UpdateMatrix();
+        }
+        ++it;
+    }
+}
+
+void NetworkManager::SendTCPTo(int targetPeerId, const std::vector<uint8_t>& data) {
+    uint32_t size = (uint32_t)data.size();
+    std::lock_guard<std::mutex> lock(m_peerMutex);
+    if (targetPeerId >= 0 && targetPeerId < m_peers.size()) {
+        auto& p = m_peers[targetPeerId];
+        if (p.isConnected && p.tcpSocket != INVALID_SOCKET) {
+            send(p.tcpSocket, (char*)&size, 4, 0);
+            send(p.tcpSocket, (char*)data.data(), size, 0);
+        }
+    }
+}
+
+
+void NetworkManager::SendReliableEventTo(int targetPeerId, NetworkEventType type, const std::string& payload, uint32_t targetEntity) {
+    flatbuffers::FlatBufferBuilder builder(512);
+    EventType fbType;
+    switch (type) {
+    case NetworkEventType::SceneLoad: fbType = EventType_SceneLoad; break;
+    case NetworkEventType::SpawnObject: fbType = EventType_SpawnObject; break;
+    case NetworkEventType::DespawnObject: fbType = EventType_DespawnObject; break;
+    default: return;
+    }
+    auto payloadStr = builder.CreateString(payload);
+    auto ev = CreateReliableEvent(builder, fbType, payloadStr, targetEntity);
+    auto msg = CreateNetworkMessage(builder, static_cast<int8_t>(m_localPeerId.load()), Payload_ReliableEvent, ev.Union());
+    builder.Finish(msg);
+    std::vector<uint8_t> data(builder.GetBufferPointer(), builder.GetBufferPointer() + builder.GetSize());
+
+    SendTCPTo(targetPeerId, data);
 }

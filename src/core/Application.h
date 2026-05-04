@@ -71,7 +71,7 @@ private:
 
     void GenerateLookahead(float timeframe);
 
-    void LoadScene(const std::string& scenePath);
+    void LoadScene(const std::string& scenePath, bool broadcast = true);
 
     std::vector<SceneOption> sceneOptions;
 

@@ -10,19 +10,44 @@
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <glm/glm.hpp>
 #include <atomic>
 #include <mutex>
 #include <queue>
+#include <deque>
+#include <unordered_map>
 #include <vector>
 #include <string>
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <functional>
 
 #pragma comment(lib, "ws2_32.lib")
 
 // Forward declaration to avoid header dependency
 class Registry;
+
+enum class NetworkEventType {
+    SceneLoad,
+    SpawnObject,
+    DespawnObject
+};
+
+using ReliableEventCallback = std::function<void(NetworkEventType, const std::string&, uint32_t)>;
+using PeerJoinedCallback = std::function<void(int)>;
+
+struct RemoteState {
+    glm::vec3 position;
+    glm::vec3 rotation;
+    glm::vec3 velocity;
+    float timestamp;
+};
+
+struct RemoteHistory {
+    std::deque<RemoteState> states;
+    static constexpr size_t MAX_HISTORY = 10;
+};
 
 struct RemotePeer {
     int id = -1;
@@ -33,6 +58,7 @@ struct RemotePeer {
     sockaddr_in udpAddr{};
     bool isConnected = false;
     std::vector<uint8_t> tcpBuffer;
+    uint32_t lastReceivedSequence = 0;
 };
 
 struct PendingConnection {
@@ -67,8 +93,17 @@ public:
     void SendUDP(const std::vector<uint8_t>& data);
     void SendTCP(const std::vector<uint8_t>& data);
 
+    void SendTCPTo(int targetPeerId, const std::vector<uint8_t>& data);
+    void SendReliableEventTo(int targetPeerId, NetworkEventType type, const std::string& payload, uint32_t targetEntity = 0);
+
+    void SendReliableEvent(NetworkEventType type, const std::string& payload, uint32_t targetEntity = 0);
+    void SetReliableEventCallback(ReliableEventCallback callback) { m_eventCallback = callback; }
+    void SetPeerJoinedCallback(PeerJoinedCallback callback) { m_peerJoinedCallback = callback; }
+
+
     void BroadcastState(Registry& registry);
     void ProcessInboundPackets(Registry& registry);
+    void UpdateInterpolation(Registry& registry, float dt);
 
 private:
     std::atomic<bool> m_isRunning{ false };
@@ -81,14 +116,28 @@ private:
     SOCKET m_udpSocket{ INVALID_SOCKET };
     SOCKET m_tcpSocket{ INVALID_SOCKET };
 
+    PeerJoinedCallback m_peerJoinedCallback = nullptr;
+
     std::vector<RemotePeer> m_peers;
     std::vector<PendingConnection> m_pendingConnections;
+    std::mutex m_peerMutex;
 
     std::mutex m_inboundMutex;
     std::queue<std::vector<uint8_t>> m_inboundQueue;
 
+    std::mutex m_outboundMutex;
+    std::queue<std::vector<uint8_t>> m_outboundQueue;
+
     std::thread m_receiveThread;
     std::thread m_sendThread;
+
+    ReliableEventCallback m_eventCallback;
+
+    // Interpolation State
+    std::unordered_map<uint32_t, RemoteHistory> m_remoteHistories;
+    std::mutex m_historyMutex;
+    float m_playbackTime = 0.0f;
+    static constexpr float kInterpolationDelay = 0.15f; 
 
     // Internal Logic
     void ReceiveLoop();

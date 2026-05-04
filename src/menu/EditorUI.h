@@ -6,6 +6,13 @@
 #include "../rendering/Scene.h"
 #include <chrono>
 
+struct NetworkTelemetry {
+    int localPeerId = -1;
+    int connectedPeers = 0;
+    uint16_t localPort = 0;
+    bool isRunning = false;
+};
+
 struct UIProfiler {
     float drawMainMenuTime = 0.0f;
     float drawWindowsTime = 0.0f;
@@ -27,6 +34,7 @@ struct UIProfiler {
     bool renderAffinityApplied = false;
     bool simulationAffinityApplied = false;
     bool showProfiler = false;
+    NetworkTelemetry network;
 };
 
 class EditorUI {
@@ -84,6 +92,12 @@ public:
     std::vector<GeometryChangeRequest> ConsumeGeometryRequests() {
         auto reqs = m_GeometryRequests;
         m_GeometryRequests.clear();
+        return reqs;
+    }
+
+    std::vector<Entity> ConsumeDespawnRequests() {
+        auto reqs = m_DespawnRequests;
+        m_DespawnRequests.clear();
         return reqs;
     }
 
@@ -161,6 +175,10 @@ public:
         m_Profiler.affinityCompliant = affinityCompliant;
         m_Profiler.renderAffinityApplied = renderAffinityApplied;
         m_Profiler.simulationAffinityApplied = simulationAffinityApplied;
+    }
+
+    void SetNetworkTelemetry(const NetworkTelemetry& telemetry) {
+        m_Profiler.network = telemetry;
     }
 
     // Physics settings
@@ -274,6 +292,7 @@ private:
 
     std::vector<std::string> m_AvailableModels;
     std::vector<GeometryChangeRequest> m_GeometryRequests;
+    std::vector<Entity> m_DespawnRequests;
 
     std::vector<std::string> m_AvailableTextures;
     std::vector<ProceduralTextureRequest> m_TextureRequests;

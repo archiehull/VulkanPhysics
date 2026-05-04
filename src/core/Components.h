@@ -451,11 +451,11 @@ struct OwnershipComponent {
     }
     glm::vec4 GetOwnerColor() const {
         switch (owner) {
-            case ObjectOwnershipType::ONE: return glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-            case ObjectOwnershipType::TWO: return glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-            case ObjectOwnershipType::THREE: return glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-            case ObjectOwnershipType::FOUR: return glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
-            default: return glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
+            case ObjectOwnershipType::ONE: return glm::vec4(1.0f, 0.3f, 0.3f, 1.0f);   // Red-ish
+            case ObjectOwnershipType::TWO: return glm::vec4(0.3f, 1.0f, 0.3f, 1.0f);   // Green-ish
+            case ObjectOwnershipType::THREE: return glm::vec4(0.3f, 0.3f, 1.0f, 1.0f); // Blue-ish
+            case ObjectOwnershipType::FOUR: return glm::vec4(1.0f, 1.0f, 0.3f, 1.0f);  // Yellow-ish
+            default: return glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);                        // Grey
         }
     }
-};
+    };

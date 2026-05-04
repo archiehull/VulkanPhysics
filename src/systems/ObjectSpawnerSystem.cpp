@@ -35,6 +35,8 @@ namespace {
     }
 }
 
+ObjectSpawnerSystem::SpawnCallback ObjectSpawnerSystem::onObjectSpawned = nullptr;
+
 void ObjectSpawnerSystem::ResetSpawnerRun(ObjectSpawnerComponent& spawner) {
     spawner.spawnTimer = 0.0f;
     spawner.runElapsedSeconds = 0.0f;
@@ -95,12 +97,18 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
         // --- NEW: Ownership check for the spawner itself ---
         // If the spawner has an OwnershipComponent, only the owner runs the spawn logic.
         // This prevents multiple peers from spawning duplicates of the same object.
+        int localId = PhysicsSystem::localPeerId;
+        if (localId == -1) continue; // Waiting for network handshake, don't spawn yet!
+
         if (registry.HasComponent<OwnershipComponent>(e)) {
             auto& spawnerOwnership = registry.GetComponent<OwnershipComponent>(e);
-            int localId = PhysicsSystem::localPeerId;
-            if (localId != -1 && static_cast<int>(spawnerOwnership.GetOwnerIndex()) != localId) {
+            if (static_cast<int>(spawnerOwnership.GetOwnerIndex()) != localId) {
                 continue; 
             }
+        }
+        else if (localId != 0) {
+            // Unowned spawners default to Peer 0 (Host) authority
+            continue;
         }
 
         if (spawner.attachToTarget) {
@@ -462,5 +470,29 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     }
 
     ObjectOwnershipType ownerType = static_cast<ObjectOwnershipType>(std::min(objectOwner, (uint8_t)3));
-    registry.AddComponent<OwnershipComponent>(spawnedEntity, { ownerType });
+    OwnershipComponent ownComp{ ownerType };
+    registry.AddComponent<OwnershipComponent>(spawnedEntity, ownComp);
+
+    // --- NEW: Apply Owner-specific visual feedback ---
+    if (registry.HasComponent<RenderComponent>(spawnedEntity)) {
+        auto& render = registry.GetComponent<RenderComponent>(spawnedEntity);
+        render.useDebugOverlay = true;
+        render.debugOverlayColor = ownComp.GetOwnerColor();
+        render.debugOverlayColor.a = 1.0f; // SOLID COLOR as requested
+    }
+
+    if (onObjectSpawned) {
+        SpawnEvent ev;
+        ev.entityId = spawnedEntity;
+        ev.geometryType = geometryType;
+        ev.position = spawnPos;
+        ev.scale = effectiveSpawnScale;
+        ev.texturePath = spawner.spawnTexturePath;
+        ev.modelPath = spawner.spawnModelPath;
+        ev.mass = phys.mass;
+        ev.velocity = phys.velocity;
+        ev.angularVelocity = phys.angularVelocity;
+        ev.ownerId = objectOwner;
+        onObjectSpawned(ev);
+    }
 }

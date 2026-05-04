@@ -5,8 +5,10 @@
 #include <ws2ipdef.h>
 #include <ws2tcpip.h>
 #include <windows.h> // For CPU affinity
+#include <timeapi.h> // For timeBeginPeriod
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 #include <cmath>
 #include <algorithm>
 #include <thread>
@@ -17,6 +19,9 @@
 #include <chrono>
 #include <vector>
 #include <utility>
+
+#pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "ws2_32.lib")
 
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
@@ -40,12 +45,31 @@ namespace {
     constexpr float kPerfLogIntervalSeconds = 1.0f;
     constexpr float kPerfHitchThresholdMs = 20.0f;
 
-    constexpr DWORD_PTR kVisualCoreMask = static_cast<DWORD_PTR>(1ull << 0);      // Core 1
+    // --- NEW: Adaptive Affinity Masking ---
+    DWORD_PTR BuildVisualCoreMask(unsigned int logicalCores, uint16_t portOffset) {
+        // Default to Core 0 (Bit 0)
+        DWORD_PTR mask = static_cast<DWORD_PTR>(1ull << 0);
+        
+        // If we have many cores, shift the visual core based on the instance port
+        // to prevent Peer 1, Peer 2, etc. from all fighting for Core 0.
+        if (logicalCores >= 8) {
+            mask = static_cast<DWORD_PTR>(1ull << (portOffset % 4));
+        }
+        return mask;
+    }
 
-    DWORD_PTR BuildSimulationCoreMask(unsigned int logicalCores) {
+    DWORD_PTR BuildSimulationCoreMask(unsigned int logicalCores, uint16_t portOffset) {
         DWORD_PTR mask = 0;
         if (logicalCores >= 4) {
-            for (unsigned int core = 3; core < logicalCores; ++core) {
+            // Start simulation cores at Core 3 (Bit 2) or higher
+            unsigned int startCore = 2;
+            
+            // If many cores, offset the starting simulation core to separate instances
+            if (logicalCores >= 8) {
+                startCore = 4 + (portOffset % 2);
+            }
+
+            for (unsigned int core = startCore; core < logicalCores; ++core) {
                 mask |= (static_cast<DWORD_PTR>(1ull) << core);
             }
         }
@@ -110,23 +134,209 @@ Application::Application() {
 void Application::Run() {
     InitVulkan();
 
-    const unsigned int logicalCores = GetLogicalCoreCount();
-    const DWORD_PTR simMask = BuildSimulationCoreMask(logicalCores);
-    m_RenderAffinityMask = static_cast<uint64_t>(kVisualCoreMask);
-    m_SimulationAffinityMask = static_cast<uint64_t>(simMask);
-
-    m_RenderThreadId = static_cast<uint32_t>(GetCurrentThreadId());
-    m_RenderAffinityApplied = ApplyCurrentThreadAffinity(static_cast<DWORD_PTR>(m_RenderAffinityMask));
+    // Enable high-resolution timers on Windows (fix for background "slowness")
+    timeBeginPeriod(1);
 
     m_networkManager = std::make_unique<NetworkManager>();
     m_networkManager->SetDebugLogging(true);
-    //m_networkManager->SetLocalPeerId(); // Passed from main()
+    uint16_t localPort = m_networkManager->Startup();
+
+    const unsigned int logicalCores = GetLogicalCoreCount();
+    uint16_t portOffset = (localPort >= 27015) ? (localPort - 27015) : 0;
+
+    m_RenderAffinityMask = static_cast<uint64_t>(BuildVisualCoreMask(logicalCores, portOffset));
+    m_SimulationAffinityMask = static_cast<uint64_t>(BuildSimulationCoreMask(logicalCores, portOffset));
+
+    m_RenderThreadId = static_cast<uint32_t>(GetCurrentThreadId());
+    m_RenderAffinityApplied = ApplyCurrentThreadAffinity(static_cast<DWORD_PTR>(m_RenderAffinityMask));
 
     // Configure the mesh map (everyone needs to know the layout)
     m_networkManager->ConfigurePeer(0, "127.0.0.1", 27015);
     m_networkManager->ConfigurePeer(1, "127.0.0.1", 27016);
     m_networkManager->ConfigurePeer(2, "127.0.0.1", 27017);
     m_networkManager->ConfigurePeer(3, "127.0.0.1", 27018);
+
+    m_networkManager->SetReliableEventCallback([this](NetworkEventType type, const std::string& payload, uint32_t target) {
+        if (type == NetworkEventType::SceneLoad) {
+            std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
+            m_TaskQueue.push_back([this, payload]() {
+                LoadScene(payload, false);
+            });
+        }
+        else if (type == NetworkEventType::DespawnObject) {
+            std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
+            m_TaskQueue.push_back([this, target]() {
+                if (!scene) return;
+                std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
+                scene->DeleteEntity(target);
+            });
+        }
+        else if (type == NetworkEventType::SpawnObject) {
+            std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
+            m_TaskQueue.push_back([this, payload]() {
+                if (!scene) return;
+                
+                std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
+
+                try {
+                    // Parse CSV payload: geo,px,py,pz,sx,sy,sz,tex,model,mass,vx,vy,vz,avx,avy,avz,owner,id
+                    std::vector<std::string> tokens;
+                    std::stringstream ss(payload);
+                    std::string item;
+                    while (std::getline(ss, item, ',')) tokens.push_back(item);
+
+                    if (tokens.size() < 18) return;
+
+                    std::string geo = tokens[0];
+                    glm::vec3 pos(std::stof(tokens[1]), std::stof(tokens[2]), std::stof(tokens[3]));
+                    glm::vec3 scale(std::stof(tokens[4]), std::stof(tokens[5]), std::stof(tokens[6]));
+                    std::string tex = tokens[7];
+                    std::string model = tokens[8];
+                    if (model == "none") model = "";
+                    float massVal = std::stof(tokens[9]);
+                    glm::vec3 vel(std::stof(tokens[10]), std::stof(tokens[11]), std::stof(tokens[12]));
+                    glm::vec3 angVel(std::stof(tokens[13]), std::stof(tokens[14]), std::stof(tokens[15]));
+                    uint8_t ownerId = static_cast<uint8_t>(std::stoi(tokens[16]));
+                    Entity id = static_cast<Entity>(std::stoul(tokens[17]));
+
+                    if (scene->GetRegistry().IsAlive(id)) return; // Already exists
+
+                    Entity spawned = MAX_ENTITIES;
+                    std::string name = "NetSpawn_" + std::to_string(id);
+
+                    if (geo == "Cube") spawned = scene->AddObjectExplicit(id, name, std::shared_ptr<Geometry>(GeometryGenerator::CreateCube(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice())), pos, tex, false);
+                    else if (geo == "Plane") spawned = scene->AddObjectExplicit(id, name, std::shared_ptr<Geometry>(GeometryGenerator::CreatePlane(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), true)), pos, tex, false);
+                    else if (geo == "Sphere") spawned = scene->AddObjectExplicit(id, name, std::shared_ptr<Geometry>(GeometryGenerator::CreateSphere(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 16, 32, 0.5f)), pos, tex, false);
+                    else if (geo == "Capsule" || geo == "Smoke Grenade") spawned = scene->AddObjectExplicit(id, name, std::shared_ptr<Geometry>(GeometryGenerator::CreateCapsule(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 0.2f, 1.0f, 32, 16)), pos, tex, false);
+                    else if (geo == "Model") spawned = scene->AddModel(name, pos, glm::vec3(0), scale, model, tex, false, id); 
+
+                    if (spawned != MAX_ENTITIES) {
+                        auto& reg = scene->GetRegistry();
+                        auto& tr = reg.GetComponent<TransformComponent>(spawned);
+                        tr.scale = scale;
+                        tr.UpdateMatrix();
+
+                        if (!reg.HasComponent<PhysicsComponent>(spawned)) reg.AddComponent<PhysicsComponent>(spawned, PhysicsComponent{});
+                        auto& p = reg.GetComponent<PhysicsComponent>(spawned);
+                        p.isStatic = false;
+                        p.SetMass(massVal);
+                        p.velocity = vel;
+                        p.angularVelocity = angVel;
+
+                        if (!reg.HasComponent<ColliderComponent>(spawned)) reg.AddComponent<ColliderComponent>(spawned, ColliderComponent{});
+                        auto& col = reg.GetComponent<ColliderComponent>(spawned);
+                        col.hasCollision = true;
+                        if (geo == "Sphere") { col.type = 0; col.radius = std::max({ scale.x, scale.y, scale.z }) * 0.5f; }
+                        else if (geo == "Capsule" || geo == "Smoke Grenade") { col.type = 2; col.radius = 0.2f * scale.x; col.height = 1.0f * scale.y; }
+
+                        auto ownType = static_cast<ObjectOwnershipType>(ownerId);
+                        reg.AddComponent<OwnershipComponent>(spawned, { ownType });
+
+                        // --- NEW: Apply Owner-specific visual feedback for remote spawns ---
+                        if (reg.HasComponent<RenderComponent>(spawned)) {
+                            auto& render = reg.GetComponent<RenderComponent>(spawned);
+                            render.useDebugOverlay = true;
+                            render.debugOverlayColor = OwnershipComponent{ ownType }.GetOwnerColor();
+                            render.debugOverlayColor.a = 1.0f; 
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    std::cerr << "[Network] Failed to parse SpawnObject event: " << e.what() << std::endl;
+                }
+            });
+        }
+    });
+
+    m_networkManager->SetPeerJoinedCallback([this](int newPeerId) {
+        // We are the Host (Peer 0). A new client just joined.
+        // Queue this on the main thread so we safely access the ECS registry.
+        std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
+        m_TaskQueue.push_back([this, newPeerId]() {
+
+            // 1. Tell them to load the exact base world file we are running
+            m_networkManager->SendReliableEventTo(newPeerId, NetworkEventType::SceneLoad, currentScenePath);
+
+            // 2. Iterate through ECS and send them all dynamically spawned entities
+            if (!scene) return;
+            std::shared_lock<std::shared_mutex> readLock(m_RegistryMutex);
+
+            auto& registry = scene->GetRegistry();
+            auto transformArray = registry.GetComponentArray<TransformComponent>();
+            auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+            auto renderArray = registry.GetComponentArray<RenderComponent>();
+            auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
+
+            // Assuming dynamic objects use partitioned IDs starting at 10,000
+            for (Entity e = 10000; e < MAX_ENTITIES; ++e) {
+                if (registry.IsAlive(e) && transformArray->HasData(e) && renderArray->HasData(e)) {
+                    auto& tr = transformArray->GetData(e);
+                    auto& rd = renderArray->GetData(e);
+
+                    float mass = 1.0f;
+                    glm::vec3 vel(0.0f);
+                    glm::vec3 angVel(0.0f);
+                    if (physicsArray->HasData(e)) {
+                        auto& p = physicsArray->GetData(e);
+                        mass = p.mass;
+                        vel = p.velocity;
+                        angVel = p.angularVelocity;
+                    }
+
+                    uint8_t owner = 0;
+                    if (ownershipArray->HasData(e)) {
+                        owner = ownershipArray->GetData(e).GetOwnerIndex();
+                    }
+
+                    // Recover the spawn type from the geometry name
+                    std::string geoStr = "Sphere";
+                    std::string modelStr = "";
+                    std::string lowerGeo = rd.geometryName;
+                    std::transform(lowerGeo.begin(), lowerGeo.end(), lowerGeo.begin(), ::tolower);
+
+                    if (lowerGeo == "cube") geoStr = "Cube";
+                    else if (lowerGeo == "plane") geoStr = "Plane";
+                    else if (lowerGeo == "capsule") geoStr = "Capsule";
+                    else if (lowerGeo.find(".obj") != std::string::npos || lowerGeo.find(".sjg") != std::string::npos) {
+                        geoStr = "Model";
+                        modelStr = rd.geometryName;
+                    }
+                    else if (rd.texturePath.find("smoke_grenade") != std::string::npos) {
+                        geoStr = "Smoke Grenade";
+                    }
+
+                    // Format it EXACTLY like ObjectSpawnerSystem does so the standard TCP receiver parses it
+                    std::stringstream ss;
+                    ss << geoStr << ","
+                        << tr.position.x << "," << tr.position.y << "," << tr.position.z << ","
+                        << tr.scale.x << "," << tr.scale.y << "," << tr.scale.z << ","
+                        << rd.texturePath << "," << modelStr << ","
+                        << mass << ","
+                        << vel.x << "," << vel.y << "," << vel.z << ","
+                        << angVel.x << "," << angVel.y << "," << angVel.z << ","
+                        << (int)owner << "," << e;
+
+                    m_networkManager->SendReliableEventTo(newPeerId, NetworkEventType::SpawnObject, ss.str());
+                }
+            }
+            });
+        });
+
+    ObjectSpawnerSystem::onObjectSpawned = [this](const ObjectSpawnerSystem::SpawnEvent& ev) {
+        if (m_networkManager && m_networkManager->IsRunning()) {
+            // Build CSV: geo,px,py,pz,sx,sy,sz,tex,model,mass,vx,vy,vz,avx,avy,avz,owner,id
+            std::stringstream ss;
+            ss << ev.geometryType << ","
+                << ev.position.x << "," << ev.position.y << "," << ev.position.z << ","
+                << ev.scale.x << "," << ev.scale.y << "," << ev.scale.z << ","
+                << ev.texturePath << "," << ev.modelPath << ","
+                << ev.mass << ","
+                << ev.velocity.x << "," << ev.velocity.y << "," << ev.velocity.z << ","
+                << ev.angularVelocity.x << "," << ev.angularVelocity.y << "," << ev.angularVelocity.z << ","
+                << (int)ev.ownerId << "," << ev.entityId;
+
+            m_networkManager->SendReliableEvent(NetworkEventType::SpawnObject, ss.str());
+        }
+    };
 
     m_networkManager->Startup();
 
@@ -219,7 +429,11 @@ void Application::InitVulkan() {
 
 }
 
-void Application::LoadScene(const std::string& scenePath) {
+void Application::LoadScene(const std::string& scenePath, bool broadcast) {
+    if (broadcast && m_networkManager && m_networkManager->IsRunning()) {
+        m_networkManager->SendReliableEvent(NetworkEventType::SceneLoad, scenePath);
+    }
+
     // 1. Wait for GPU to finish current frames
     if (vulkanDevice) {
         vkDeviceWaitIdle(vulkanDevice->GetDevice());
@@ -297,6 +511,13 @@ void Application::LoadScene(const std::string& scenePath) {
 
     if (renderer && scene) {
         renderer->SetupSceneParticles(*scene);
+    }
+
+    if (m_networkManager && m_networkManager->IsRunning()) {
+        int localId = m_networkManager->GetLocalPeerId();
+        if (localId != -1) {
+            scene->GetRegistry().SetNetworkPartition(localId);
+        }
     }
 
     if (kSceneDebug) {
@@ -1076,6 +1297,13 @@ void Application::MainLoop() {
             LoadScene(nextScene);
         }
 
+        auto despawnRequests = editorUI->ConsumeDespawnRequests();
+        for (auto e : despawnRequests) {
+            if (m_networkManager && m_networkManager->IsRunning()) {
+                m_networkManager->SendReliableEvent(NetworkEventType::DespawnObject, "", e);
+            }
+        }
+
         bool requestedVsync = config.vsync;
         int requestedMaxFps = config.maxFps;
         if (editorUI->ConsumePerformanceSettingsRequest(requestedVsync, requestedMaxFps)) {
@@ -1398,8 +1626,7 @@ void Application::MainLoop() {
         const bool affinityCompliant =
             m_RenderAffinityApplied.load() &&
             m_SimulationAffinityApplied.load() &&
-            (m_RenderAffinityMask == static_cast<uint64_t>(kVisualCoreMask)) &&
-            ((m_SimulationAffinityMask & static_cast<uint64_t>(0x7)) == 0) &&
+            (m_RenderAffinityMask != 0) &&
             (m_SimulationAffinityMask != 0);
 
         editorUI->SetThreadInfo(2, static_cast<unsigned long>(m_RenderAffinityMask | m_SimulationAffinityMask));
@@ -1413,6 +1640,15 @@ void Application::MainLoop() {
             affinityCompliant,
             m_RenderAffinityApplied.load(),
             m_SimulationAffinityApplied.load());
+
+        if (m_networkManager) {
+            NetworkTelemetry network;
+            network.isRunning = m_networkManager->IsRunning();
+            network.localPeerId = m_networkManager->GetLocalPeerId();
+            network.localPort = m_networkManager->GetLocalPort();
+            network.connectedPeers = m_networkManager->GetPeerCount();
+            editorUI->SetNetworkTelemetry(network);
+        }
 
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 
@@ -1643,6 +1879,9 @@ void Application::Cleanup() {
         m_networkManager->Shutdown();
     }
 
+    // Disable high-resolution timers
+    timeEndPeriod(1);
+
     if (vulkanDevice) {
         vkDeviceWaitIdle(vulkanDevice->GetDevice());
     }
@@ -1710,26 +1949,53 @@ void Application::SimulationLoop() {
 
         // 1. Process thread-safe tasks from the main thread
         {
-            std::unique_lock<std::mutex> taskLock(m_TaskQueueMutex);
-            if (!m_TaskQueue.empty()) {
-                std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
-                for (auto& task : m_TaskQueue) {
-                    task();
-                }
-                m_TaskQueue.clear();
+            std::vector<std::function<void()>> tasksToRun;
+            {
+                std::unique_lock<std::mutex> taskLock(m_TaskQueueMutex);
+                tasksToRun = std::move(m_TaskQueue);
             }
+
+            // Execute tasks. Note: individual tasks that touch the ECS now take the mutex themselves
+            // to prevent recursive deadlock with LoadScene or other locking methods.
+            for (auto& task : tasksToRun) {
+                task();
+            }
+        }
+
+        if (m_networkManager && m_IsRunning && scene) {
+            // --- NEW: Detect ID assignment and configure ECS Partition ---
+            static int lastConfiguredPeerId = -1;
+            int currentPeerId = m_networkManager->GetLocalPeerId();
+            if (currentPeerId != -1 && currentPeerId != lastConfiguredPeerId) {
+                std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
+                scene->GetRegistry().SetNetworkPartition(currentPeerId);
+                lastConfiguredPeerId = currentPeerId;
+                std::cout << "[Application] ECS Partition locked to Peer " << currentPeerId << std::endl;
+            }
+            // -------------------------------------------------------------
+
+            // Only update networking logic once per simulation loop iteration, not twice.
+            // These require unique_lock because they modify the Registry (interpolated state).
+            std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
+            m_networkManager->ProcessInboundPackets(scene->GetRegistry());
+            // Use frameTime (unscaled) for network clock advancing, as network time is independent of local timeScale
+            m_networkManager->UpdateInterpolation(scene->GetRegistry(), frameTime);
         }
 
         // 2. Consume accumulator in fixed steps
         bool stepped = false;
         int stepsThisFrame = 0;
-        const int maxStepsPerFrame = 5; // Cap steps to prevent "spiral of death"
+        const int maxStepsPerFrame = 10; // Increased cap slightly
 
         while (accumulator >= fixedDt && stepsThisFrame < maxStepsPerFrame) {
             if (!m_IsReplaying && !PhysicsSystem::simulationPaused && scene) {
                 const auto physStart = std::chrono::high_resolution_clock::now();
-                std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
-                scene->UpdatePhysics(fixedDt);
+                
+                {
+                    std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
+                    scene->UpdatePhysics(fixedDt);
+                }
+                
                 const auto physEnd = std::chrono::high_resolution_clock::now();
                 m_LastPhysicsStepMs = static_cast<float>(std::chrono::duration<double, std::milli>(physEnd - physStart).count());
                 stepped = true;
@@ -1737,15 +2003,11 @@ void Application::SimulationLoop() {
 
                 // Network broadcast of authoritative state (throttled)
                 if (m_networkManager) {
-                    if (kBroadcastInterval <= 0.0f) {
-                        // immediate broadcast every physics step
+                    broadcastAccumulator += fixedDt;
+                    if (broadcastAccumulator >= kBroadcastInterval) {
+                        broadcastAccumulator = 0.0f;
+                        std::shared_lock<std::shared_mutex> ecsReadLock(m_RegistryMutex);
                         m_networkManager->BroadcastState(scene->GetRegistry());
-                    } else {
-                        broadcastAccumulator += fixedDt;
-                        if (broadcastAccumulator >= kBroadcastInterval) {
-                            broadcastAccumulator = 0.0f;
-                            m_networkManager->BroadcastState(scene->GetRegistry());
-                        }
                     }
                 }
             } else {
@@ -1757,22 +2019,26 @@ void Application::SimulationLoop() {
             accumulator -= fixedDt;
             stepsThisFrame++;
 
-            // If we are doing multiple catch-up steps, yield briefly between them
-            // to allow the renderer thread to get a shared lock for a frame.
-            if (accumulator >= fixedDt && stepsThisFrame < maxStepsPerFrame) {
-                std::this_thread::sleep_for(std::chrono::nanoseconds(1));
-            }
+            // Yield briefly to allow the renderer thread to get a shared lock
+            std::this_thread::yield();
         }
 
-        // If we hit the step cap, discard the remaining time to avoid a permanent lag spiral.
-        // This causes "time dilation" (physics runs slow) but keeps the app responsive.
-        if (accumulator > fixedDt) {
+        // If we still have a lot of time left, cap it but don't reset to 0 unless we are really falling behind
+        if (accumulator > 0.5f) {
             accumulator = 0.0f;
         }
 
-        // Prevent 100% CPU usage and allow lock breathing room if we are caught up
+        // --- OPTIMIZED: Adaptive background sleep ---
+        // Prevent 100% CPU usage but be more aggressive when close to needing a step.
+        // This prevents the 15ms "background sleep" penalty on Windows.
         if (!stepped || accumulator < fixedDt) {
-            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            if (accumulator < fixedDt * 0.25f) {
+                // We are very caught up, sleep a bit to be nice to the OS
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            } else {
+                // We are close to needing a step, just yield to allow other threads to run
+                std::this_thread::yield();
+            }
         }
 
         const auto hzNow = std::chrono::high_resolution_clock::now();

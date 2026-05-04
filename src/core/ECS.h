@@ -129,14 +129,15 @@ public:
 
 class Registry {
 private:
-    Entity nextEntityId = 0;
+    std::atomic<Entity> nextEntityId{ 0 };
     std::queue<Entity> availableEntities;
     std::vector<bool> isAlive;  // Track which entities are currently alive to prevent double-free
     std::unordered_map<std::type_index, std::shared_ptr<IComponentArray>> componentArrays;
     mutable std::mutex componentArraysMutex;
     mutable std::mutex entityMutex;
 
-
+    Entity partitionMin = 0;
+    Entity partitionMax = 9999; // Default to the static scene loading
 
 public:
     template<typename T>
@@ -167,40 +168,94 @@ public:
         return isAlive[entity];
     }
 
+    void SetNetworkPartition(int peerId) {
+        if (peerId < 0 || peerId > 3) return;
+
+        std::lock_guard<std::mutex> lock(entityMutex);
+        // Reserve 0-9999 for deterministic static scene loads.
+        // Peers get blocks of 5000 starting at 10000.
+        partitionMin = 10000 + (peerId * 5000);
+        partitionMax = partitionMin + 4999;
+
+        // Fast-forward our local ID generator to our new block
+        if (nextEntityId < partitionMin) {
+            nextEntityId = partitionMin;
+        }
+
+        // Clear out any recycled IDs from the static partition so we don't accidentally reuse them
+        std::queue<Entity> emptyQueue;
+        std::swap(availableEntities, emptyQueue);
+    }
+
     Entity CreateEntity() {
         std::lock_guard<std::mutex> lock(entityMutex);
         if (!availableEntities.empty()) {
             Entity id = availableEntities.front();
             availableEntities.pop();
-            if (id >= isAlive.size()) {
-                isAlive.resize(id + 1, false);
-            }
+            if (id >= isAlive.size()) isAlive.resize(id + 1, false);
             isAlive[id] = true;
             return id;
         }
-        if (nextEntityId >= MAX_ENTITIES) {
-            throw std::runtime_error("Too many entities.");
+
+        // Ensure we don't bleed out of our assigned partition
+        if (nextEntityId > partitionMax || nextEntityId >= MAX_ENTITIES) {
+            throw std::runtime_error("Entity partition exhausted or MAX_ENTITIES reached.");
         }
+
         Entity id = nextEntityId++;
-        if (id >= isAlive.size()) {
-            isAlive.resize(id + 1, false);
-        }
+        if (id >= isAlive.size()) isAlive.resize(id + 1, false);
         isAlive[id] = true;
         return id;
     }
 
+    void CreateEntityExplicit(Entity id) {
+        std::lock_guard<std::mutex> lock(entityMutex);
+        if (id >= MAX_ENTITIES) {
+            throw std::runtime_error("Entity ID out of range.");
+        }
+        
+        if (id >= isAlive.size()) {
+            isAlive.resize(id + 1, false);
+        }
+        
+        if (isAlive[id]) {
+            // Already exists, just return or handle as update?
+            // For now, let's assume we are overriding or it's a conflict
+            return;
+        }
+
+        isAlive[id] = true;
+        if (id >= nextEntityId) {
+            nextEntityId = id + 1;
+        }
+        
+        // Remove from availableEntities if it was there
+        // (Inefficient but rare for explicit network sync)
+        std::queue<Entity> temp;
+        while (!availableEntities.empty()) {
+            Entity top = availableEntities.front();
+            availableEntities.pop();
+            if (top != id) temp.push(top);
+        }
+        availableEntities = std::move(temp);
+    }
+
     void DestroyEntity(Entity entity) {
-        // Prevent double-free: if entity is already dead, ignore
+        // Prevent double-free
         {
             std::lock_guard<std::mutex> entLock(entityMutex);
             if (entity >= isAlive.size() || !isAlive[entity]) {
                 return;
             }
             isAlive[entity] = false;
-            availableEntities.push(entity);
+
+            // --- MODIFIED: Only recycle IDs that belong to OUR partition ---
+            if (entity >= partitionMin && entity <= partitionMax) {
+                availableEntities.push(entity);
+            }
         }
 
-        // Snapshot component arrays under the component map lock, then call EntityDestroyed
+        // Snapshot component arrays and destroy...
         std::vector<std::shared_ptr<IComponentArray>> arrays;
         {
             std::lock_guard<std::mutex> lock(componentArraysMutex);
@@ -274,7 +329,8 @@ public:
     }
 
     Entity GetEntityCount() const {
-        std::lock_guard<std::mutex> lock(entityMutex);
-        return nextEntityId;
+        // nextEntityId is atomic, so we can safely read it without the entityMutex.
+        // This avoids millions of locks per second in high-frequency system loops.
+        return nextEntityId.load();
     }
 };

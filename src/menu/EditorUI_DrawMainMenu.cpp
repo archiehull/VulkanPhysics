@@ -1537,8 +1537,21 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
                     entityName += " [" + std::to_string(emitterCount) + " Emitters]";
                 }
 
+                // --- NEW: Ownership color coding ---
+                ImVec4 ownerColor(1.0f, 1.0f, 1.0f, 1.0f);
+                bool hasOwner = false;
+                if (registry.HasComponent<OwnershipComponent>(e)) {
+                    glm::vec4 ownCol = registry.GetComponent<OwnershipComponent>(e).GetOwnerColor();
+                    ownerColor = ImVec4(ownCol.r, ownCol.g, ownCol.b, 1.0f);
+                    hasOwner = true;
+                }
+
                 int popCount = 0;
-                if (isViewing) {
+                if (hasOwner) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ownerColor);
+                    popCount++;
+                }
+                else if (isViewing) {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 1.0f, 1.0f));
                     popCount++;
                 }

@@ -354,6 +354,10 @@ void Scene::DeleteEntity(Entity entity) {
         m_EnvironmentEntity = MAX_ENTITIES;
     }
 
+    if (m_EntityDeletedCallback) {
+        m_EntityDeletedCallback(entity);
+    }
+
     m_Registry.DestroyEntity(entity);
 
     if (linkedShadow != MAX_ENTITIES && linkedShadow != entity) {
@@ -427,8 +431,18 @@ void Scene::ToggleGlobalShadingMode() {
     std::cout << "Shading Mode Toggled: " << (globalShadingMode == 1 ? "Phong" : "Gouraud") << std::endl;
 }
 
-Entity Scene::AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable) {
-    Entity entity = m_Registry.CreateEntity();
+Entity Scene::AddObjectExplicit(Entity id, const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable) {
+    return AddObjectInternal(name, geometry, position, texturePath, isFlammable, id);
+}
+
+Entity Scene::AddObjectInternal(const std::string& name, std::shared_ptr<Geometry> geometry, const glm::vec3& position, const std::string& texturePath, bool isFlammable, Entity explicitId) {
+    Entity entity = explicitId;
+    if (entity == MAX_ENTITIES) {
+        entity = m_Registry.CreateEntity();
+    }
+    else {
+        m_Registry.CreateEntityExplicit(entity);
+    }
     m_EntityMap[name] = entity;
 
     m_Registry.AddComponent<NameComponent>(entity, { name });
@@ -709,7 +723,7 @@ void Scene::AddGeometry(const std::string& name, std::unique_ptr<Geometry> geome
     AddObjectInternal(name, std::move(geometry), position, "", false);
 }
 
-Entity Scene::AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable) {
+Entity Scene::AddModel(const std::string& name, const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale, const std::string& modelPath, const std::string& texturePath, bool isFlammable, Entity explicitId) {
     try {
         std::shared_ptr<Geometry> geometry;
         std::string ext = modelPath.substr(modelPath.find_last_of(".") + 1);
@@ -720,7 +734,7 @@ Entity Scene::AddModel(const std::string& name, const glm::vec3& position, const
             geometry = OBJLoader::Load(device, physicalDevice, modelPath);
         }
 
-        Entity entity = AddObjectInternal(name, geometry, position, texturePath, isFlammable);
+        Entity entity = AddObjectInternal(name, geometry, position, texturePath, isFlammable, explicitId);
         m_Registry.GetComponent<RenderComponent>(entity).geometryName = modelPath;
 
         auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
