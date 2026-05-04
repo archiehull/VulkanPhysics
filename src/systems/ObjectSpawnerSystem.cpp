@@ -510,9 +510,10 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     // --- NEW: Apply Owner-specific visual feedback ---
     if (registry.HasComponent<RenderComponent>(spawnedEntity)) {
         auto& render = registry.GetComponent<RenderComponent>(spawnedEntity);
-        render.useDebugOverlay = true;
-        render.debugOverlayColor = ownComp.GetOwnerColor();
-        render.debugOverlayColor.a = 1.0f; // SOLID COLOR as requested
+        render.useDebugOverlay = false;
+        render.useColorTint = true;
+        render.tintColor = ownComp.GetOwnerColor();
+        render.tintColor.a = 1.0f;
     }
 
     if (onObjectSpawned) {

@@ -226,9 +226,10 @@ void Application::Run() {
                         // Apply owner-specific visual feedback for remote spawns
                         if (reg.HasComponent<RenderComponent>(spawned)) {
                             auto& render = reg.GetComponent<RenderComponent>(spawned);
-                            render.useDebugOverlay = true;
-                            render.debugOverlayColor = OwnershipComponent{ ownType }.GetOwnerColor();
-                            render.debugOverlayColor.a = 1.0f;
+                            render.useDebugOverlay = false;
+                            render.useColorTint = true;
+                            render.tintColor = OwnershipComponent{ ownType }.GetOwnerColor();
+                            render.tintColor.a = 1.0f;
                         }
 
                         // Seed interpolation history so the object moves immediately

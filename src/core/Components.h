@@ -45,6 +45,8 @@ struct RenderComponent {
     std::string originalTexturePath;
     bool useDebugOverlay = false;
     glm::vec4 debugOverlayColor = glm::vec4(0.0f);
+    bool useColorTint = false;
+    glm::vec4 tintColor = glm::vec4(1.0f);
 
     Entity simpleShadowEntity = MAX_ENTITIES;
     float simpleShadowRadius = -1.0f;

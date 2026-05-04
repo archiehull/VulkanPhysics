@@ -125,6 +125,9 @@ void main() {
 
     // --- STANDARD LIGHTING ---
     vec4 texColor = texture(texSampler, fragUV);
+    if (pco.debugOverlay == 2) {
+        texColor.rgb *= pco.debugColor.rgb;
+    }
     vec3 lighting = vec3(0.0);
 
     float shadow = ShadowCalculation(fragPosLightSpace);

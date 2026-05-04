@@ -691,10 +691,11 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
                         // --- NEW: Ensure visual sync even if OwnershipComponent arrived late ---
                         if (registry.HasComponent<RenderComponent>(id) && ownershipArray->HasData(id)) {
                             auto& render = registry.GetComponent<RenderComponent>(id);
-                            if (!render.useDebugOverlay) {
-                                render.useDebugOverlay = true;
-                                render.debugOverlayColor = ownershipArray->GetData(id).GetOwnerColor();
-                                render.debugOverlayColor.a = 1.0f;
+                            if (!render.useColorTint) {
+                                render.useDebugOverlay = false;
+                                render.useColorTint = true;
+                                render.tintColor = ownershipArray->GetData(id).GetOwnerColor();
+                                render.tintColor.a = 1.0f;
                             }
                         }
                     }
