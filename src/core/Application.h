@@ -45,6 +45,12 @@ struct EntitySnapshot {
     // Collider state
     bool hasCollider = false;
     bool hasCollision = false;
+
+    // Animation state
+    bool hasPathAnimation = false;
+    float pathCurrentTime = 0.0f;
+    int pathPlaybackDirection = 1;
+    bool pathIsPlaying = false;
 };
 
 struct FrameSnapshot {
@@ -132,6 +138,7 @@ private:
     bool m_IsReplaying = false;
     int m_CurrentReplayFrame = 0;
     float m_LookaheadTimeframe = 5.0f;
+    Entity m_LookaheadInitialEntityCount = 0;
 
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 };

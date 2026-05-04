@@ -1668,6 +1668,15 @@ void Scene::UpdateVisuals(float deltaTime) {
     }
     for (auto& sys : m_Systems) {
         if (!sys->IsPhysics()) {
+            // --- NEW: BYPASS GPU SYSTEMS DURING LOOKAHEAD ---
+            if (m_IsLookaheadMode) {
+                std::string sysName = typeid(*sys).name();
+                if (sysName.find("ClothSystem") != std::string::npos ||
+                    sysName.find("ParticleUpdateSystem") != std::string::npos) {
+                    continue;
+                }
+            }
+
             const auto sStart = std::chrono::high_resolution_clock::now();
             sys->Update(*this, deltaTime);
             const auto sEnd = std::chrono::high_resolution_clock::now();
@@ -1677,18 +1686,14 @@ void Scene::UpdateVisuals(float deltaTime) {
         }
     }
 
+    // --- NEW: Skip rebuilding visual helpers (lines, arrows) during fast-forward ---
+    if (m_IsLookaheadMode) return;
+
     if (m_ShowSpringVisuals) {
         UpdateSpringVisuals();
     }
     else if (!m_SpringVisualEntitiesList.empty()) {
         ClearSpringVisuals();
-    }
-
-    if (m_ShowSpawnerVisuals) {
-        UpdateSpawnerVisuals();
-    }
-    else if (!m_SpawnerVisualEntitiesList.empty()) {
-        ClearSpawnerVisuals();
     }
 
     UpdatePathVisuals();

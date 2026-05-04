@@ -186,7 +186,9 @@ private:
     std::atomic<int> m_localPeerId{ -1 };
     std::atomic<int> m_peerCount{ 0 };
 
+    uint16_t m_basePort{ 27015 };
     uint16_t m_localPort{ 0 };
+
     bool m_debugLogging{ true };
     bool m_interpLogging{ false };
     bool m_spawnLogging{ false };

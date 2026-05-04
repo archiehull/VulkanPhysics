@@ -59,7 +59,7 @@ void NetworkManager::ConfigurePeer(int peerId, const std::string& ip, uint16_t p
 
 void NetworkManager::Restart() {
     Shutdown();
-    Startup(m_localPort);
+    Startup(m_basePort);
 }
 
 int NetworkManager::GetNextAvailableId() {
@@ -73,6 +73,8 @@ int NetworkManager::GetNextAvailableId() {
 
 uint16_t NetworkManager::Startup(uint16_t basePort) {
     if (m_isRunning.load()) return m_localPort;
+
+    m_basePort = basePort;
 
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -148,6 +150,10 @@ void NetworkManager::Shutdown() {
             p.isConnected = false;
             p.tcpBuffer.clear();
         }
+
+        m_peerCount.store(0);
+        m_localPeerId.store(-1);
+        PhysicsSystem::localPeerId = -1;
     }
 
     for (auto& pending : m_pendingConnections) {

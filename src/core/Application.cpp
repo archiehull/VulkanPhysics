@@ -46,6 +46,7 @@ namespace {
     constexpr bool kSceneDebug = false;
     constexpr bool kPerfDebug = false;
     constexpr bool kRuntimeDebug = false;
+    constexpr bool kReplayDebug = false;
     constexpr float kRuntimeLogIntervalSeconds = 1.0f;
     constexpr float kPerfLogIntervalSeconds = 1.0f;
     constexpr float kPerfHitchThresholdMs = 20.0f;
@@ -1288,24 +1289,176 @@ void Application::RecreateSwapChain() {
 void Application::GenerateLookahead(float timeframe) {
     if (!scene) return;
 
-    std::cout << "Generating lookahead for " << timeframe << " seconds..." << std::endl;
+    if (kReplayDebug) {
+        std::cout << "[Replay] Generating lookahead for " << timeframe << " seconds..." << std::endl;
+    }
     m_ReplayFrames.clear();
+
+    auto& registry = scene->GetRegistry();
+    m_LookaheadInitialEntityCount = registry.GetEntityCount();
+    Entity highestHijackedId = m_LookaheadInitialEntityCount;
+    int currentLocalId = PhysicsSystem::localPeerId;
+    if (kReplayDebug) {
+        std::cout << "[Replay] Local peer id at lookahead start: " << currentLocalId << std::endl;
+    }
+
+    std::vector<std::pair<Entity, ObjectOwnershipType>> originalOwners;
+    struct OriginalSpawnerState {
+        Entity e;
+        uint8_t autofireAuthority;
+        bool rotateAuthority;
+        bool isRunning;
+        float spawnTimer;
+        float runElapsedSeconds;
+        int spawnedThisRun;
+        int spawnedCount;
+    };
+    std::vector<OriginalSpawnerState> originalSpawners;
+
+    // 1. HIJACK INITIAL REMOTE ENTITIES & SPAWNERS
+    for (Entity e = 0; e < highestHijackedId; ++e) {
+        if (!registry.IsAlive(e)) continue;
+
+        if (registry.HasComponent<OwnershipComponent>(e)) {
+            auto& own = registry.GetComponent<OwnershipComponent>(e);
+            if (static_cast<int>(own.owner) != currentLocalId) {
+                originalOwners.push_back({ e, own.owner });
+                own.owner = static_cast<ObjectOwnershipType>(currentLocalId);
+            }
+        }
+
+        if (registry.HasComponent<ObjectSpawnerComponent>(e)) {
+            auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+            originalSpawners.push_back({
+                e,
+                spawner.autofireAuthority,
+                spawner.rotateAuthority,
+                spawner.isRunning,
+                spawner.spawnTimer,
+                spawner.runElapsedSeconds,
+                spawner.spawnedThisRun,
+                spawner.spawnedCount
+            });
+            if (spawner.autofireAuthority != static_cast<uint8_t>(currentLocalId) || spawner.rotateAuthority) {
+                spawner.autofireAuthority = static_cast<uint8_t>(currentLocalId);
+                spawner.rotateAuthority = false;
+            }
+        }
+    }
+
+    if (kReplayDebug) {
+        int spawnerCount = 0;
+        int alwaysOnCount = 0;
+        for (Entity e = 0; e < highestHijackedId; ++e) {
+            if (!registry.IsAlive(e) || !registry.HasComponent<ObjectSpawnerComponent>(e)) continue;
+            ++spawnerCount;
+            if (registry.GetComponent<ObjectSpawnerComponent>(e).alwaysOn) {
+                ++alwaysOnCount;
+            }
+        }
+        std::cout << "[Replay] Spawners at lookahead start: " << spawnerCount
+                  << " (alwaysOn=" << alwaysOnCount << ")" << std::endl;
+    }
+
+    // 2. CACHE GEOMETRY TO PREVENT MASSIVE VULKAN ALLOCATIONS DURING LOOP
+    std::shared_ptr<Geometry> cachedSphere = std::shared_ptr<Geometry>(GeometryGenerator::CreateSphere(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 16, 32, 0.5f));
+    std::shared_ptr<Geometry> cachedCube = std::shared_ptr<Geometry>(GeometryGenerator::CreateCube(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice()));
+    std::shared_ptr<Geometry> cachedCapsule = std::shared_ptr<Geometry>(GeometryGenerator::CreateCapsule(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 0.2f, 1.0f, 32, 16));
+
+    auto originalSpawnCallback = ObjectSpawnerSystem::onObjectSpawned;
+    ObjectSpawnerSystem::onObjectSpawned = [this, cachedSphere, cachedCube, cachedCapsule](const ObjectSpawnerSystem::SpawnEvent& ev) {
+        auto& reg = scene->GetRegistry();
+
+        std::shared_ptr<Geometry> geo = cachedSphere;
+        if (ev.geometryType == "Cube") geo = cachedCube;
+        else if (ev.geometryType == "Capsule" || ev.geometryType == "Smoke Grenade") geo = cachedCapsule;
+
+        if (reg.IsAlive(ev.entityId)) {
+            if (reg.HasComponent<RenderComponent>(ev.entityId)) {
+                auto& render = reg.GetComponent<RenderComponent>(ev.entityId);
+                if (!render.geometry) render.geometry = geo;
+            }
+        }
+        else {
+            Entity spawned = scene->AddObjectExplicit(
+                ev.entityId,
+                "ReplaySpawn_" + std::to_string(ev.entityId),
+                geo,
+                ev.position,
+                ev.texturePath,
+                false
+            );
+
+            if (spawned != MAX_ENTITIES) {
+                auto& tr = reg.GetComponent<TransformComponent>(spawned);
+                tr.scale = ev.scale;
+                tr.UpdateMatrix();
+
+                if (!reg.HasComponent<PhysicsComponent>(spawned)) reg.AddComponent<PhysicsComponent>(spawned, PhysicsComponent{});
+                auto& p = reg.GetComponent<PhysicsComponent>(spawned);
+                p.isStatic = false;
+                p.SetMass(ev.mass);
+                p.velocity = ev.velocity;
+                p.angularVelocity = ev.angularVelocity;
+
+                if (!reg.HasComponent<ColliderComponent>(spawned)) reg.AddComponent<ColliderComponent>(spawned, ColliderComponent{});
+                auto& col = reg.GetComponent<ColliderComponent>(spawned);
+                col.hasCollision = true;
+                if (ev.geometryType == "Sphere") { col.type = 0; col.radius = std::max({ ev.scale.x, ev.scale.y, ev.scale.z }) * 0.5f; }
+                else if (ev.geometryType == "Capsule" || ev.geometryType == "Smoke Grenade") { col.type = 2; col.radius = 0.2f * ev.scale.x; col.height = 1.0f * ev.scale.y; }
+
+                auto ownType = static_cast<ObjectOwnershipType>(ev.ownerId);
+                reg.AddComponent<OwnershipComponent>(spawned, { ownType });
+
+                if (reg.HasComponent<RenderComponent>(spawned)) {
+                    auto& render = reg.GetComponent<RenderComponent>(spawned);
+                    render.useDebugOverlay = false;
+                    render.useColorTint = true;
+                    render.tintColor = OwnershipComponent{ ownType }.GetOwnerColor();
+                    render.tintColor.a = 1.0f;
+                }
+            }
+        }
+        };
 
     const float stepTime = 1.0f / 60.0f;
     const int steps = static_cast<int>(timeframe / stepTime);
 
-    // Save original state to restore if needed, but since we are applying the lookahead,
-    // the user will scrub back if they want the past.
     scene->SetLookaheadMode(true);
 
     for (int i = 0; i < steps; ++i) {
+        // 3. FULL SCENE UPDATE: Ticks Animations, Orbits, Spawners, and Physics
         scene->Update(stepTime);
 
+        const Entity currentEntityCount = registry.GetEntityCount();
+
+        // 4. HIJACK NEWLY SPAWNED ENTITIES
+        for (Entity e = highestHijackedId; e < currentEntityCount; ++e) {
+            if (!registry.IsAlive(e)) continue;
+
+            if (registry.HasComponent<OwnershipComponent>(e)) {
+                auto& own = registry.GetComponent<OwnershipComponent>(e);
+                if (static_cast<int>(own.owner) != currentLocalId) {
+                    originalOwners.push_back({ e, own.owner });
+                    own.owner = static_cast<ObjectOwnershipType>(currentLocalId);
+                }
+            }
+
+            if (registry.HasComponent<ObjectSpawnerComponent>(e)) {
+                auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+                if (spawner.autofireAuthority != currentLocalId || spawner.rotateAuthority) {
+                    originalSpawners.push_back({ e, spawner.autofireAuthority, spawner.rotateAuthority });
+                    spawner.autofireAuthority = static_cast<uint8_t>(currentLocalId);
+                    spawner.rotateAuthority = false;
+                }
+            }
+        }
+        highestHijackedId = currentEntityCount;
+
+        // 5. RECORD SNAPSHOT
         FrameSnapshot snapshot;
-        auto& registry = scene->GetRegistry();
-        const Entity entityCount = registry.GetEntityCount();
-        for (Entity e = 0; e < entityCount; ++e) {
-            if (registry.HasComponent<TransformComponent>(e)) {
+        for (Entity e = 0; e < currentEntityCount; ++e) {
+            if (registry.IsAlive(e) && registry.HasComponent<TransformComponent>(e)) {
                 EntitySnapshot eSnap;
                 auto& t = registry.GetComponent<TransformComponent>(e);
                 eSnap.position = t.position;
@@ -1313,13 +1466,14 @@ void Application::GenerateLookahead(float timeframe) {
                 eSnap.scale = t.scale;
                 eSnap.matrix = t.matrix;
                 eSnap.visible = registry.HasComponent<RenderComponent>(e) ? registry.GetComponent<RenderComponent>(e).visible : true;
-                
+
                 if (registry.HasComponent<LightComponent>(e)) {
                     eSnap.lightIntensity = registry.GetComponent<LightComponent>(e).intensity;
-                } else {
+                }
+                else {
                     eSnap.lightIntensity = 0.0f;
                 }
-                
+
                 if (registry.HasComponent<PhysicsComponent>(e)) {
                     eSnap.hasPhysics = true;
                     auto& phys = registry.GetComponent<PhysicsComponent>(e);
@@ -1330,10 +1484,18 @@ void Application::GenerateLookahead(float timeframe) {
                     eSnap.forceAccumulator = phys.forceAccumulator;
                     eSnap.torqueAccumulator = phys.torqueAccumulator;
                 }
-                
+
                 if (registry.HasComponent<ColliderComponent>(e)) {
                     eSnap.hasCollider = true;
                     eSnap.hasCollision = registry.GetComponent<ColliderComponent>(e).hasCollision;
+                }
+
+                if (registry.HasComponent<PathAnimationComponent>(e)) {
+                    eSnap.hasPathAnimation = true;
+                    auto& path = registry.GetComponent<PathAnimationComponent>(e);
+                    eSnap.pathCurrentTime = path.currentTime;
+                    eSnap.pathPlaybackDirection = path.playbackDirection;
+                    eSnap.pathIsPlaying = path.isPlaying;
                 }
 
                 snapshot.entities[e] = eSnap;
@@ -1343,11 +1505,35 @@ void Application::GenerateLookahead(float timeframe) {
     }
 
     scene->SetLookaheadMode(false);
-    
-    // Pass the generated frames count to UI
+
+    // 6. RESTORE ENGINE STATE
+    ObjectSpawnerSystem::onObjectSpawned = originalSpawnCallback;
+
+    for (const auto& pair : originalOwners) {
+        if (registry.IsAlive(pair.first) && registry.HasComponent<OwnershipComponent>(pair.first)) {
+            registry.GetComponent<OwnershipComponent>(pair.first).owner = pair.second;
+        }
+    }
+
+    for (const auto& state : originalSpawners) {
+        if (state.e >= m_LookaheadInitialEntityCount) continue;
+        if (registry.IsAlive(state.e) && registry.HasComponent<ObjectSpawnerComponent>(state.e)) {
+            auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(state.e);
+            spawner.autofireAuthority = state.autofireAuthority;
+            spawner.rotateAuthority = state.rotateAuthority;
+            spawner.isRunning = state.isRunning;
+            spawner.spawnTimer = state.spawnTimer;
+            spawner.runElapsedSeconds = state.runElapsedSeconds;
+            spawner.spawnedThisRun = state.spawnedThisRun;
+            spawner.spawnedCount = state.spawnedCount;
+        }
+    }
+
     editorUI->SetMaxReplayFrames(static_cast<int>(m_ReplayFrames.size()));
     editorUI->SetReplayFrame(0);
-    std::cout << "Lookahead generation complete. " << m_ReplayFrames.size() << " frames recorded." << std::endl;
+    if (kReplayDebug) {
+        std::cout << "[Replay] Lookahead generation complete. " << m_ReplayFrames.size() << " frames recorded." << std::endl;
+    }
 }
 
 void Application::MainLoop() {
@@ -1363,6 +1549,7 @@ void Application::MainLoop() {
     int perfHitchCount = 0;
     float runtimeLogTimer = 0.0f;
     uint64_t runtimeFrameCount = 0;
+    bool wasReplaying = false;
 
     while (!window->ShouldClose()) {
         if (kRuntimeDebug && runtimeFrameCount == 0) {
@@ -1661,72 +1848,135 @@ void Application::MainLoop() {
 
         // --- Replay Mode Override ---
         if (editorUI->ConsumeGenerateLookaheadRequest(m_LookaheadTimeframe)) {
+            int lookaheadLocalId = PhysicsSystem::localPeerId;
+            if (m_networkManager) {
+                lookaheadLocalId = m_networkManager->GetLocalPeerId();
+            }
+            if (kReplayDebug) {
+                std::cout << "[Replay] Cached local peer id for lookahead: " << lookaheadLocalId << std::endl;
+            }
+
+            if (m_networkManager) {
+                std::cout << "[Replay] Shutting down network BEFORE lookahead generation...\n";
+                m_networkManager->Shutdown();
+            }
+
+            const int priorLocalId = PhysicsSystem::localPeerId;
+            if (lookaheadLocalId != -1) {
+                PhysicsSystem::localPeerId = lookaheadLocalId;
+            }
+
             std::unique_lock<std::shared_mutex> lookaheadLock(m_RegistryMutex);
             GenerateLookahead(m_LookaheadTimeframe);
+            PhysicsSystem::localPeerId = priorLocalId;
             editorUI->SetIsReplaying(true);
         }
 
         if (editorUI->IsReplaying()) {
+            if (!wasReplaying) {
+                if (m_networkManager && m_networkManager->IsRunning()) {
+                    std::cout << "[Replay] Entering Lookahead: Disconnecting network...\n";
+                    m_networkManager->Shutdown();
+                }
+                wasReplaying = true;
+            }
+
             m_IsReplaying = true;
             m_CurrentReplayFrame = editorUI->GetReplayFrame();
 
-            std::unique_lock<std::shared_mutex> replayLock(m_RegistryMutex);
-            if (!m_ReplayFrames.empty() && m_CurrentReplayFrame >= 0 && m_CurrentReplayFrame < m_ReplayFrames.size()) {
-                const auto& snapshot = m_ReplayFrames[m_CurrentReplayFrame];
-                auto& registry = scene->GetRegistry();
-                const Entity entityCount = registry.GetEntityCount();
-                for (Entity e = 0; e < entityCount; ++e) {
-                    if (registry.HasComponent<TransformComponent>(e)) {
-                        auto it = snapshot.entities.find(e);
-                        if (it != snapshot.entities.end()) {
-                            auto& t = registry.GetComponent<TransformComponent>(e);
-                            t.position = it->second.position;
-                            t.rotation = it->second.rotation;
-                            t.scale = it->second.scale;
-                            t.matrix = it->second.matrix;
 
-                            if (registry.HasComponent<LightComponent>(e)) {
-                                registry.GetComponent<LightComponent>(e).intensity = it->second.lightIntensity;
+            {
+            std::unique_lock<std::shared_mutex> replayLock(m_RegistryMutex);
+                if (!m_ReplayFrames.empty() && m_CurrentReplayFrame >= 0 && m_CurrentReplayFrame < m_ReplayFrames.size()) {
+                    const auto& snapshot = m_ReplayFrames[m_CurrentReplayFrame];
+                    auto& registry = scene->GetRegistry();
+                    const Entity entityCount = registry.GetEntityCount();
+
+                    for (Entity e = 0; e < entityCount; ++e) {
+                        if (registry.HasComponent<TransformComponent>(e)) {
+                            auto it = snapshot.entities.find(e);
+                            if (it != snapshot.entities.end()) {
+                                auto& t = registry.GetComponent<TransformComponent>(e);
+                                t.position = it->second.position;
+                                t.rotation = it->second.rotation;
+                                t.scale = it->second.scale;
+                                t.matrix = it->second.matrix;
+
+                                if (registry.HasComponent<LightComponent>(e)) {
+                                    registry.GetComponent<LightComponent>(e).intensity = it->second.lightIntensity;
+                                }
+                                if (it->second.hasPhysics && registry.HasComponent<PhysicsComponent>(e)) {
+                                    auto& phys = registry.GetComponent<PhysicsComponent>(e);
+                                    phys.velocity = it->second.velocity;
+                                    phys.angularVelocity = it->second.angularVelocity;
+                                    phys.orientation = it->second.orientation;
+                                    phys.isStatic = it->second.isStatic;
+                                    phys.forceAccumulator = it->second.forceAccumulator;
+                                    phys.torqueAccumulator = it->second.torqueAccumulator;
+                                }
+
+                                if (registry.HasComponent<RenderComponent>(e)) {
+                                    registry.GetComponent<RenderComponent>(e).visible = it->second.visible;
+                                }
+                                if (it->second.hasCollider && registry.HasComponent<ColliderComponent>(e)) {
+                                    registry.GetComponent<ColliderComponent>(e).hasCollision = it->second.hasCollision;
+                                }
+                                if (it->second.hasPathAnimation && registry.HasComponent<PathAnimationComponent>(e)) {
+                                    auto& path = registry.GetComponent<PathAnimationComponent>(e);
+                                    path.currentTime = it->second.pathCurrentTime;
+                                    path.playbackDirection = it->second.pathPlaybackDirection;
+                                    path.isPlaying = it->second.pathIsPlaying;
+                                }
                             }
-                            if (it->second.hasPhysics && registry.HasComponent<PhysicsComponent>(e)) {
-                                auto& phys = registry.GetComponent<PhysicsComponent>(e);
-                                phys.velocity = it->second.velocity;
-                                phys.angularVelocity = it->second.angularVelocity;
-                                phys.orientation = it->second.orientation;
-                                phys.isStatic = it->second.isStatic;
-                                phys.forceAccumulator = it->second.forceAccumulator;
-                                phys.torqueAccumulator = it->second.torqueAccumulator;
-                            }
-                            
-                            if (registry.HasComponent<RenderComponent>(e)) {
-                                registry.GetComponent<RenderComponent>(e).visible = it->second.visible;
-                            }
-                            if (it->second.hasCollider && registry.HasComponent<ColliderComponent>(e)) {
-                                registry.GetComponent<ColliderComponent>(e).hasCollision = it->second.hasCollision;
-                            }
-                        } else {
-                            if (registry.HasComponent<RenderComponent>(e)) {
-                                registry.GetComponent<RenderComponent>(e).visible = false;
-                            }
-                            if (registry.HasComponent<LightComponent>(e)) {
-                                registry.GetComponent<LightComponent>(e).intensity = 0.0f;
-                            }
-                            if (registry.HasComponent<ColliderComponent>(e)) {
-                                registry.GetComponent<ColliderComponent>(e).hasCollision = false;
-                            }
-                            if (registry.HasComponent<PhysicsComponent>(e)) {
-                                auto& phys = registry.GetComponent<PhysicsComponent>(e);
-                                phys.isStatic = true;
-                                phys.velocity = glm::vec3(0.0f);
-                                phys.angularVelocity = glm::vec3(0.0f);
+                            else {
+                                if (registry.HasComponent<RenderComponent>(e)) {
+                                    registry.GetComponent<RenderComponent>(e).visible = false;
+                                }
+                                if (registry.HasComponent<LightComponent>(e)) {
+                                    registry.GetComponent<LightComponent>(e).intensity = 0.0f;
+                                }
+                                if (registry.HasComponent<ColliderComponent>(e)) {
+                                    registry.GetComponent<ColliderComponent>(e).hasCollision = false;
+                                }
+                                if (registry.HasComponent<PhysicsComponent>(e)) {
+                                    auto& phys = registry.GetComponent<PhysicsComponent>(e);
+                                    phys.isStatic = true;
+                                    phys.velocity = glm::vec3(0.0f);
+                                    phys.angularVelocity = glm::vec3(0.0f);
+                                }
                             }
                         }
                     }
                 }
             }
             PhysicsSystem::simulationPaused = true;
-            // Removed scene->Update(simDeltaTime) as it runs in simulation loop
+
+            {
+                std::unique_lock<std::shared_mutex> visualLock(m_RegistryMutex);
+                scene->UpdateVisuals(0.0f);
+            }
+
         } else {
+            if (wasReplaying) {
+                std::cout << "[Replay] Exiting Lookahead: Reconnecting to network...\n";
+
+                // Delete entities that were spawned during lookahead simulation
+                if (scene && m_LookaheadInitialEntityCount > 0) {
+                    auto& reg = scene->GetRegistry();
+                    const Entity finalCount = reg.GetEntityCount();
+                    for (Entity e = m_LookaheadInitialEntityCount; e < finalCount; ++e) {
+                        if (reg.IsAlive(e)) scene->DeleteEntity(e);
+                    }
+                    m_LookaheadInitialEntityCount = 0;
+                }
+
+                if (m_networkManager) {
+                    m_networkManager->ClearHistory();
+                    // Restart() calls Shutdown() then Startup() using the cached base port
+                    m_networkManager->Restart();
+                }
+                wasReplaying = false;
+            }
             m_IsReplaying = false;
             PhysicsSystem::simulationPaused = false;
             

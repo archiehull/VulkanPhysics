@@ -5,11 +5,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <iostream>
 #include <random>
 #include <vector>
 
 namespace {
     std::vector<Entity> g_TimedSpawnedEntities;
+    constexpr bool kSpawnerDebug = false;
 
     char NormalizeSpawnerGroup(const std::string& group) {
         if (group.empty()) return 'A';
@@ -54,6 +56,23 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
     auto spawnerArray = registry.GetComponentArray<ObjectSpawnerComponent>();
     auto transformArray = registry.GetComponentArray<TransformComponent>();
 
+    const int localId = PhysicsSystem::localPeerId;
+    if (kSpawnerDebug && localId == -1 && scene.IsLookaheadMode()) {
+        static bool loggedMissingLocalId = false;
+        if (!loggedMissingLocalId) {
+            int spawnerCount = 0;
+            const Entity count = registry.GetEntityCount();
+            for (Entity e = 0; e < count; ++e) {
+                if (spawnerArray->HasData(e)) {
+                    ++spawnerCount;
+                }
+            }
+            std::cout << "[Spawner] Lookahead active but local peer id is -1. Spawners skipped. Count="
+                      << spawnerCount << std::endl;
+            loggedMissingLocalId = true;
+        }
+    }
+
     if (!g_TimedSpawnedEntities.empty()) {
         const Entity currentCount = registry.GetEntityCount();
         g_TimedSpawnedEntities.erase(
@@ -94,7 +113,6 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
         auto& spawner = spawnerArray->GetData(e);
         auto& transform = transformArray->GetData(e);
 
-        int localId = PhysicsSystem::localPeerId;
         if (localId == -1) continue; // Waiting for network handshake, don't spawn yet!
 
         const bool spawnerIsOwned = registry.HasComponent<OwnershipComponent>(e);
