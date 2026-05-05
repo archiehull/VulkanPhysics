@@ -106,6 +106,7 @@ namespace {
         bool hasStepSize = false;
         float stepSize = 0.0166f;
         int stepCount = 0;
+        bool resetScene = false;
 
         std::vector<std::pair<uint32_t, uint8_t>> spawnerAuthOverrides;
         std::vector<std::pair<uint32_t, uint8_t>> spawnerOwnerOverrides;
@@ -154,6 +155,9 @@ namespace {
                 }
                 else if (key == "step" || key == "steps") {
                     state.stepCount = std::max(0, std::stoi(value));
+                }
+                else if (key == "resetscene") {
+                    state.resetScene = ParseBool(value);
                 }
                 else if (key == "spawnerauth") {
                     std::stringstream valSS(value);
@@ -274,9 +278,8 @@ void Application::Run() {
     m_networkManager->SetReliableEventCallback([this](NetworkEventType type, const std::string& payload, uint32_t target) {
         if (type == NetworkEventType::SceneLoad) {
             if (payload == currentScenePath) {
-                return; // Ignore the request, we are already in this scene
+                return; // Ignore join-broadcast duplicates (all existing peers send this to a new joiner)
             }
-
             std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
             m_TaskQueue.push_back([this, payload]() {
                 LoadScene(payload, false);
@@ -838,6 +841,12 @@ void Application::ReloadCurrentScene() {
 
 void Application::ApplyRuntimeControlPayload(const std::string& payload) {
     RuntimeControlState state = ParseRuntimeControlPayload(payload);
+
+    if (state.resetScene) {
+        ReloadCurrentScene();
+        return; // Scene reload resets all ECS state; skip applying other overrides on top of it
+    }
+
     if (state.hasPaused) {
         editorUI->SetPaused(state.paused);
     }
@@ -864,7 +873,7 @@ void Application::ApplyRuntimeControlPayload(const std::string& payload) {
         }
     }
 
-    if (scene && (!state.spawnerAuthOverrides.empty() || !state.spawnerOwnerOverrides.empty())) {
+    if (scene && (!state.spawnerAuthOverrides.empty() || !state.spawnerOwnerOverrides.empty() || !state.spawnerRotOverrides.empty())) {
         std::unique_lock<std::shared_mutex> lock(m_RegistryMutex);
         auto& reg = scene->GetRegistry();
         int localId = m_networkManager ? m_networkManager->GetLocalPeerId() : -1;
@@ -905,7 +914,11 @@ void Application::ApplyRuntimeControlPayload(const std::string& payload) {
         for (const auto& rot : state.spawnerRotOverrides) {
             Entity e = static_cast<Entity>(rot.first);
             if (reg.IsAlive(e) && reg.HasComponent<ObjectSpawnerComponent>(e)) {
-                reg.GetComponent<ObjectSpawnerComponent>(e).rotateAuthority = rot.second;
+                auto& spawner = reg.GetComponent<ObjectSpawnerComponent>(e);
+                spawner.rotateAuthority = rot.second;
+                // Sync the spawn timer phase so all peers start their rotation
+                // clock from zero at the same moment, eliminating initial phase drift.
+                if (rot.second) spawner.spawnTimer = 0.0f;
             }
         }
     }
@@ -1929,6 +1942,14 @@ void Application::MainLoop() {
                     if (hasRot) rotStream << ",";
                     rotStream << req.entity << ":" << (req.newRotate ? 1 : 0);
                     hasRot = true;
+                    // Mirror the same timer reset that remote peers will apply,
+                    // so the peer that toggled the checkbox starts in sync with them.
+                    if (req.newRotate && scene) {
+                        auto& reg = scene->GetRegistry();
+                        if (reg.HasComponent<ObjectSpawnerComponent>(req.entity)) {
+                            reg.GetComponent<ObjectSpawnerComponent>(req.entity).spawnTimer = 0.0f;
+                        }
+                    }
                 }
             }
 
@@ -2101,6 +2122,9 @@ void Application::MainLoop() {
         // 1. Handle Restart
         if (editorUI->ConsumeRestartRequest()) {
             ReloadCurrentScene();
+            if (m_networkManager && m_networkManager->IsRunning()) {
+                m_networkManager->SendReliableEvent(NetworkEventType::RuntimeControl, "resetscene=1;");
+            }
         }
 
         std::string selectedCam = editorUI->ConsumeCameraSwitchRequest();
@@ -2611,6 +2635,11 @@ void Application::ProcessInput() {
         }
         if (inputManager->IsActionJustPressed(InputAction::ResetEnvironment)) {
             needsReload = true;
+            // Broadcast reset to peers via RuntimeControl so the same-path SceneLoad guard
+            // doesn't silently drop it (all existing peers already have this scene loaded).
+            if (m_networkManager && m_networkManager->IsRunning()) {
+                m_networkManager->SendReliableEvent(NetworkEventType::RuntimeControl, "resetscene=1;");
+            }
         }
 
         if (inputManager->IsActionJustPressed(InputAction::ToggleNoclip)) {

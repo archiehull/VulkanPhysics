@@ -195,7 +195,7 @@ private:
     uint16_t m_basePort{ 27015 };
     uint16_t m_localPort{ 0 };
 
-    bool m_debugLogging{ true };
+    bool m_debugLogging{ false };
     bool m_interpLogging{ false };
     bool m_spawnLogging{ false };
 

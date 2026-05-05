@@ -11,7 +11,10 @@
 
 namespace {
     std::vector<Entity> g_TimedSpawnedEntities;
-    constexpr bool kSpawnerDebug = false;
+    constexpr bool kSpawnerDebug = true;
+    // Set to true to see per-shot authority/ownership decisions in the console.
+    // Flip back to false once the firing/ownership bugs are resolved.
+    constexpr bool kSpawnerFireDebug = true;
 
     char NormalizeSpawnerGroup(const std::string& group) {
         if (group.empty()) return 'A';
@@ -187,35 +190,79 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
 
             spawner.spawnTimer -= interval;
 
+            if (kSpawnerFireDebug) {
+                std::string dbgName = registry.HasComponent<NameComponent>(e)
+                    ? registry.GetComponent<NameComponent>(e).name : "?";
+                std::cout << "[SpawnerFire] Spawner='" << dbgName << "'"
+                    << " entity=" << e
+                    << " localId=" << localId
+                    << " owned=" << spawnerIsOwned
+                    << " autofireAuth=" << (int)spawner.autofireAuthority
+                    << " rotateAuth=" << spawner.rotateAuthority
+                    << " alwaysOn=" << spawner.alwaysOn
+                    << " assignedOwner=" << (int)spawner.assignedOwner
+                    << " nextSeqOwner=" << (int)spawner.nextSequentialOwner
+                    << " activePeers=["
+                    << PhysicsSystem::activePeers[0] << PhysicsSystem::activePeers[1]
+                    << PhysicsSystem::activePeers[2] << PhysicsSystem::activePeers[3] << "]"
+                    << std::endl;
+            }
+
             // For unowned spawners, only the authority peer fires to avoid duplicates.
             // All peers run this loop so their timers and authority counters stay in sync.
             if (!spawnerIsOwned) {
-                if (localId == static_cast<int>(spawner.autofireAuthority)) {
+                const bool willFire = (localId == static_cast<int>(spawner.autofireAuthority));
+                if (kSpawnerFireDebug) {
+                    std::cout << "[SpawnerFire]   Unowned: localId=" << localId
+                        << " auth=" << (int)spawner.autofireAuthority
+                        << " -> " << (willFire ? "FIRE" : "skip") << std::endl;
+                }
+                if (willFire) {
                     SpawnObjectFromSpawner(scene, e);
                 }
-                // SAFEGUARD: Only rotate authority if the spawner is globally synced (alwaysOn).
-                // If it was triggered manually via the UI, local timers will desync and cause a 3-turn silence.
-                if (spawner.rotateAuthority && spawner.alwaysOn) {
+                // Always advance sequential owner before any early-exit so the
+                // counter stays in sync regardless of whether rotateAuthority is on.
+                if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
+                    const uint8_t oldSeq = spawner.nextSequentialOwner;
+                    for (int i = 0; i < 4; ++i) {
+                        spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
+                        if (PhysicsSystem::activePeers[spawner.nextSequentialOwner]) break;
+                    }
+                    if (kSpawnerFireDebug) {
+                        std::cout << "[SpawnerFire]   SeqOwner (unowned): " << (int)oldSeq
+                            << " -> " << (int)spawner.nextSequentialOwner << std::endl;
+                    }
+                }
+                if (spawner.rotateAuthority) {
+                    const uint8_t oldAuth = spawner.autofireAuthority;
                     for (int i = 0; i < 4; ++i) {
                         spawner.autofireAuthority = (spawner.autofireAuthority + 1) % 4;
                         if (PhysicsSystem::activePeers[spawner.autofireAuthority]) break;
                     }
+                    if (kSpawnerFireDebug) {
+                        std::cout << "[SpawnerFire]   RotateAuth: " << (int)oldAuth
+                            << " -> " << (int)spawner.autofireAuthority << std::endl;
+                    }
+                    // Preserve leftover timer to avoid cumulative delay/jitter across rotations,
+                    // while the break below still prevents burst spawns in a single frame.
+                    break;
                 }
-                // NEW: Advance sequential owner in lockstep for everyone
+            }
+            else {
+                if (kSpawnerFireDebug) {
+                    std::cout << "[SpawnerFire]   Owned: p" << localId << " fires (owner always fires)" << std::endl;
+                }
+                SpawnObjectFromSpawner(scene, e);
+                // NEW: Advance sequential owner in lockstep for the owner
                 if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
+                    const uint8_t oldSeq = spawner.nextSequentialOwner;
                     for (int i = 0; i < 4; ++i) {
                         spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
                         if (PhysicsSystem::activePeers[spawner.nextSequentialOwner]) break;
                     }
-                }
-            }
-            else {
-                SpawnObjectFromSpawner(scene, e);
-                // NEW: Advance sequential owner in lockstep for the owner
-                if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
-                    for (int i = 0; i < 4; ++i) {
-                        spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
-                        if (PhysicsSystem::activePeers[spawner.nextSequentialOwner]) break;
+                    if (kSpawnerFireDebug) {
+                        std::cout << "[SpawnerFire]   SeqOwner (owned): " << (int)oldSeq
+                            << " -> " << (int)spawner.nextSequentialOwner << std::endl;
                     }
                 }
             }
@@ -538,25 +585,43 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
         // SEQUENTIAL mode: use nextSequentialOwner (advancement is now handled externally)
         objectOwner = spawner.nextSequentialOwner;
+        if (kSpawnerFireDebug) {
+            std::cout << "[SpawnerSpawn] SEQUENTIAL -> using nextSeqOwner=" << (int)objectOwner << std::endl;
+        }
     }
     else if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_LOCAL) {
         // LOCAL mode: Use the ID of the peer that is currently running the simulation
         int localId = PhysicsSystem::localPeerId;
 
         if (localId == -1 && registry.HasComponent<OwnershipComponent>(spawnerEntity)) {
-            // If we're still connecting but the spawner already has an assigned owner, 
-            // use that. This prevents objects from being "orphaned" to Peer 0 
+            // If we're still connecting but the spawner already has an assigned owner,
+            // use that. This prevents objects from being "orphaned" to Peer 0
             // before the local peer ID handshake completes.
             objectOwner = static_cast<uint8_t>(registry.GetComponent<OwnershipComponent>(spawnerEntity).GetOwnerIndex());
         }
         else {
             objectOwner = static_cast<uint8_t>(localId == -1 ? 0 : localId);
         }
+        if (kSpawnerFireDebug) {
+            std::cout << "[SpawnerSpawn] LOCAL -> objectOwner=" << (int)objectOwner << std::endl;
+        }
+    }
+    else {
+        if (kSpawnerFireDebug) {
+            std::cout << "[SpawnerSpawn] FIXED -> objectOwner=" << (int)objectOwner << std::endl;
+        }
     }
 
     ObjectOwnershipType ownerType = static_cast<ObjectOwnershipType>(std::min(objectOwner, (uint8_t)3));
     OwnershipComponent ownComp{ ownerType };
     registry.AddComponent<OwnershipComponent>(spawnedEntity, ownComp);
+
+    if (kSpawnerFireDebug) {
+        std::cout << "[SpawnerSpawn] entity=" << spawnedEntity
+            << " name=" << spawnedName
+            << " finalOwner=" << (int)ownerType
+            << " firedBy=p" << PhysicsSystem::localPeerId << std::endl;
+    }
     
     //std::cout << "[ObjectSpawnerSystem] Spawned Entity: " << spawnedEntity << " (" << geometryType << ") Owner: " << (int)ownerType << " Name: " << spawnedName << std::endl;
 

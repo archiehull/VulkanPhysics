@@ -122,15 +122,18 @@ uint16_t NetworkManager::Startup(uint16_t basePort) {
     if (m_localPort == basePort) {
         m_localPeerId = 0;
         PhysicsSystem::localPeerId = 0;
-        if (m_debugLogging) std::cout << "[NetworkManager] Bound to base port. Identifying as Peer 0.\n";
+        if (m_debugLogging){
+            std::cout << "[NetworkManager] Bound to base port. Identifying as Peer 0.\n";
+        }
     }
     else {
         m_localPeerId = -1;
         PhysicsSystem::localPeerId = -1;
         m_startupTime = std::chrono::steady_clock::now();
 
-        if (m_debugLogging) std::cout << "[NetworkManager] Bound to port " << m_localPort << ". Sweeping for mesh...\n";
-
+        if (m_debugLogging) {
+            std::cout << "[NetworkManager] Bound to port " << m_localPort << ". Sweeping for mesh...\n";
+                    }
         m_isRunning.store(true);
     }
 
@@ -284,7 +287,7 @@ void NetworkManager::ReceiveTCP() {
 
                 if (ready > 0 && FD_ISSET(it->socket, &exceptSet)) {
                     // Connection failed
-                    if (m_debugLogging) std::cout << "[NetworkManager] Outgoing connection to anchor failed.\n";
+                    if (m_debugLogging) { std::cout << "[NetworkManager] Outgoing connection to anchor failed.\n"; }
                     closesocket(it->socket);
                     it = m_pendingConnections.erase(it);
                     continue;
@@ -297,7 +300,9 @@ void NetworkManager::ReceiveTCP() {
                     getsockopt(it->socket, SOL_SOCKET, SO_ERROR, (char*)&sockErr, &errLen);
 
                     if (sockErr != 0) {
-                        if (m_debugLogging) std::cout << "[NetworkManager] Outgoing connect() error: " << sockErr << "\n";
+                        if (m_debugLogging){
+                            std::cout << "[NetworkManager] Outgoing connect() error: " << sockErr << "\n";
+                        }
                         closesocket(it->socket);
                         it = m_pendingConnections.erase(it);
                         continue;
@@ -328,8 +333,10 @@ void NetworkManager::ReceiveTCP() {
                         flatbuffers::Verifier verifier(fbData, packetSize);
 
                         if (!VerifyNetworkMessageBuffer(verifier)) {
-                            if (m_debugLogging) std::cout << "[NetworkManager] Dropped corrupted handshake packet.\n";
-                            // Erase the corrupted data and try to recover the stream
+                            if (m_debugLogging) {
+                                std::cout << "[NetworkManager] Dropped corrupted handshake packet.\n";
+                            }
+                             // Erase the corrupted data and try to recover the stream
                             it->buffer.erase(it->buffer.begin(), it->buffer.begin() + 4 + packetSize);
                             continue;
                         }
@@ -352,8 +359,9 @@ void NetworkManager::ReceiveTCP() {
                                 }
                                 m_peerCount++;
 
-                                if (m_debugLogging) std::cout << "[NetworkManager] Successfully joined as Peer " << assignedId << "\n";
-
+                                if (m_debugLogging){
+                                    std::cout << "[NetworkManager] Successfully joined as Peer " << assignedId << "\n";
+                                                                    }
                                 it = m_pendingConnections.erase(it);
                                 continue;
                             }
@@ -407,7 +415,9 @@ void NetworkManager::ReceiveTCP() {
                 }
             }
             else if (bytes == 0 || (bytes == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
-                if (m_debugLogging) std::cout << "[NetworkManager] Peer " << peer.id << " disconnected.\n";
+                if (m_debugLogging) {
+                    std::cout << "[NetworkManager] Peer " << peer.id << " disconnected.\n";
+				}
 
                 peer.isConnected = false;
 
@@ -601,7 +611,9 @@ void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
                 if (m_peerJoinedCallback) m_peerJoinedCallback(newId);
             }
             else {
-                if (m_debugLogging) std::cout << "[NetworkManager] Mesh is full. Rejecting.\n";
+                if (m_debugLogging) {
+                    std::cout << "[NetworkManager] Mesh is full. Rejecting.\n";
+                }
                 closesocket(s);
             }
         }
