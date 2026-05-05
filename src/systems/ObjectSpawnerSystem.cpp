@@ -191,23 +191,34 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
             // All peers run this loop so their timers and authority counters stay in sync.
             if (!spawnerIsOwned) {
                 if (localId == static_cast<int>(spawner.autofireAuthority)) {
-                    //std::cout << "[ObjectSpawnerSystem] Peer " << localId << " triggering unowned spawner " << e << " (Authority Match)" << std::endl;
                     SpawnObjectFromSpawner(scene, e);
                 }
-                if (spawner.rotateAuthority) {
-                    // --- NEW: Safely cycle to the next online peer ---
+                // SAFEGUARD: Only rotate authority if the spawner is globally synced (alwaysOn).
+                // If it was triggered manually via the UI, local timers will desync and cause a 3-turn silence.
+                if (spawner.rotateAuthority && spawner.alwaysOn) {
                     for (int i = 0; i < 4; ++i) {
                         spawner.autofireAuthority = (spawner.autofireAuthority + 1) % 4;
-                        if (PhysicsSystem::activePeers[spawner.autofireAuthority]) {
-                            break; // Found the next connected peer!
-                        }
+                        if (PhysicsSystem::activePeers[spawner.autofireAuthority]) break;
                     }
                 }
-            } else {
-                //std::cout << "[ObjectSpawnerSystem] Peer " << localId << " triggering owned spawner " << e << std::endl;
-                SpawnObjectFromSpawner(scene, e);
+                // NEW: Advance sequential owner in lockstep for everyone
+                if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
+                    for (int i = 0; i < 4; ++i) {
+                        spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
+                        if (PhysicsSystem::activePeers[spawner.nextSequentialOwner]) break;
+                    }
+                }
             }
-
+            else {
+                SpawnObjectFromSpawner(scene, e);
+                // NEW: Advance sequential owner in lockstep for the owner
+                if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
+                    for (int i = 0; i < 4; ++i) {
+                        spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
+                        if (PhysicsSystem::activePeers[spawner.nextSequentialOwner]) break;
+                    }
+                }
+            }
             ++spawnsThisFrame;
         }
 
@@ -233,6 +244,7 @@ void ObjectSpawnerSystem::FireOnce(Scene& scene, Entity spawnerEntity) {
 
     int localId = PhysicsSystem::localPeerId;
     auto& registry = scene.GetRegistry();
+
     if (localId != -1) {
         if (registry.HasComponent<OwnershipComponent>(spawnerEntity)) {
             if (static_cast<int>(registry.GetComponent<OwnershipComponent>(spawnerEntity).GetOwnerIndex()) != localId) return;
@@ -241,6 +253,17 @@ void ObjectSpawnerSystem::FireOnce(Scene& scene, Entity spawnerEntity) {
     }
 
     SpawnObjectFromSpawner(scene, spawnerEntity);
+
+    // --- NEW: Advance sequential owner in lockstep for manual fires ---
+    auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(spawnerEntity);
+    if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
+        for (int i = 0; i < 4; ++i) {
+            spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
+            if (PhysicsSystem::activePeers[spawner.nextSequentialOwner]) {
+                break;
+            }
+        }
+    }
 }
 
 void ObjectSpawnerSystem::FireGroup(Scene& scene, const std::string& group) {
@@ -253,7 +276,9 @@ void ObjectSpawnerSystem::FireGroup(Scene& scene, const std::string& group) {
             !registry.HasComponent<TransformComponent>(e)) {
             continue;
         }
+
         auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+
         if (NormalizeSpawnerGroup(spawner.group) != normalizedGroup) {
             continue;
         }
@@ -267,6 +292,16 @@ void ObjectSpawnerSystem::FireGroup(Scene& scene, const std::string& group) {
         }
 
         SpawnObjectFromSpawner(scene, e);
+
+        // --- NEW: Advance sequential owner in lockstep for manual fires ---
+        if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
+            for (int i = 0; i < 4; ++i) {
+                spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
+                if (PhysicsSystem::activePeers[spawner.nextSequentialOwner]) {
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -501,15 +536,8 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     // Assign ownership to spawned object
     uint8_t objectOwner = spawner.assignedOwner;
     if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
-        // SEQUENTIAL mode: use nextSequentialOwner and then rotate
+        // SEQUENTIAL mode: use nextSequentialOwner (advancement is now handled externally)
         objectOwner = spawner.nextSequentialOwner;
-        
-        for (int i = 0; i < 4; ++i) {
-            spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
-            if (PhysicsSystem::activePeers[spawner.nextSequentialOwner]) {
-                break;
-            }
-        }
     }
     else if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_LOCAL) {
         // LOCAL mode: Use the ID of the peer that is currently running the simulation

@@ -372,10 +372,15 @@ void Application::Run() {
                             render.tintColor.a = 1.0f;
                         }
 
-                        // Seed interpolation history anchored at the actual spawn time.
-                        // normalizedSpawnTs aligns the seed with the real physics elapsed time,
-                        // eliminating the position snap when the first UDP snapshot arrives.
-                        m_networkManager->SeedRemoteState(spawned, pos, vel, glm::vec3(0.0f), normalizedSpawnTs);
+                        // --- Claim local UDP broadcast authority if they assigned it to us ---
+                        if (static_cast<int>(ownerId) == m_networkManager->GetLocalPeerId()) {
+                            scene->RegisterLocallyOwnedNetworkEntity(spawned);
+                        }
+                        else {
+                            // Seed interpolation history anchored at the actual spawn time.
+                            // normalizedSpawnTs aligns the seed with the real physics elapsed time.
+                            m_networkManager->SeedRemoteState(spawned, pos, vel, glm::vec3(0.0f), normalizedSpawnTs);
+                        }
                     }
                 } catch (const std::exception& e) {
                     std::cerr << "[Network] Failed to parse SpawnObject event: " << e.what() << std::endl;
