@@ -1402,6 +1402,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                     const char* ownerOptions[] = {"Player 1 (Red)", "Player 2 (Green)", "Player 3 (Blue)", "Player 4 (Yellow)"};
                     if (ImGui::Combo("##Owner", &currentOwner, ownerOptions, IM_ARRAYSIZE(ownerOptions))) {
                         ownership.owner = static_cast<ObjectOwnershipType>(currentOwner);
+                        m_ECSSyncRequests.push_back({ e, false, 0, true, static_cast<uint8_t>(currentOwner) });
                     }
 
                     ImGui::TreePop();
@@ -2019,6 +2020,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         if (currentMode == 4) spawner.assignedOwner = ObjectSpawnerComponent::OWNER_SEQUENTIAL;
                         else if (currentMode == 5) spawner.assignedOwner = ObjectSpawnerComponent::OWNER_LOCAL;
                         else spawner.assignedOwner = (uint8_t)currentMode;
+                        m_ECSSyncRequests.push_back({ e, false, 0, true, spawner.assignedOwner });
                     }
 
                     if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
@@ -2041,13 +2043,16 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
                         }
                         if (ImGui::Combo("Autofire Peer##auth", &authIdx, peerNames, 4)) {
                             spawner.autofireAuthority = static_cast<uint8_t>(authIdx);
+                            m_ECSSyncRequests.push_back({ e, true, spawner.autofireAuthority, false, 0 });
                         }
                         ImGui::PopStyleColor();
 
-                        ImGui::Checkbox("Rotate Authority Each Shot##rot", &spawner.rotateAuthority);
+                        if (ImGui::Checkbox("Rotate Authority Each Shot##rot", &spawner.rotateAuthority)) {
+                            m_ECSSyncRequests.push_back({ e, false, 0, false, 0, true, spawner.rotateAuthority });
+                        }
                         if (spawner.rotateAuthority) {
                             ImGui::SameLine();
-                            ImGui::TextDisabled("(0→1→2→3→0)");
+                            ImGui::TextDisabled("(0 -> 0)");
                         }
                     }
 

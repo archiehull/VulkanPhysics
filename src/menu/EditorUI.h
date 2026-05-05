@@ -122,6 +122,16 @@ public:
         std::string path;
     };
 
+    struct ECSSyncRequest {
+        Entity entity;
+        bool isAuthorityChange = false;
+        uint8_t newAuthority = 0;
+        bool isOwnerChange = false;
+        uint8_t newOwner = 0;
+        bool isRotateChange = false;
+        bool newRotate = false;
+    };
+
     void RefreshModelList();
     std::vector<GeometryChangeRequest> ConsumeGeometryRequests() {
         auto reqs = m_GeometryRequests;
@@ -303,6 +313,12 @@ public:
         return false;
     }
 
+    std::vector<ECSSyncRequest> ConsumeECSSyncRequests() {
+        auto reqs = m_ECSSyncRequests;
+        m_ECSSyncRequests.clear();
+        return reqs;
+    }
+
     bool GetReplayFreeRoam() const { return m_ReplayFreeRoam; }
 
     bool IsReplaying() const { return m_IsReplaying; }
@@ -315,6 +331,8 @@ public:
     float GetReplayFrameDuration() const { return m_StepSize; }
 
 private:
+    std::vector<ECSSyncRequest> m_ECSSyncRequests;
+
     bool m_ShowNetworkWindow = false;
     NetworkSettingsRequest m_PendingNetworkSettings;
     void DrawNetworkWindow();

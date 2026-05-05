@@ -40,6 +40,7 @@ public:
     static bool simulationPaused;
 
     static int localPeerId;
+    static bool activePeers[4];
 
     // Setters for runtime adjustment
     static void SetLinearDamping(bool enabled, float factor);

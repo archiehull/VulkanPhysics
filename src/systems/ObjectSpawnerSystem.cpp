@@ -195,7 +195,13 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
                     SpawnObjectFromSpawner(scene, e);
                 }
                 if (spawner.rotateAuthority) {
-                    spawner.autofireAuthority = (spawner.autofireAuthority + 1) % 4;
+                    // --- NEW: Safely cycle to the next online peer ---
+                    for (int i = 0; i < 4; ++i) {
+                        spawner.autofireAuthority = (spawner.autofireAuthority + 1) % 4;
+                        if (PhysicsSystem::activePeers[spawner.autofireAuthority]) {
+                            break; // Found the next connected peer!
+                        }
+                    }
                 }
             } else {
                 //std::cout << "[ObjectSpawnerSystem] Peer " << localId << " triggering owned spawner " << e << std::endl;
@@ -497,7 +503,13 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
         // SEQUENTIAL mode: use nextSequentialOwner and then rotate
         objectOwner = spawner.nextSequentialOwner;
-        spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
+        
+        for (int i = 0; i < 4; ++i) {
+            spawner.nextSequentialOwner = (spawner.nextSequentialOwner + 1) % 4;
+            if (PhysicsSystem::activePeers[spawner.nextSequentialOwner]) {
+                break;
+            }
+        }
     }
     else if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_LOCAL) {
         // LOCAL mode: Use the ID of the peer that is currently running the simulation

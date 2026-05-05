@@ -109,6 +109,7 @@ namespace {
 
         std::vector<std::pair<uint32_t, uint8_t>> spawnerAuthOverrides;
         std::vector<std::pair<uint32_t, uint8_t>> spawnerOwnerOverrides;
+        std::vector<std::pair<uint32_t, bool>> spawnerRotOverrides;
     };
 
     bool NearlyEqual(float a, float b, float eps = 1e-4f) {
@@ -176,6 +177,19 @@ namespace {
                             state.spawnerOwnerOverrides.push_back({
                                 std::stoul(pairStr.substr(0, colonPos)),
                                 static_cast<uint8_t>(std::stoi(pairStr.substr(colonPos + 1)))
+                                });
+                        }
+                    }
+                }
+                else if (key == "spawnerrot") {
+                    std::stringstream valSS(value);
+                    std::string pairStr;
+                    while (std::getline(valSS, pairStr, ',')) {
+                        auto colonPos = pairStr.find(':');
+                        if (colonPos != std::string::npos) {
+                            state.spawnerRotOverrides.push_back({
+                                std::stoul(pairStr.substr(0, colonPos)),
+                                std::stoi(pairStr.substr(colonPos + 1)) == 1
                                 });
                         }
                     }
@@ -399,8 +413,10 @@ void Application::Run() {
 
             std::stringstream authStream;
             std::stringstream ownerStream;
+            std::stringstream rotStream;
             bool hasAuth = false;
             bool hasOwner = false;
+            bool hasRot = false;
 
             for (Entity e = 0; e < 10000; ++e) {
                 if (!registry.IsAlive(e)) continue;
@@ -416,6 +432,10 @@ void Application::Run() {
                         ownerStream << e << ":" << (int)spawner.assignedOwner;
                         hasOwner = true;
                     }
+
+                    if (hasRot) rotStream << ",";
+                    rotStream << e << ":" << (spawner.rotateAuthority ? 1 : 0);
+                    hasRot = true;
                 }
                 if (ownershipArray->HasData(e)) {
                     auto& own = ownershipArray->GetData(e);
@@ -425,10 +445,11 @@ void Application::Run() {
                 }
             }
 
-            if (hasAuth || hasOwner) {
+            if (hasAuth || hasOwner || hasRot) {
                 std::stringstream syncPayload;
                 if (hasAuth) syncPayload << "spawnerauth=" << authStream.str() << ";";
                 if (hasOwner) syncPayload << "spawnerowner=" << ownerStream.str() << ";";
+                if (hasRot) syncPayload << "spawnerrot=" << rotStream.str() << ";"; // NEW
                 m_networkManager->SendReliableEventTo(newPeerId, NetworkEventType::RuntimeControl, syncPayload.str());
             }
 
@@ -841,6 +862,7 @@ void Application::ApplyRuntimeControlPayload(const std::string& payload) {
     if (scene && (!state.spawnerAuthOverrides.empty() || !state.spawnerOwnerOverrides.empty())) {
         std::unique_lock<std::shared_mutex> lock(m_RegistryMutex);
         auto& reg = scene->GetRegistry();
+        int localId = m_networkManager ? m_networkManager->GetLocalPeerId() : -1;
 
         for (const auto& auth : state.spawnerAuthOverrides) {
             Entity e = static_cast<Entity>(auth.first);
@@ -853,14 +875,35 @@ void Application::ApplyRuntimeControlPayload(const std::string& payload) {
             if (reg.IsAlive(e)) {
                 if (reg.HasComponent<OwnershipComponent>(e)) {
                     reg.GetComponent<OwnershipComponent>(e).owner = static_cast<ObjectOwnershipType>(own.second);
+
+                    // If the remote peer gave US ownership
+                    if (own.second == localId) {
+                        scene->RegisterLocallyOwnedNetworkEntity(e);
+                        if (m_networkManager) m_networkManager->ClearHistoryForEntity(e);
+                    }
+                    else {
+                        scene->UnregisterLocallyOwnedNetworkEntity(e);
+                    }
+
+                    if (reg.HasComponent<RenderComponent>(e)) {
+                        reg.GetComponent<RenderComponent>(e).tintColor =
+                            OwnershipComponent{ static_cast<ObjectOwnershipType>(own.second) }.GetOwnerColor();
+                    }
                 }
                 else if (reg.HasComponent<ObjectSpawnerComponent>(e)) {
                     reg.GetComponent<ObjectSpawnerComponent>(e).assignedOwner = own.second;
                 }
             }
         }
-    }
 
+        // --- NEW: Apply remote rotation checkbox ---
+        for (const auto& rot : state.spawnerRotOverrides) {
+            Entity e = static_cast<Entity>(rot.first);
+            if (reg.IsAlive(e) && reg.HasComponent<ObjectSpawnerComponent>(e)) {
+                reg.GetComponent<ObjectSpawnerComponent>(e).rotateAuthority = rot.second;
+            }
+        }
+    }
     m_SuppressRuntimeBroadcast = true;
 }
 
@@ -1839,6 +1882,62 @@ void Application::MainLoop() {
             }
         }
 
+        auto syncReqs = editorUI->ConsumeECSSyncRequests();
+        if (!syncReqs.empty() && m_networkManager && m_networkManager->IsRunning()) {
+            std::stringstream authStream;
+            std::stringstream ownerStream;
+            std::stringstream rotStream;
+            bool hasAuth = false;
+            bool hasOwner = false;
+            bool hasRot = false;
+
+            int localId = m_networkManager->GetLocalPeerId();
+
+            for (const auto& req : syncReqs) {
+                // --- FIX 1: Apply Local UDP Registration Side-Effects ---
+                if (req.isOwnerChange && scene) {
+                    if (req.newOwner == localId) {
+                        scene->RegisterLocallyOwnedNetworkEntity(req.entity);
+                        m_networkManager->ClearHistoryForEntity(req.entity); // Stop interpolating!
+                    }
+                    else {
+                        scene->UnregisterLocallyOwnedNetworkEntity(req.entity);
+                    }
+                    if (scene->GetRegistry().HasComponent<RenderComponent>(req.entity)) {
+                        scene->GetRegistry().GetComponent<RenderComponent>(req.entity).tintColor =
+                            OwnershipComponent{ static_cast<ObjectOwnershipType>(req.newOwner) }.GetOwnerColor();
+                    }
+                }
+
+                // --- Build Payload ---
+                if (req.isAuthorityChange) {
+                    if (hasAuth) authStream << ",";
+                    authStream << req.entity << ":" << (int)req.newAuthority;
+                    hasAuth = true;
+                }
+                if (req.isOwnerChange) {
+                    if (hasOwner) ownerStream << ",";
+                    ownerStream << req.entity << ":" << (int)req.newOwner;
+                    hasOwner = true;
+                }
+                if (req.isRotateChange) {
+                    if (hasRot) rotStream << ",";
+                    rotStream << req.entity << ":" << (req.newRotate ? 1 : 0);
+                    hasRot = true;
+                }
+            }
+
+            std::stringstream syncPayload;
+            if (hasAuth) syncPayload << "spawnerauth=" << authStream.str() << ";";
+            if (hasOwner) syncPayload << "spawnerowner=" << ownerStream.str() << ";";
+            if (hasRot) syncPayload << "spawnerrot=" << rotStream.str() << ";";
+
+            if (hasAuth || hasOwner || hasRot) {
+                m_networkManager->SendReliableEvent(NetworkEventType::RuntimeControl, syncPayload.str());
+            }
+        }
+
+
         bool requestedVsync = config.vsync;
         int requestedMaxFps = config.maxFps;
         if (editorUI->ConsumePerformanceSettingsRequest(requestedVsync, requestedMaxFps)) {
@@ -2337,7 +2436,13 @@ void Application::MainLoop() {
                 network.peers[i].ip = ps.ip;
                 network.peers[i].pingMs = ps.pingMs;
                 network.peers[i].packetLossPct = ps.packetLossPct;
+                PhysicsSystem::activePeers[i] = ps.connected;
             }
+
+            if (network.localPeerId >= 0 && network.localPeerId < 4) {
+                PhysicsSystem::activePeers[network.localPeerId] = true;
+            }
+
             editorUI->SetNetworkTelemetry(network);
 
             if (scene) scene->SetHasConnectedPeers(network.connectedPeers > 0);
@@ -2668,6 +2773,18 @@ void Application::SimulationLoop() {
                     std::cout << "[Application] NETWORK IDENTITY ESTABLISHED: Peer " << currentPeerId
                         << " (Partition: " << (currentPeerId * 10000) << " - " << ((currentPeerId + 1) * 10000 - 1) << ")" << std::endl;
                 }
+            }
+            const int activeLocalId = m_networkManager->GetLocalPeerId();
+            for (int i = 0; i < 4; ++i) {
+                bool isActive = false;
+                if (activeLocalId != -1) {
+                    if (i == activeLocalId) {
+                        isActive = true;
+                    } else {
+                        isActive = m_networkManager->GetPeerStatus(i).connected;
+                    }
+                }
+                PhysicsSystem::activePeers[i] = isActive;
             }
             // -------------------------------------------------------------
 

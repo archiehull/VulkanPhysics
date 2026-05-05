@@ -9,6 +9,7 @@
 #include <vector>
 
 int PhysicsSystem::localPeerId = -1;
+bool PhysicsSystem::activePeers[4] = { true, false, false, false };
 
 // Default settings
 int PhysicsSystem::subSteps = 4;
