@@ -35,33 +35,36 @@ enum EventType : int8_t {
   EventType_SpawnObject = 1,
   EventType_DespawnObject = 2,
   EventType_IdAssignment = 3,
+  EventType_RuntimeControl = 4,
   EventType_MIN = EventType_SceneLoad,
-  EventType_MAX = EventType_IdAssignment
+  EventType_MAX = EventType_RuntimeControl
 };
 
-inline const EventType (&EnumValuesEventType())[4] {
+inline const EventType (&EnumValuesEventType())[5] {
   static const EventType values[] = {
     EventType_SceneLoad,
     EventType_SpawnObject,
     EventType_DespawnObject,
-    EventType_IdAssignment
+    EventType_IdAssignment,
+    EventType_RuntimeControl
   };
   return values;
 }
 
 inline const char * const *EnumNamesEventType() {
-  static const char * const names[5] = {
+  static const char * const names[6] = {
     "SceneLoad",
     "SpawnObject",
     "DespawnObject",
     "IdAssignment",
+    "RuntimeControl",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameEventType(EventType e) {
-  if (::flatbuffers::IsOutRange(e, EventType_SceneLoad, EventType_IdAssignment)) return "";
+  if (::flatbuffers::IsOutRange(e, EventType_SceneLoad, EventType_RuntimeControl)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesEventType()[index];
 }
