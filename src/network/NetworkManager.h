@@ -128,7 +128,7 @@ public:
 
     // Returns the raw broadcast timestamp for the local peer (seconds since NetworkManager started).
     float GetCurrentBroadcastTimestamp() const {
-        return std::chrono::duration<float>(std::chrono::steady_clock::now() - m_broadcastStartTime).count();
+        return m_currentSimulationTime;
     }
 
     // Returns the timestamp offset applied to packets from the given peer, and whether it is calibrated.
@@ -170,6 +170,10 @@ public:
 
     float GetSimulatedLatency() const { return m_simulatedLatencyMs; }
     float GetSimulatedPacketLoss() const { return m_simulatedPacketLoss; }
+
+    void AdvanceSimulationTime(float dt) {
+        m_currentSimulationTime += dt;
+    }
 
 private:
     struct DelayedPacket {
@@ -225,7 +229,7 @@ private:
 
     // Shared broadcast sequence counter and start time for all outgoing UDP snapshots
     uint32_t m_broadcastSequence = 0;
-    std::chrono::steady_clock::time_point m_broadcastStartTime = std::chrono::steady_clock::now();
+    float m_currentSimulationTime = 0.0f;
 
     // Connection retry state — member so Restart() resets it correctly
     std::chrono::steady_clock::time_point m_lastConnectionAttempt{};

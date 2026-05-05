@@ -642,7 +642,7 @@ void NetworkManager::BroadcastState(Registry& registry, const std::vector<Entity
     flatbuffers::FlatBufferBuilder builder(4096);
     std::vector<flatbuffers::Offset<EntityState>> entityStates;
 
-    float timestamp = std::chrono::duration<float>(std::chrono::steady_clock::now() - m_broadcastStartTime).count();
+    float timestamp = m_currentSimulationTime;
 
     entityStates.reserve(std::min((Entity)locallyOwnedEntities.size(), (Entity)512));
 
@@ -704,7 +704,7 @@ void NetworkManager::BroadcastSingleEntity(Registry& registry, Entity entity) {
     auto& t = transformArray->GetData(entity);
     auto& p = physicsArray->GetData(entity);
 
-    float timestamp = std::chrono::duration<float>(std::chrono::steady_clock::now() - m_broadcastStartTime).count();
+    float timestamp = m_currentSimulationTime;
 
     flatbuffers::FlatBufferBuilder builder(256);
     Vec3 pos(t.position.x, t.position.y, t.position.z);

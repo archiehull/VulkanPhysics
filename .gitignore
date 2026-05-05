@@ -17,3 +17,7 @@
 src/network/Claude Setup.exe
 /SimulationStaticLib/x64
 .claude/worktrees/jolly-leakey-be6319/
+/.parasoft.dat
+/.cpptest
+/VulkanPhysics/x64
+.parasoft

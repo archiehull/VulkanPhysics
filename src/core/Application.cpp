@@ -2536,6 +2536,8 @@ void Application::SimulationLoop() {
         }
         wasPaused = userPaused;
 
+        float simulatedDt = userPaused ? stepBudget : (frameTime * timeScale.load());
+
         // Cap the accumulator to prevent "spiral of death" or huge unstable catch-up steps
         if (accumulator > 0.25f) {
             accumulator = 0.25f;
@@ -2564,7 +2566,8 @@ void Application::SimulationLoop() {
             std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
             m_networkManager->ProcessInboundPackets(scene->GetRegistry());
             // Use frameTime (unscaled) for network clock advancing, as network time is independent of local timeScale
-            m_networkManager->UpdateInterpolation(scene->GetRegistry(), frameTime);
+            m_networkManager->AdvanceSimulationTime(simulatedDt);
+            m_networkManager->UpdateInterpolation(scene->GetRegistry(), simulatedDt);
         }
 
         // 2. Consume accumulator in fixed steps
@@ -2591,7 +2594,8 @@ void Application::SimulationLoop() {
                 // Network broadcast of authoritative state (throttled)
                 if (m_networkManager) {
                     broadcastAccumulator += fixedDt;
-                    if (broadcastAccumulator >= m_BroadcastInterval.load()) {
+                    bool forceStepBroadcast = (userPaused && stepBudget > 0.0f);
+                    if (broadcastAccumulator >= m_BroadcastInterval.load() || forceStepBroadcast) {
                         broadcastAccumulator = 0.0f;
                         std::shared_lock<std::shared_mutex> ecsReadLock(m_RegistryMutex);
                         m_networkManager->BroadcastState(scene->GetRegistry(), scene->GetLocallyOwnedNetworkEntities());
