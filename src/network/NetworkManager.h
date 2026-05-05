@@ -31,7 +31,8 @@
 enum class NetworkEventType {
     SceneLoad,
     SpawnObject,
-    DespawnObject
+    DespawnObject,
+    RuntimeControl
 };
 
 using ReliableEventCallback = std::function<void(NetworkEventType, const std::string&, uint32_t)>;

@@ -76,6 +76,8 @@ private:
     void SimulationLoop();
     // Networking is currently disabled (omitted per request)
 
+    void ApplyRuntimeControlPayload(const std::string& payload);
+
     void GenerateLookahead(float timeframe);
 
     void LoadScene(const std::string& scenePath, bool broadcast = true);
@@ -108,6 +110,9 @@ private:
     std::atomic<float> deltaTime = 0.0f;
     std::atomic<float> timeScale = 1.0f;
 	std::atomic<float> m_BroadcastInterval = 0.033f; // Default 30Hz broadcast
+    std::atomic<bool> m_UserPaused = false;
+    std::atomic<float> m_PendingStepTime = 0.0f;
+    std::atomic<float> m_UserStepSize = 0.0166f;
 
     uint32_t currentFrame = 0;
     bool framebufferResized = false;
@@ -140,6 +145,11 @@ private:
     int m_CurrentReplayFrame = 0;
     float m_LookaheadTimeframe = 5.0f;
     Entity m_LookaheadInitialEntityCount = 0;
+
+    bool m_SuppressRuntimeBroadcast = false;
+    bool m_LastSentPaused = false;
+    float m_LastSentTimeScale = 1.0f;
+    float m_LastSentStepSize = 0.0166f;
 
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 };

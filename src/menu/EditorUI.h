@@ -138,6 +138,7 @@ public:
     void RefreshTextureList();
 
     float GetStepSize() const { return m_StepSize; }
+    void SetStepSize(float stepSize) { m_StepSize = stepSize; }
     bool IsPaused() const { return m_IsPaused; }
     void SetPaused(bool paused) { m_IsPaused = paused; }
     float GetTimeScale() const { return m_TimeScale; }

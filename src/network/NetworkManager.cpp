@@ -732,6 +732,7 @@ void NetworkManager::SendReliableEvent(NetworkEventType type, const std::string&
     case NetworkEventType::SceneLoad: fbType = EventType_SceneLoad; break;
     case NetworkEventType::SpawnObject: fbType = EventType_SpawnObject; break;
     case NetworkEventType::DespawnObject: fbType = EventType_DespawnObject; break;
+    case NetworkEventType::RuntimeControl: fbType = EventType_RuntimeControl; break;
     default: return;
     }
 
@@ -912,6 +913,7 @@ void NetworkManager::ProcessInboundPackets(Registry& registry) {
                 case EventType_SceneLoad: type = NetworkEventType::SceneLoad; break;
                 case EventType_SpawnObject: type = NetworkEventType::SpawnObject; break;
                 case EventType_DespawnObject: type = NetworkEventType::DespawnObject; break;
+                case EventType_RuntimeControl: type = NetworkEventType::RuntimeControl; break;
                 default: valid = false; break;
                 }
 
@@ -1143,6 +1145,7 @@ void NetworkManager::SendReliableEventTo(int targetPeerId, NetworkEventType type
     case NetworkEventType::SceneLoad: fbType = EventType_SceneLoad; break;
     case NetworkEventType::SpawnObject: fbType = EventType_SpawnObject; break;
     case NetworkEventType::DespawnObject: fbType = EventType_DespawnObject; break;
+    case NetworkEventType::RuntimeControl: fbType = EventType_RuntimeControl; break;
     default: return;
     }
     auto payloadStr = builder.CreateString(payload);
