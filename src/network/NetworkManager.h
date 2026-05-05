@@ -79,6 +79,7 @@ struct PendingConnection {
     std::vector<uint8_t> buffer;
     bool isOutgoing = false;    // true = we initiated this connect() (client side)
     bool handshakeSent = false; // true = initial handshake already sent
+    int expectedTargetId = -1;  // Tracks who we are dialing
 };
 
 class NetworkManager {
@@ -209,6 +210,7 @@ private:
     std::vector<RemotePeer> m_peers;
     std::vector<PendingConnection> m_pendingConnections;
     mutable std::mutex m_peerMutex;
+    std::mutex m_pendingMutex;
 
     std::mutex m_inboundMutex;
     std::queue<std::vector<uint8_t>> m_inboundQueue;

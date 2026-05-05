@@ -705,7 +705,6 @@ void NetworkManager::BroadcastSingleEntity(Registry& registry, Entity entity) {
     auto& p = physicsArray->GetData(entity);
 
     float timestamp = m_currentSimulationTime;
-
     flatbuffers::FlatBufferBuilder builder(256);
     Vec3 pos(t.position.x, t.position.y, t.position.z);
     Vec3 rot(t.rotation.x, t.rotation.y, t.rotation.z);

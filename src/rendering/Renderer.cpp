@@ -753,7 +753,7 @@ void Renderer::RenderRefractionPass(VkCommandBuffer cmd, uint32_t currentFrame, 
         pco.receiveShadows = renderComp.receiveShadows ? 1 : 0;
         pco.layerMask = renderComp.layerMask;
         pco.burnFactor = 0.0f;
-        bool applyTint = renderComp.useColorTint && scene.GetColorByOwnership();
+        bool applyTint = renderComp.useColorTint && scene.GetColorByOwnership() && scene.HasConnectedPeers();
         pco.debugOverlay = renderComp.useDebugOverlay ? 1 : (applyTint ? 2 : 0);
         pco.debugColor = renderComp.useDebugOverlay ? renderComp.debugOverlayColor : (applyTint ? renderComp.tintColor : glm::vec4(0.0f));
         pco.opacity = renderComp.opacity;
@@ -849,7 +849,7 @@ void Renderer::DrawSceneObjects(VkCommandBuffer cmd, Scene& scene, VkPipelineLay
         pco.receiveShadows = renderComp.receiveShadows ? 1 : 0;
         pco.layerMask = renderComp.layerMask;
         pco.burnFactor = burnFactor;
-        bool applyTint = renderComp.useColorTint && scene.GetColorByOwnership();
+        bool applyTint = renderComp.useColorTint && scene.GetColorByOwnership() && scene.HasConnectedPeers();
         pco.debugOverlay = renderComp.useDebugOverlay ? 1 : (applyTint ? 2 : 0);
         pco.debugColor = renderComp.useDebugOverlay ? renderComp.debugOverlayColor : (applyTint ? renderComp.tintColor : glm::vec4(0.0f));
         pco.opacity = renderComp.opacity;

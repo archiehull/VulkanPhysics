@@ -25,7 +25,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         };
     // Tint the entire menu bar with the local peer colour when networking is active
     bool menuBarColoured = false;
-    if (m_Profiler.network.isRunning && m_Profiler.network.localPeerId >= 0) {
+    if (m_Profiler.network.isRunning && m_Profiler.network.localPeerId >= 0 && m_Profiler.network.connectedPeers > 0) {
         auto ownType = static_cast<ObjectOwnershipType>(std::min(m_Profiler.network.localPeerId, 3));
         glm::vec4 c = OwnershipComponent{ ownType }.GetOwnerColor();
         ImGui::PushStyleColor(ImGuiCol_MenuBarBg,    ImVec4(c.r * 0.22f, c.g * 0.22f, c.b * 0.22f, 1.0f));
@@ -1327,9 +1327,13 @@ void EditorUI::DrawMainMenuStatusBar(float deltaTime) {
     bool showPeer = m_Profiler.network.isRunning && m_Profiler.network.localPeerId >= 0;
     if (showPeer) {
         peerStr = "Peer " + std::to_string(m_Profiler.network.localPeerId);
-        auto ownType = static_cast<ObjectOwnershipType>(std::min(m_Profiler.network.localPeerId, 3));
-        glm::vec4 c = OwnershipComponent{ ownType }.GetOwnerColor();
-        peerCol = ImVec4(c.r, c.g, c.b, 1.0f);
+
+        // Only apply the color if connected
+        if (m_Profiler.network.connectedPeers > 0) {
+            auto ownType = static_cast<ObjectOwnershipType>(std::min(m_Profiler.network.localPeerId, 3));
+            glm::vec4 c = OwnershipComponent{ ownType }.GetOwnerColor();
+            peerCol = ImVec4(c.r, c.g, c.b, 1.0f);
+        }
     }
 
     float peerWidth  = showPeer ? (ImGui::CalcTextSize(peerStr.c_str()).x + 12.0f) : 0.0f;

@@ -215,6 +215,9 @@ public:
 
     Entity CreateDustCloud(const std::string& name, const glm::vec3& position, const glm::vec3& direction, float speed, bool isActive);
 
+    bool HasConnectedPeers() const { return m_HasConnectedPeers; }
+    void SetHasConnectedPeers(bool has) { m_HasConnectedPeers = has; }
+
 private:
     void FlushDeferredGeometryCleanup();
     void UpdateSpringVisuals();
@@ -273,6 +276,7 @@ private:
     bool m_ColorByOwnership = true;
     float m_ElapsedTime = 0.0f;
     int globalShadingMode = 1;
+    bool m_HasConnectedPeers = false;
 
     mutable std::vector<std::pair<std::string, float>> m_LastSystemTimings;
     std::vector<std::pair<std::string, float>> m_LastPhysicsTimings;

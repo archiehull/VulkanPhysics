@@ -42,6 +42,7 @@ enum class InputAction {
     ResetEnvironment,
     ToggleNoclip,
     PauseToggle,
+    StepSimulation,
     Exit
 };
 

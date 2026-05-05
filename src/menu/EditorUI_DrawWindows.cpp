@@ -141,7 +141,7 @@ if (m_Profiler.showProfiler) {
 if (m_ShowRuntimeWindow) {
     // Tint the window title bar with the local peer colour when networking is active
     const auto& net = m_Profiler.network;
-    bool hasNetColor = net.isRunning && net.localPeerId >= 0;
+    bool hasNetColor = net.isRunning && net.localPeerId >= 0 && net.connectedPeers > 0;
     ImVec4 peerCol(0.7f, 0.7f, 0.7f, 1.0f);
     if (hasNetColor) {
         auto ownType = static_cast<ObjectOwnershipType>(std::min(net.localPeerId, 3));
@@ -661,7 +661,7 @@ for (auto it = m_PropertyWindows.begin(); it != m_PropertyWindows.end(); ) {
 
                 // --- NEW: Color-code by ownership ---
                 ImVec4 textColor(1.0f, 1.0f, 1.0f, 1.0f);
-                if (registry.HasComponent<OwnershipComponent>(e)) {
+                if (registry.HasComponent<OwnershipComponent>(e) && scene.HasConnectedPeers()) {
                     glm::vec4 ownCol = registry.GetComponent<OwnershipComponent>(e).GetOwnerColor();
                     textColor = ImVec4(ownCol.r, ownCol.g, ownCol.b, 1.0f);
                 }

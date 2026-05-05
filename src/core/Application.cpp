@@ -1849,7 +1849,18 @@ void Application::MainLoop() {
         m_UserPaused.store(uiPaused);
         m_UserStepSize.store(std::max(0.0f, editorUI->GetStepSize()));
 
-        const bool stepRequested = editorUI->ConsumeStepRequest();
+        bool stepRequested = editorUI->ConsumeStepRequest();
+
+        // Listen for the 'F' keypress
+        if (inputManager->IsActionJustPressed(InputAction::StepSimulation)) {
+            // Auto-pause if we aren't already paused so the step actually works
+            if (!uiPaused) {
+                editorUI->SetPaused(true);
+                m_UserPaused.store(true);
+            }
+            stepRequested = true;
+        }
+
         if (stepRequested) {
             const float stepDelta = m_UserStepSize.load() * std::max(0.0f, timeScale.load());
             AddPendingStepTime(m_PendingStepTime, stepDelta);
@@ -2222,6 +2233,7 @@ void Application::MainLoop() {
             network.interpolationDelay = m_networkManager->GetInterpolationDelay();
             network.latestRemoteTimestamp = m_networkManager->GetLatestRemoteTimestamp();
             network.remoteEntityCount = m_networkManager->GetRemoteEntityCount();
+            network.connectedPeers = m_networkManager->GetPeerCount();
             for (int i = 0; i < 4; ++i) {
                 auto ps = m_networkManager->GetPeerStatus(i);
                 network.peers[i].connected = ps.connected;
@@ -2231,6 +2243,8 @@ void Application::MainLoop() {
                 network.peers[i].packetLossPct = ps.packetLossPct;
             }
             editorUI->SetNetworkTelemetry(network);
+
+            if (scene) scene->SetHasConnectedPeers(network.connectedPeers > 0);
         }
 
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;

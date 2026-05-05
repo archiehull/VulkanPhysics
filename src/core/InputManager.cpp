@@ -7,6 +7,7 @@
 // Define string-to-key mappings
 std::unordered_map<std::string, int> InputManager::StringToKeyMap = {
     {"W", GLFW_KEY_W}, {"A", GLFW_KEY_A}, {"S", GLFW_KEY_S}, {"D", GLFW_KEY_D},
+    {"F", GLFW_KEY_F},
     {"B", GLFW_KEY_B},
     {"Q", GLFW_KEY_Q}, {"E", GLFW_KEY_E}, {"R", GLFW_KEY_R}, {"T", GLFW_KEY_T},
     {"Y", GLFW_KEY_Y}, {"U", GLFW_KEY_U}, {"I", GLFW_KEY_I}, {"O", GLFW_KEY_O},
@@ -54,6 +55,7 @@ std::unordered_map<std::string, InputAction> InputManager::StringToActionMap = {
     {"SpawnDustCloud", InputAction::SpawnDustCloud},
     {"ToggleNoclip", InputAction::ToggleNoclip},
     {"PauseToggle", InputAction::PauseToggle},
+    {"StepSimulation", InputAction::StepSimulation},
     {"Exit", InputAction::Exit}
 };
 
@@ -105,6 +107,7 @@ std::unordered_map<std::string, std::string> InputManager::GetDefaultBindings() 
         {"FireSpawnerGroupB", "N"},
         {"ToggleNoclip", "M"},
         {"PauseToggle", "SPACE"},
+        {"StepSimulation", "F"},
         {"Exit", "ESCAPE"}
     };
 }
