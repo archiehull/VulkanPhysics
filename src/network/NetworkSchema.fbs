@@ -14,8 +14,7 @@ enum EventType : byte {
   SceneLoad = 0,
   SpawnObject = 1,
   DespawnObject = 2,
-  IdAssignment = 3,
-  RuntimeControl = 4
+  IdAssignment = 3
 }
 
 // 3. The physics payload for a single entity

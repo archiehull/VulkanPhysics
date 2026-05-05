@@ -97,83 +97,6 @@ namespace {
     float ClampHz(float value, float minHz, float maxHz) {
         return std::clamp(value, minHz, maxHz);
     }
-
-    struct RuntimeControlState {
-        bool hasPaused = false;
-        bool paused = false;
-        bool hasTimeScale = false;
-        float timeScale = 1.0f;
-        bool hasStepSize = false;
-        float stepSize = 0.0166f;
-        int stepCount = 0;
-    };
-
-    bool NearlyEqual(float a, float b, float eps = 1e-4f) {
-        return std::fabs(a - b) <= eps;
-    }
-
-    bool ParseBool(const std::string& value) {
-        if (value == "1" || value == "true" || value == "True" || value == "TRUE") {
-            return true;
-        }
-        return false;
-    }
-
-    RuntimeControlState ParseRuntimeControlPayload(const std::string& payload) {
-        RuntimeControlState state;
-        std::stringstream ss(payload);
-        std::string token;
-
-        while (std::getline(ss, token, ';')) {
-            if (token.empty()) continue;
-            auto eqPos = token.find('=');
-            if (eqPos == std::string::npos) continue;
-            std::string key = token.substr(0, eqPos);
-            std::string value = token.substr(eqPos + 1);
-
-            key.erase(std::remove_if(key.begin(), key.end(), ::isspace), key.end());
-            value.erase(std::remove_if(value.begin(), value.end(), ::isspace), value.end());
-            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-
-            try {
-                if (key == "pause" || key == "paused") {
-                    state.hasPaused = true;
-                    state.paused = ParseBool(value);
-                }
-                else if (key == "timescale") {
-                    state.hasTimeScale = true;
-                    state.timeScale = std::max(0.0f, std::stof(value));
-                }
-                else if (key == "stepsize") {
-                    state.hasStepSize = true;
-                    state.stepSize = std::max(0.0f, std::stof(value));
-                }
-                else if (key == "step" || key == "steps") {
-                    state.stepCount = std::max(0, std::stoi(value));
-                }
-            }
-            catch (const std::exception&) {
-                continue;
-            }
-        }
-
-        return state;
-    }
-
-    std::string BuildRuntimeControlPayload(bool paused, float timeScale, float stepSize, int stepCount) {
-        std::ostringstream out;
-        out << "paused=" << (paused ? 1 : 0)
-            << ";timeScale=" << timeScale
-            << ";stepSize=" << stepSize
-            << ";step=" << stepCount;
-        return out.str();
-    }
-
-    void AddPendingStepTime(std::atomic<float>& pending, float delta) {
-        float expected = pending.load();
-        while (!pending.compare_exchange_weak(expected, expected + delta)) {
-        }
-    }
 }
 
         
@@ -335,12 +258,6 @@ void Application::Run() {
                 } catch (const std::exception& e) {
                     std::cerr << "[Network] Failed to parse SpawnObject event: " << e.what() << std::endl;
                 }
-            });
-        }
-        else if (type == NetworkEventType::RuntimeControl) {
-            std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
-            m_TaskQueue.push_back([this, payload]() {
-                ApplyRuntimeControlPayload(payload);
             });
         }
     });
@@ -735,37 +652,6 @@ void Application::ReloadCurrentScene() {
     }
 
     LoadScene(currentScenePath);
-}
-
-void Application::ApplyRuntimeControlPayload(const std::string& payload) {
-    RuntimeControlState state = ParseRuntimeControlPayload(payload);
-    if (state.hasPaused) {
-        editorUI->SetPaused(state.paused);
-    }
-    if (state.hasTimeScale) {
-        editorUI->SetTimeScale(state.timeScale);
-        timeScale.store(state.timeScale);
-    }
-    if (state.hasStepSize) {
-        editorUI->SetStepSize(state.stepSize);
-        m_UserStepSize.store(state.stepSize);
-    }
-
-    if (state.stepCount > 0) {
-        if (!state.hasPaused) {
-            editorUI->SetPaused(true);
-        }
-
-        const float scale = state.hasTimeScale ? state.timeScale : timeScale.load();
-        const float stepSize = state.hasStepSize ? state.stepSize : editorUI->GetStepSize();
-        const float stepDelta = stepSize * std::max(0.0f, scale);
-
-        for (int i = 0; i < state.stepCount; ++i) {
-            AddPendingStepTime(m_PendingStepTime, stepDelta);
-        }
-    }
-
-    m_SuppressRuntimeBroadcast = true;
 }
 
 
@@ -1692,8 +1578,6 @@ void Application::MainLoop() {
         window->PollEvents();
         ProcessInput();
 
-        editorUI->SetTimeScale(timeScale.load());
-
         // 1. Process thread-safe tasks from the main thread
         {
             std::vector<std::function<void()>> tasksToRun;
@@ -1840,53 +1724,6 @@ void Application::MainLoop() {
 
         ImGui::Render();
 
-        const float uiTimeScale = std::max(0.0f, editorUI->GetTimeScale());
-        if (!NearlyEqual(uiTimeScale, timeScale.load())) {
-            timeScale.store(uiTimeScale);
-        }
-
-        const bool uiPaused = editorUI->IsPaused();
-        m_UserPaused.store(uiPaused);
-        m_UserStepSize.store(std::max(0.0f, editorUI->GetStepSize()));
-
-        const bool stepRequested = editorUI->ConsumeStepRequest();
-        if (stepRequested) {
-            const float stepDelta = m_UserStepSize.load() * std::max(0.0f, timeScale.load());
-            AddPendingStepTime(m_PendingStepTime, stepDelta);
-
-            if (m_networkManager && m_networkManager->IsRunning()) {
-                const std::string payload = BuildRuntimeControlPayload(
-                    uiPaused,
-                    timeScale.load(),
-                    m_UserStepSize.load(),
-                    1);
-                m_networkManager->SendReliableEvent(NetworkEventType::RuntimeControl, payload);
-                m_LastSentPaused = uiPaused;
-                m_LastSentTimeScale = timeScale.load();
-                m_LastSentStepSize = m_UserStepSize.load();
-            }
-        }
-
-        if (m_networkManager && m_networkManager->IsRunning()) {
-            const bool paused = uiPaused;
-            const float scale = timeScale.load();
-            const float stepSize = m_UserStepSize.load();
-
-            if (m_SuppressRuntimeBroadcast) {
-                m_LastSentPaused = paused;
-                m_LastSentTimeScale = scale;
-                m_LastSentStepSize = stepSize;
-                m_SuppressRuntimeBroadcast = false;
-            }
-            else if (paused != m_LastSentPaused || !NearlyEqual(scale, m_LastSentTimeScale) || !NearlyEqual(stepSize, m_LastSentStepSize)) {
-                const std::string payload = BuildRuntimeControlPayload(paused, scale, stepSize, 0);
-                m_networkManager->SendReliableEvent(NetworkEventType::RuntimeControl, payload);
-                m_LastSentPaused = paused;
-                m_LastSentTimeScale = scale;
-                m_LastSentStepSize = stepSize;
-            }
-        }
-
         // 1. Handle Restart
         if (editorUI->ConsumeRestartRequest()) {
             ReloadCurrentScene();
@@ -1978,6 +1815,19 @@ void Application::MainLoop() {
             }
         }
         // --------------------------------
+
+        // 2. Calculate advancement
+        float stepDelta = 0.0f;
+        float currentTimeScale = editorUI->GetTimeScale();
+
+        if (!editorUI->IsPaused()) {
+            // Normal running state
+            stepDelta = simDeltaTime * currentTimeScale;
+        }
+        else if (editorUI->ConsumeStepRequest()) {
+            // Manual step state - uses the custom step size multiplied by speed
+            stepDelta = editorUI->GetStepSize() * currentTimeScale;
+        }
 
         auto& registry = scene->GetRegistry();
         const VkExtent2D extent = vulkanSwapChain->GetExtent();
@@ -2109,6 +1959,8 @@ void Application::MainLoop() {
                     }
                 }
             }
+            PhysicsSystem::simulationPaused = true;
+
             {
                 std::unique_lock<std::shared_mutex> visualLock(m_RegistryMutex);
                 float replayVisualDelta = 0.0f;
@@ -2140,6 +1992,7 @@ void Application::MainLoop() {
                 wasReplaying = false;
             }
             m_IsReplaying = false;
+            PhysicsSystem::simulationPaused = false;
             
             // Visual systems (Cloth vertex updates, Animation, etc.) are updated on the main thread 
             // to share the workload and avoid stalling the high-frequency physics thread.
@@ -2511,30 +2364,15 @@ void Application::SimulationLoop() {
     auto hzWindowStart = std::chrono::high_resolution_clock::now();
 
     float broadcastAccumulator = 0.0f;
-    bool wasPaused = false;
 
     while (m_IsRunning) {
         auto currentTime = std::chrono::high_resolution_clock::now();
         float frameTime = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;
 
-        const bool userPaused = m_UserPaused.load();
-        float stepBudget = 0.0f;
-
-        if (userPaused) {
-            if (!wasPaused) {
-                accumulator = 0.0f;
-            }
-            stepBudget = m_PendingStepTime.exchange(0.0f);
-            if (stepBudget > 0.0f) {
-                accumulator += stepBudget;
-            }
-        } else {
-            // Apply timescale to the advancement of physics time
-            float currentScale = timeScale.load();
-            accumulator += frameTime * currentScale;
-        }
-        wasPaused = userPaused;
+        // Apply timescale to the advancement of physics time
+        float currentScale = timeScale.load();
+        accumulator += frameTime * currentScale;
 
         // Cap the accumulator to prevent "spiral of death" or huge unstable catch-up steps
         if (accumulator > 0.25f) {
@@ -2572,10 +2410,8 @@ void Application::SimulationLoop() {
         int stepsThisFrame = 0;
         const int maxStepsPerFrame = 10; // Increased cap slightly
 
-        PhysicsSystem::simulationPaused = userPaused && stepBudget <= 0.0f;
-
         while (accumulator >= fixedDt && stepsThisFrame < maxStepsPerFrame) {
-            if (!m_IsReplaying && scene && (!userPaused || stepBudget > 0.0f)) {
+            if (!m_IsReplaying && !PhysicsSystem::simulationPaused && scene) {
                 const auto physStart = std::chrono::high_resolution_clock::now();
                 
                 {
@@ -2610,11 +2446,8 @@ void Application::SimulationLoop() {
             std::this_thread::yield();
         }
 
-        if (userPaused) {
-            accumulator = 0.0f;
-        }
-        else if (accumulator > 0.5f) {
-            // If we still have a lot of time left, cap it but don't reset to 0 unless we are really falling behind
+        // If we still have a lot of time left, cap it but don't reset to 0 unless we are really falling behind
+        if (accumulator > 0.5f) {
             accumulator = 0.0f;
         }
 

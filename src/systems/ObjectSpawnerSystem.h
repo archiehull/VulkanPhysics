@@ -26,7 +26,6 @@ public:
     static SpawnCallback onObjectSpawned;
 
     void Update(Scene& scene, float deltaTime) override;
-    bool IsPhysics() const override { return true; }
     static void FireOnce(Scene& scene, Entity spawnerEntity);
     static void FireGroup(Scene& scene, const std::string& group);
     static void StartSpawner(Scene& scene, Entity spawnerEntity);
