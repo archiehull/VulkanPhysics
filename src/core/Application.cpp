@@ -106,6 +106,9 @@ namespace {
         bool hasStepSize = false;
         float stepSize = 0.0166f;
         int stepCount = 0;
+
+        std::vector<std::pair<uint32_t, uint8_t>> spawnerAuthOverrides;
+        std::vector<std::pair<uint32_t, uint8_t>> spawnerOwnerOverrides;
     };
 
     bool NearlyEqual(float a, float b, float eps = 1e-4f) {
@@ -151,10 +154,34 @@ namespace {
                 else if (key == "step" || key == "steps") {
                     state.stepCount = std::max(0, std::stoi(value));
                 }
+                else if (key == "spawnerauth") {
+                    std::stringstream valSS(value);
+                    std::string pairStr;
+                    while (std::getline(valSS, pairStr, ',')) {
+                        auto colonPos = pairStr.find(':');
+                        if (colonPos != std::string::npos) {
+                            state.spawnerAuthOverrides.push_back({
+                                std::stoul(pairStr.substr(0, colonPos)),
+                                static_cast<uint8_t>(std::stoi(pairStr.substr(colonPos + 1)))
+                                });
+                        }
+                    }
+                }
+                else if (key == "spawnerowner") {
+                    std::stringstream valSS(value);
+                    std::string pairStr;
+                    while (std::getline(valSS, pairStr, ',')) {
+                        auto colonPos = pairStr.find(':');
+                        if (colonPos != std::string::npos) {
+                            state.spawnerOwnerOverrides.push_back({
+                                std::stoul(pairStr.substr(0, colonPos)),
+                                static_cast<uint8_t>(std::stoi(pairStr.substr(colonPos + 1)))
+                                });
+                        }
+                    }
+                }
             }
-            catch (const std::exception&) {
-                continue;
-            }
+            catch (const std::exception&) { continue; }
         }
 
         return state;
@@ -232,6 +259,10 @@ void Application::Run() {
     // Register all callbacks before Startup() so no peer-join or reliable event is missed
     m_networkManager->SetReliableEventCallback([this](NetworkEventType type, const std::string& payload, uint32_t target) {
         if (type == NetworkEventType::SceneLoad) {
+            if (payload == currentScenePath) {
+                return; // Ignore the request, we are already in this scene
+            }
+
             std::lock_guard<std::mutex> lock(m_TaskQueueMutex);
             m_TaskQueue.push_back([this, payload]() {
                 LoadScene(payload, false);
@@ -360,13 +391,59 @@ void Application::Run() {
 
             auto& registry = scene->GetRegistry();
             auto transformArray = registry.GetComponentArray<TransformComponent>();
-            auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
             auto renderArray = registry.GetComponentArray<RenderComponent>();
             auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
+			auto spawnerArray = registry.GetComponentArray<ObjectSpawnerComponent>();
+
+            int localId = m_networkManager->GetLocalPeerId();
+
+            std::stringstream authStream;
+            std::stringstream ownerStream;
+            bool hasAuth = false;
+            bool hasOwner = false;
+
+            for (Entity e = 0; e < 10000; ++e) {
+                if (!registry.IsAlive(e)) continue;
+
+                if (spawnerArray->HasData(e)) {
+                    auto& spawner = spawnerArray->GetData(e);
+                    if (hasAuth) authStream << ",";
+                    authStream << e << ":" << (int)spawner.autofireAuthority;
+                    hasAuth = true;
+
+                    if (spawner.assignedOwner < 4) {
+                        if (hasOwner) ownerStream << ",";
+                        ownerStream << e << ":" << (int)spawner.assignedOwner;
+                        hasOwner = true;
+                    }
+                }
+                if (ownershipArray->HasData(e)) {
+                    auto& own = ownershipArray->GetData(e);
+                    if (hasOwner) ownerStream << ",";
+                    ownerStream << e << ":" << (int)own.GetOwnerIndex();
+                    hasOwner = true;
+                }
+            }
+
+            if (hasAuth || hasOwner) {
+                std::stringstream syncPayload;
+                if (hasAuth) syncPayload << "spawnerauth=" << authStream.str() << ";";
+                if (hasOwner) syncPayload << "spawnerowner=" << ownerStream.str() << ";";
+                m_networkManager->SendReliableEventTo(newPeerId, NetworkEventType::RuntimeControl, syncPayload.str());
+            }
+
+            auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+
 
             // Assuming dynamic objects use partitioned IDs starting at 10,000
             for (Entity e = 10000; e < MAX_ENTITIES; ++e) {
                 if (registry.IsAlive(e) && transformArray->HasData(e) && renderArray->HasData(e)) {
+
+                    // --- Only broadcast this entity if we are the authoritative owner ---
+                    if (!ownershipArray->HasData(e) || static_cast<int>(ownershipArray->GetData(e).GetOwnerIndex()) != localId) {
+                        continue;
+                    }
+
                     auto& tr = transformArray->GetData(e);
                     auto& rd = renderArray->GetData(e);
 
@@ -411,7 +488,7 @@ void Application::Run() {
                         << mass << ","
                         << vel.x << "," << vel.y << "," << vel.z << ","
                         << angVel.x << "," << angVel.y << "," << angVel.z << ","
-                        << (int)owner << "," << e;
+                        << (int)localId << "," << e;
 
                     m_networkManager->SendReliableEventTo(newPeerId, NetworkEventType::SpawnObject, ss.str());
                 }
@@ -426,83 +503,79 @@ void Application::Run() {
             if (!scene) return;
             std::unique_lock<std::shared_mutex> ecsLock(m_RegistryMutex);
 
-            // 1. Determine who the new "Authority" is (Lowest surviving Peer ID)
             int localId = m_networkManager->GetLocalPeerId();
             int lowestSurvivingId = localId;
+
+            // 1. Determine who the new "Authority" is deterministically
             for (int i = 0; i < 4; ++i) {
                 if (i != disconnectedPeerId && m_networkManager->GetPeerStatus(i).connected) {
                     if (i < lowestSurvivingId) {
-                        lowestSurvivingId = i; // Someone else with a lower ID is still alive
+                        lowestSurvivingId = i;
                     }
                 }
             }
 
-            // 2. If WE are the lowest surviving peer, we take ownership of the orphans
-            if (localId == lowestSurvivingId) {
-                auto& registry = scene->GetRegistry();
-                auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
-                const Entity entityCount = registry.GetEntityCount();
+            auto& registry = scene->GetRegistry();
+            auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
+            const Entity entityCount = registry.GetEntityCount();
 
-                int orphanedCount = 0;
-                ObjectOwnershipType newOwnerType = static_cast<ObjectOwnershipType>(localId);
+            int orphanedCount = 0;
+            ObjectOwnershipType newOwnerType = static_cast<ObjectOwnershipType>(lowestSurvivingId);
 
-                for (Entity e = 0; e < entityCount; ++e) {
-                    if (!registry.IsAlive(e)) continue;
+            // --- NEW: Everyone loops over the entities to keep ECS in sync ---
+            for (Entity e = 0; e < entityCount; ++e) {
+                if (!registry.IsAlive(e)) continue;
 
-                    // --- 1. Migrate Standard Ownership (The Balls) ---
-                    if (ownershipArray->HasData(e)) {
-                        auto& ownership = ownershipArray->GetData(e);
+                // --- 1. Migrate Standard Ownership (The Balls) ---
+                if (ownershipArray->HasData(e)) {
+                    auto& ownership = ownershipArray->GetData(e);
+                    if (static_cast<int>(ownership.GetOwnerIndex()) == disconnectedPeerId) {
 
-                        if (static_cast<int>(ownership.GetOwnerIndex()) == disconnectedPeerId) {
+                        // EVERY peer reassigns ownership locally so the state stays synced
+                        ownership.owner = newOwnerType;
 
-                            // Reassign 
-                            ownership.owner = newOwnerType;
+                        // Update visual color so you can see it change ownership
+                        if (registry.HasComponent<RenderComponent>(e)) {
+                            auto& render = registry.GetComponent<RenderComponent>(e);
+                            render.useColorTint = true;
+                            render.tintColor = ownership.GetOwnerColor();
+                        }
+
+                        // ONLY the new authority adopts the object for UDP broadcasting
+                        if (localId == lowestSurvivingId) {
                             scene->RegisterLocallyOwnedNetworkEntity(e);
                             m_networkManager->ClearHistoryForEntity(e);
                             orphanedCount++;
-
-                            // Update visual color so you can see it change ownership
-                            if (registry.HasComponent<RenderComponent>(e)) {
-                                auto& render = registry.GetComponent<RenderComponent>(e);
-                                render.useColorTint = true;
-                                render.tintColor = ownership.GetOwnerColor();
-                            }
                         }
-                    }
-
-                    // --- 2. Migrate Spawner Authority ---
-                    if (registry.HasComponent<ObjectSpawnerComponent>(e)) {
-                        auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
-
-                        // A) Reassign unowned spawners waiting for the dead peer to fire
-                        if (static_cast<int>(spawner.autofireAuthority) == disconnectedPeerId) {
-                            spawner.autofireAuthority = static_cast<uint8_t>(lowestSurvivingId);
-                        }
-
-                        // B) If the spawner cycles authority or ownership sequentially, it WILL hit 
-                        // the dead peer on the next tick and break. Force it to local host mode.
-                        spawner.rotateAuthority = false;
-                        if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
-                            spawner.assignedOwner = static_cast<uint8_t>(lowestSurvivingId);
-                        }
-
-                        // C) Fix spawners hardcoded to assign newly created objects to the dead peer
-                        if (spawner.assignedOwner < 4 && static_cast<int>(spawner.assignedOwner) == disconnectedPeerId) {
-                            spawner.assignedOwner = static_cast<uint8_t>(lowestSurvivingId);
-                        }
-
-                        // D) Preserve dormant spawners. Only keep running if already active
-                        // or configured to auto-run.
-                        spawner.isRunning = spawner.isRunning || spawner.alwaysOn || spawner.triggerOnStartup;
                     }
                 }
 
-                if (orphanedCount > 0) {
-                    std::cout << "[Application] Peer " << localId
-                        << " assumed control of " << orphanedCount
-                        << " orphaned entities from dropped Peer "
-                        << disconnectedPeerId << std::endl;
+                // --- 2. Migrate Spawner Authority ---
+                if (registry.HasComponent<ObjectSpawnerComponent>(e)) {
+                    auto& spawner = registry.GetComponent<ObjectSpawnerComponent>(e);
+
+                    if (static_cast<int>(spawner.autofireAuthority) == disconnectedPeerId) {
+                        spawner.autofireAuthority = static_cast<uint8_t>(lowestSurvivingId);
+                    }
+                    spawner.rotateAuthority = false;
+
+                    if (spawner.assignedOwner == ObjectSpawnerComponent::OWNER_SEQUENTIAL) {
+                        spawner.assignedOwner = static_cast<uint8_t>(lowestSurvivingId);
+                    }
+                    if (spawner.assignedOwner < 4 && static_cast<int>(spawner.assignedOwner) == disconnectedPeerId) {
+                        spawner.assignedOwner = static_cast<uint8_t>(lowestSurvivingId);
+                    }
+
+                    spawner.isRunning = spawner.isRunning || spawner.alwaysOn || spawner.triggerOnStartup;
                 }
+            }
+
+            // Print the adoption message only on the peer that actually adopted them
+            if (localId == lowestSurvivingId && orphanedCount > 0) {
+                std::cout << "[Application] Peer " << localId
+                    << " assumed control of " << orphanedCount
+                    << " orphaned entities from dropped Peer "
+                    << disconnectedPeerId << std::endl;
             }
             });
         });
@@ -762,6 +835,29 @@ void Application::ApplyRuntimeControlPayload(const std::string& payload) {
 
         for (int i = 0; i < state.stepCount; ++i) {
             AddPendingStepTime(m_PendingStepTime, stepDelta);
+        }
+    }
+
+    if (scene && (!state.spawnerAuthOverrides.empty() || !state.spawnerOwnerOverrides.empty())) {
+        std::unique_lock<std::shared_mutex> lock(m_RegistryMutex);
+        auto& reg = scene->GetRegistry();
+
+        for (const auto& auth : state.spawnerAuthOverrides) {
+            Entity e = static_cast<Entity>(auth.first);
+            if (reg.IsAlive(e) && reg.HasComponent<ObjectSpawnerComponent>(e)) {
+                reg.GetComponent<ObjectSpawnerComponent>(e).autofireAuthority = auth.second;
+            }
+        }
+        for (const auto& own : state.spawnerOwnerOverrides) {
+            Entity e = static_cast<Entity>(own.first);
+            if (reg.IsAlive(e)) {
+                if (reg.HasComponent<OwnershipComponent>(e)) {
+                    reg.GetComponent<OwnershipComponent>(e).owner = static_cast<ObjectOwnershipType>(own.second);
+                }
+                else if (reg.HasComponent<ObjectSpawnerComponent>(e)) {
+                    reg.GetComponent<ObjectSpawnerComponent>(e).assignedOwner = own.second;
+                }
+            }
         }
     }
 

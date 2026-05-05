@@ -64,8 +64,12 @@ void NetworkManager::Restart() {
 
 int NetworkManager::GetNextAvailableId() {
     std::lock_guard<std::mutex> lock(m_peerMutex);
-    // Peer 0 is always the host. Check which slots 1-3 are not connected.
-    for (int i = 1; i < 4; ++i) {
+
+    // --- Check ALL slots (0-3) instead of skipping 0 ---
+    for (int i = 0; i < 4; ++i) {
+        // Prevent assigning our own ID to someone else!
+        if (i == m_localPeerId.load()) continue;
+
         if (!m_peers[i].isConnected) return i;
     }
     return -1;
@@ -118,11 +122,16 @@ uint16_t NetworkManager::Startup(uint16_t basePort) {
     if (m_localPort == basePort) {
         m_localPeerId = 0;
         PhysicsSystem::localPeerId = 0;
-        if (m_debugLogging) std::cout << "[NetworkManager] Bound to base port. Identifying as Peer 0 (Host).\n";
+        if (m_debugLogging) std::cout << "[NetworkManager] Bound to base port. Identifying as Peer 0.\n";
     }
     else {
-        m_localPeerId = -1; // Request assignment from Peer 0
-        if (m_debugLogging) std::cout << "[NetworkManager] Bound to port " << m_localPort << ". Searching for Host...\n";
+        m_localPeerId = -1;
+        PhysicsSystem::localPeerId = -1;
+        m_startupTime = std::chrono::steady_clock::now();
+
+        if (m_debugLogging) std::cout << "[NetworkManager] Bound to port " << m_localPort << ". Sweeping for mesh...\n";
+
+        m_isRunning.store(true);
     }
 
     m_isRunning.store(true);
@@ -242,7 +251,10 @@ void NetworkManager::AcceptIncomingConnections() {
     if (s != INVALID_SOCKET) {
         u_long mode = 1;
         ioctlsocket(s, FIONBIO, &mode);
-        m_pendingConnections.push_back({ s, {} });
+        {
+            std::lock_guard<std::mutex> lock(m_pendingMutex);
+            m_pendingConnections.push_back({ s, {} });
+        }
         if (m_debugLogging) {
             std::cout << "[NetworkManager] Accepted incoming TCP connection (Socket: " << s << ")." << std::endl;
         }
@@ -253,141 +265,162 @@ void NetworkManager::ReceiveTCP() {
     char buffer[4096];
 
     // 1. Process Pending Handshakes (Wait for ID assignment or normal handshake)
-    for (auto it = m_pendingConnections.begin(); it != m_pendingConnections.end(); ) {
-        // For outgoing (client) connections, the non-blocking connect() may still be
-        // in progress. Poll for write-readiness before attempting to send the handshake.
-        if (it->isOutgoing && !it->handshakeSent) {
-            fd_set writeSet, exceptSet;
-            FD_ZERO(&writeSet);
-            FD_ZERO(&exceptSet);
-            FD_SET(it->socket, &writeSet);
-            FD_SET(it->socket, &exceptSet);
-            timeval timeout = { 0, 0 }; // non-blocking poll
-            int ready = select(0, nullptr, &writeSet, &exceptSet, &timeout);
+    {
+        // Safely lock the pending connections array to prevent thread crashes
+        std::lock_guard<std::mutex> lock(m_pendingMutex);
 
-            if (ready > 0 && FD_ISSET(it->socket, &exceptSet)) {
-                // Connection failed
-                if (m_debugLogging) std::cout << "[NetworkManager] Outgoing connection to anchor failed.\n";
-                closesocket(it->socket);
-                it = m_pendingConnections.erase(it);
-                continue;
-            }
-            if (ready > 0 && FD_ISSET(it->socket, &writeSet)) {
-                // Verify no socket-level error before sending
-                int sockErr = 0;
-                int errLen = sizeof(sockErr);
-                getsockopt(it->socket, SOL_SOCKET, SO_ERROR, (char*)&sockErr, &errLen);
-                if (sockErr != 0) {
-                    if (m_debugLogging) std::cout << "[NetworkManager] Outgoing connect() error: " << sockErr << "\n";
+        for (auto it = m_pendingConnections.begin(); it != m_pendingConnections.end(); ) {
+            // For outgoing (client) connections, the non-blocking connect() may still be
+            // in progress. Poll for write-readiness before attempting to send the handshake.
+            if (it->isOutgoing && !it->handshakeSent) {
+                fd_set writeSet, exceptSet;
+                FD_ZERO(&writeSet);
+                FD_ZERO(&exceptSet);
+                FD_SET(it->socket, &writeSet);
+                FD_SET(it->socket, &exceptSet);
+
+                timeval timeout = { 0, 0 }; // non-blocking poll
+                int ready = select(0, nullptr, &writeSet, &exceptSet, &timeout);
+
+                if (ready > 0 && FD_ISSET(it->socket, &exceptSet)) {
+                    // Connection failed
+                    if (m_debugLogging) std::cout << "[NetworkManager] Outgoing connection to anchor failed.\n";
                     closesocket(it->socket);
                     it = m_pendingConnections.erase(it);
                     continue;
                 }
-                // Connection established — safe to send the handshake now
-                SendHandshake(it->socket);
-                it->handshakeSent = true;
-            }
-            // Not yet connected — check again next tick
-            if (!it->handshakeSent) { ++it; continue; }
-        }
 
-        int bytes = recv(it->socket, buffer, sizeof(buffer), 0);
-        if (bytes > 0) {
-            it->buffer.insert(it->buffer.end(), buffer, buffer + bytes);
+                if (ready > 0 && FD_ISSET(it->socket, &writeSet)) {
+                    // Verify no socket-level error before sending
+                    int sockErr = 0;
+                    int errLen = sizeof(sockErr);
+                    getsockopt(it->socket, SOL_SOCKET, SO_ERROR, (char*)&sockErr, &errLen);
 
-            // Check if we have at least the 4-byte size prefix
-            if (it->buffer.size() >= 4) {
-                uint32_t packetSize;
-                memcpy(&packetSize, it->buffer.data(), 4);
-
-                // Check if the full packet has arrived
-                if (it->buffer.size() >= 4 + packetSize) {
-
-                    // --- FlatBuffers Verification ---
-                    const uint8_t* fbData = it->buffer.data() + 4;
-                    flatbuffers::Verifier verifier(fbData, packetSize);
-
-                    if (!VerifyNetworkMessageBuffer(verifier)) {
-                        if (m_debugLogging) std::cout << "[NetworkManager] Dropped corrupted handshake packet.\n";
-                        // Erase the corrupted data and try to recover the stream
-                        it->buffer.erase(it->buffer.begin(), it->buffer.begin() + 4 + packetSize);
+                    if (sockErr != 0) {
+                        if (m_debugLogging) std::cout << "[NetworkManager] Outgoing connect() error: " << sockErr << "\n";
+                        closesocket(it->socket);
+                        it = m_pendingConnections.erase(it);
                         continue;
                     }
 
-                    auto msg = GetNetworkMessage(fbData);
+                    // Connection established — safe to send the handshake now
+                    SendHandshake(it->socket);
+                    it->handshakeSent = true;
+                }
 
-                    // --- CLIENT LOGIC: Handle ID Assignment from Host ---
-                    if (msg->payload_type() == Payload_ReliableEvent) {
-                        auto ev = msg->payload_as_ReliableEvent();
-                        if (ev->event_type() == EventType_IdAssignment) {
-                            int assignedId = std::stoi(ev->string_payload()->str());
-                            m_localPeerId = assignedId;
-                            PhysicsSystem::localPeerId = assignedId; // Update ECS Authority
-                            
-                            // Link this socket as our connection to the Host (Peer 0)
-                            {
-                                std::lock_guard<std::mutex> lock(m_peerMutex);
-                                m_peers[0].tcpSocket = it->socket;
-                                m_peers[0].isConnected = true;
-                            }
-                            m_peerCount++;
-                            if (m_debugLogging) std::cout << "[NetworkManager] Successfully joined as Peer " << assignedId << "\n";
-                            it = m_pendingConnections.erase(it);
+                // Not yet connected — check again next tick
+                if (!it->handshakeSent) { ++it; continue; }
+            }
+
+            int bytes = recv(it->socket, buffer, sizeof(buffer), 0);
+            if (bytes > 0) {
+                it->buffer.insert(it->buffer.end(), buffer, buffer + bytes);
+
+                // Check if we have at least the 4-byte size prefix
+                if (it->buffer.size() >= 4) {
+                    uint32_t packetSize;
+                    memcpy(&packetSize, it->buffer.data(), 4);
+
+                    // Check if the full packet has arrived
+                    if (it->buffer.size() >= 4 + packetSize) {
+                        // --- FlatBuffers Verification ---
+                        const uint8_t* fbData = it->buffer.data() + 4;
+                        flatbuffers::Verifier verifier(fbData, packetSize);
+
+                        if (!VerifyNetworkMessageBuffer(verifier)) {
+                            if (m_debugLogging) std::cout << "[NetworkManager] Dropped corrupted handshake packet.\n";
+                            // Erase the corrupted data and try to recover the stream
+                            it->buffer.erase(it->buffer.begin(), it->buffer.begin() + 4 + packetSize);
                             continue;
                         }
-                    }
 
-                    // --- MESH LOGIC: Process handshakes from ANY peer ---
-                    // If we are Host(0) and sender is -1, it assigns an ID.
-                    // If we are Peer 1 and sender is Peer 2, it establishes the P2P link.
-                    if (m_debugLogging) {
-                        std::cout << "[NetworkManager] Received Handshake from Peer " << msg->sender_peer_id() << " on socket " << it->socket << std::endl;
+                        auto msg = GetNetworkMessage(fbData);
+
+                        // --- CLIENT LOGIC: Handle ID Assignment from Host ---
+                        if (msg->payload_type() == Payload_ReliableEvent) {
+                            auto ev = msg->payload_as_ReliableEvent();
+                            if (ev->event_type() == EventType_IdAssignment) {
+                                int assignedId = std::stoi(ev->string_payload()->str());
+                                m_localPeerId = assignedId;
+                                PhysicsSystem::localPeerId = assignedId; // Update ECS Authority
+
+                                // Link this socket as our connection to the Host (Peer 0)
+                                {
+                                    std::lock_guard<std::mutex> peerLock(m_peerMutex);
+                                    m_peers[0].tcpSocket = it->socket;
+                                    m_peers[0].isConnected = true;
+                                }
+                                m_peerCount++;
+
+                                if (m_debugLogging) std::cout << "[NetworkManager] Successfully joined as Peer " << assignedId << "\n";
+
+                                it = m_pendingConnections.erase(it);
+                                continue;
+                            }
+                        }
+
+                        // --- MESH LOGIC: Process handshakes from ANY peer ---
+                        if (m_debugLogging) {
+                            std::cout << "[NetworkManager] Received Handshake from Peer " << msg->sender_peer_id() << " on socket " << it->socket << std::endl;
+                        }
+                        HandleHandshake(it->socket, msg->sender_peer_id());
+
+                        it = m_pendingConnections.erase(it);
+                        continue;
                     }
-                    HandleHandshake(it->socket, msg->sender_peer_id());
-                    
-                    it = m_pendingConnections.erase(it);
-                    continue;
                 }
             }
-        }
-        else if (bytes == 0 || (bytes == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
-            if (m_debugLogging) {
-                std::cout << "[NetworkManager] Pending connection closed (Mesh full or Host disconnected).\n";
+            else if (bytes == 0 || (bytes == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
+                if (m_debugLogging) {
+                    std::cout << "[NetworkManager] Pending connection closed.\n";
+                }
+                closesocket(it->socket);
+                it = m_pendingConnections.erase(it);
+                continue;
             }
-            closesocket(it->socket);
-            it = m_pendingConnections.erase(it);
-            continue;
+            ++it;
         }
-        ++it;
     }
 
     // 2. Process Established Peers (Standard reliable traffic)
     {
         std::lock_guard<std::mutex> lock(m_peerMutex);
+
         for (auto& peer : m_peers) {
             if (!peer.isConnected || peer.id == m_localPeerId.load()) continue;
 
             int bytes = recv(peer.tcpSocket, buffer, sizeof(buffer), 0);
+
             if (bytes > 0) {
                 peer.tcpBuffer.insert(peer.tcpBuffer.end(), buffer, buffer + bytes);
+
                 while (peer.tcpBuffer.size() >= 4) {
                     uint32_t packetSize;
                     memcpy(&packetSize, peer.tcpBuffer.data(), 4);
+
                     if (peer.tcpBuffer.size() < 4 + packetSize) break;
 
                     std::vector<uint8_t> packetData(peer.tcpBuffer.begin() + 4, peer.tcpBuffer.begin() + 4 + packetSize);
                     PushInboundEvent(packetData, false);
+
                     peer.tcpBuffer.erase(peer.tcpBuffer.begin(), peer.tcpBuffer.begin() + 4 + packetSize);
                 }
             }
             else if (bytes == 0 || (bytes == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
                 if (m_debugLogging) std::cout << "[NetworkManager] Peer " << peer.id << " disconnected.\n";
+
                 peer.isConnected = false;
 
-                peer.port = 0;
+                // --- RECOVERY FIXES: Wipe memory so the slot is totally clean for a returning peer ---
+                peer.hasTimestampOffset = false;
+                peer.timestampOffset = 0.0f;
+                peer.lastReceivedSequence = 0;
+                peer.tcpBuffer.clear();
+                // We deliberately DO NOT wipe peer.port here anymore so redialing works
 
                 closesocket(peer.tcpSocket);
                 peer.tcpSocket = INVALID_SOCKET;
+
                 m_peerCount--;
 
                 if (m_peerDisconnectedCallback) {
@@ -422,66 +455,101 @@ void NetworkManager::ReceiveUDP() {
 }
 
 void NetworkManager::MaintainOutgoingConnections() {
-    // Only search for anchor if we don't have an ID and aren't already waiting on a connection
-    if (m_localPeerId.load() == -1 && m_pendingConnections.empty() && m_peerCount < 3) { // 4 PEER CAP
-        if (std::chrono::steady_clock::now() - m_lastConnectionAttempt < std::chrono::seconds(2)) {
-            return;
-        }
-        m_lastConnectionAttempt = std::chrono::steady_clock::now();
-    }
-
     int localId = m_localPeerId.load();
 
-    // 1. If we don't have an ID, look for the Anchor (Peer 0)
-    if (localId == -1 && m_pendingConnections.empty() && m_peerCount < 3) {
-        if (m_debugLogging) std::cout << "[NetworkManager] Searching for Anchor (Peer 0) on port 27015...\n";
-        sockaddr_in anchorAddr{};
-        anchorAddr.sin_family = AF_INET;
-        anchorAddr.sin_port = htons(27015);
-        inet_pton(AF_INET, "127.0.0.1", &anchorAddr.sin_addr);
+    // ========================================================================
+    // PHASE 1: UNASSIGNED CLIENT (Sweeping & Genesis Timeout)
+    // ========================================================================
+    if (localId == -1 && m_pendingConnections.empty() && m_peerCount < 3) { // 4 Peer Cap
 
-        SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (s != INVALID_SOCKET) {
-            u_long mode = 1;
-            ioctlsocket(s, FIONBIO, &mode);
+        auto now = std::chrono::steady_clock::now();
+        if (now - m_lastConnectionAttempt < std::chrono::seconds(2)) {
 
-            // Non-blocking connect — returns WSAEWOULDBLOCK immediately on Windows.
-            // The handshake is deferred until the connection is confirmed write-ready
-            // in ReceiveTCP to avoid sending on a not-yet-connected socket.
-            connect(s, (sockaddr*)&anchorAddr, sizeof(anchorAddr));
+            // --- GENESIS TIMEOUT --- 
+            // If we have been searching for over 3 seconds and found nobody, 
+            // promote ourselves to the Host so a new mesh can form.
+            if (m_peerCount == 0 && (now - m_startupTime) > std::chrono::seconds(3)) {
+                m_localPeerId = 0;
+                PhysicsSystem::localPeerId = 0;
+                if (m_debugLogging) {
+                    std::cout << "[NetworkManager] Genesis Timeout: No existing mesh found. Promoting self to Peer 0 (Host).\n";
+                }
+            }
+            return;
+        }
+        m_lastConnectionAttempt = now;
 
-            m_pendingConnections.push_back({ s, {}, true, false });
+        if (m_debugLogging) {
+            std::cout << "[NetworkManager] Sweeping ports " << m_basePort << "-" << (m_basePort + 9) << " for Host...\n";
+        }
+
+        // Dial all ports in our application's block simultaneously
+        for (uint16_t p = m_basePort; p < m_basePort + 10; ++p) {
+            if (p == m_localPort) continue; // Don't dial ourselves
+
+            sockaddr_in targetAddr{};
+            targetAddr.sin_family = AF_INET;
+            targetAddr.sin_port = htons(p);
+            inet_pton(AF_INET, "127.0.0.1", &targetAddr.sin_addr);
+
+            SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (s != INVALID_SOCKET) {
+                u_long mode = 1;
+                ioctlsocket(s, FIONBIO, &mode);
+
+                // Non-blocking connect — resolves asynchronously in ReceiveTCP
+                connect(s, (sockaddr*)&targetAddr, sizeof(targetAddr));
+
+                // --- THREAD SAFETY FIX: Safely lock before pushing to the pending list ---
+                {
+                    std::lock_guard<std::mutex> lock(m_pendingMutex);
+                    m_pendingConnections.push_back({ s, {}, true, false, -1 });
+                }
+            }
         }
     }
-    // 2. If we DO have an ID, ensure we are connected to all other peers to form the Full Mesh
+
+    // ========================================================================
+    // PHASE 2: ASSIGNED PEER (Establishing Full P2P Mesh Links)
+    // ========================================================================
     else if (localId > 0 && m_peerCount < 3) {
         std::lock_guard<std::mutex> lock(m_peerMutex);
-        
+
         // Rule: A peer only initiates TCP connections to peers with a LOWER ID than itself.
-        // This prevents P1 and P2 from cross-connecting simultaneously and creating duplicate sockets.
+        // This prevents simultaneous cross-connecting and duplicate sockets.
         for (int targetId = 0; targetId < localId; ++targetId) {
+            // Note: We deliberately check if port != 0. If a peer drops, their port is 
+            // preserved so we can redial them if they come back!
             if (!m_peers[targetId].isConnected && m_peers[targetId].port != 0) {
-                if (std::chrono::steady_clock::now() - m_lastP2PAttempt[targetId] < std::chrono::seconds(2)) {
+
+                auto now = std::chrono::steady_clock::now();
+                if (now - m_lastP2PAttempt[targetId] < std::chrono::seconds(2)) {
                     continue;
                 }
-                m_lastP2PAttempt[targetId] = std::chrono::steady_clock::now();
-                if (m_debugLogging) std::cout << "[NetworkManager] Attempting P2P link to Peer " << targetId << "...\n";
-                
+                m_lastP2PAttempt[targetId] = now;
+
+                if (m_debugLogging) {
+                    std::cout << "[NetworkManager] Attempting P2P link to Peer " << targetId << "...\n";
+                }
+
                 SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
                 if (s != INVALID_SOCKET) {
                     u_long mode = 1;
                     ioctlsocket(s, FIONBIO, &mode);
-                    // In this engine, TCP and UDP share the same port assignment
-                    connect(s, (sockaddr*)&m_peers[targetId].udpAddr, sizeof(sockaddr_in)); 
-                    
-                    // --- THE FIX IS HERE ---
+                    connect(s, (sockaddr*)&m_peers[targetId].udpAddr, sizeof(sockaddr_in));
+
                     // Active outbound connections to known peers bypass the pending list.
                     // We instantly register them as active connections!
                     m_peers[targetId].tcpSocket = s;
                     m_peers[targetId].isConnected = true;
                     m_peerCount++;
-                    
+
                     SendHandshake(s); // Send our ID so the receiving peer can register us
+
+                    // --- SYNC FIX: Trigger callback so we exchange ECS and static scene states ---
+                    if (m_peerJoinedCallback) {
+                        m_peerJoinedCallback(targetId);
+                    }
                 }
             }
         }
@@ -489,51 +557,71 @@ void NetworkManager::MaintainOutgoingConnections() {
 }
 
 void NetworkManager::HandleHandshake(SOCKET s, int remoteId) {
-    if (m_localPeerId.load() == 0 && remoteId == -1) {
-        int newId = GetNextAvailableId();
-        if (newId != -1) {
-            flatbuffers::FlatBufferBuilder b(128);
+    int localId = m_localPeerId.load();
+    int currentHostId = localId;
 
-            // Create the string ID first
-            auto idStr = b.CreateString(std::to_string(newId));
-
-            // Create the event using the string
-            auto ev = CreateReliableEvent(b, EventType_IdAssignment, idStr);
-
-            auto msg = CreateNetworkMessage(b, static_cast<int8_t>(m_localPeerId.load()), Payload_ReliableEvent, ev.Union());
-            b.Finish(msg);
-
-            uint32_t size = b.GetSize();
-            if (SendAllTCP(s, (char*)&size, 4)) {
-                SendAllTCP(s, (char*)b.GetBufferPointer(), size);
+    // --- 1. Determine who the Network Host is deterministically ---
+    if (localId != -1) {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        for (int i = 0; i < 4; ++i) {
+            // Find the lowest ID currently active in the mesh
+            if (i != localId && m_peers[i].isConnected) {
+                if (i < currentHostId) {
+                    currentHostId = i;
+                }
             }
+        }
+    }
 
-            {
-                std::lock_guard<std::mutex> lock(m_peerMutex);
-                m_peers[newId].tcpSocket = s;
-                m_peers[newId].isConnected = true;
-            }
-            m_peerCount++;
-            if (m_debugLogging) {
-                std::cout << "[NetworkManager] Peer " << newId << " joined the mesh (Assigned by Host). Mesh Size: " << m_peerCount.load() << "/4" << std::endl;
-            }
+    // --- 2. Handle Unassigned Clients (New Instances) ---
+    if (remoteId == -1) {
+        // Only the active Host is allowed to assign IDs!
+        if (localId == currentHostId && localId != -1) {
+            int newId = GetNextAvailableId();
+            if (newId != -1) {
+                flatbuffers::FlatBufferBuilder b(128);
+                auto idStr = b.CreateString(std::to_string(newId));
+                auto ev = CreateReliableEvent(b, EventType_IdAssignment, idStr);
+                auto msg = CreateNetworkMessage(b, static_cast<int8_t>(localId), Payload_ReliableEvent, ev.Union());
+                b.Finish(msg);
+                uint32_t size = b.GetSize();
 
-            if (m_peerJoinedCallback) {
-                m_peerJoinedCallback(newId);
+                if (SendAllTCP(s, (char*)&size, 4)) {
+                    SendAllTCP(s, (char*)b.GetBufferPointer(), size);
+                }
+                {
+                    std::lock_guard<std::mutex> lock(m_peerMutex);
+                    m_peers[newId].tcpSocket = s;
+                    m_peers[newId].isConnected = true;
+                }
+                m_peerCount++;
+                if (m_debugLogging) {
+                    std::cout << "[NetworkManager] Peer " << newId << " joined the mesh (Assigned by Host " << localId << ").\n";
+                }
+                if (m_peerJoinedCallback) m_peerJoinedCallback(newId);
+            }
+            else {
+                if (m_debugLogging) std::cout << "[NetworkManager] Mesh is full. Rejecting.\n";
+                closesocket(s);
             }
         }
         else {
-            if (m_debugLogging) std::cout << "[NetworkManager] Mesh is full (4/4). Rejecting connection.\n";
+            // We are NOT the host. Reject the unassigned client so they keep sweeping until they find the real Host.
             closesocket(s);
         }
     }
+    // --- 3. Handle Established Peers ---
     else if (remoteId >= 0 && remoteId < 4) {
         std::lock_guard<std::mutex> lock(m_peerMutex);
-        m_peers[remoteId].tcpSocket = s;
-        m_peers[remoteId].isConnected = true;
-        m_peerCount++;
-        if (m_debugLogging) {
-            std::cout << "[NetworkManager] Peer " << remoteId << " established P2P link. Mesh Size: " << m_peerCount.load() << "/4" << std::endl;
+        if (!m_peers[remoteId].isConnected) {
+            m_peers[remoteId].tcpSocket = s;
+            m_peers[remoteId].isConnected = true;
+            m_peerCount++;
+
+            if (m_debugLogging) {
+                std::cout << "[NetworkManager] Peer " << remoteId << " established P2P link.\n";
+            }
+            if (m_peerJoinedCallback) m_peerJoinedCallback(remoteId);
         }
     }
 }

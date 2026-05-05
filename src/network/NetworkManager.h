@@ -233,6 +233,8 @@ private:
     uint32_t m_broadcastSequence = 0;
     float m_currentSimulationTime = 0.0f;
 
+    std::chrono::steady_clock::time_point m_startupTime{};
+
     // Connection retry state — member so Restart() resets it correctly
     std::chrono::steady_clock::time_point m_lastConnectionAttempt{};
     std::array<std::chrono::steady_clock::time_point, 4> m_lastP2PAttempt{};
