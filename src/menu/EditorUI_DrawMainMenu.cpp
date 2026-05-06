@@ -92,7 +92,7 @@ void EditorUI::DrawMainMenuSection(float deltaTime, float currentTemp, const std
         ImGui::TextDisabled("Async Runtime Targets (Hz)");
         if (ImGui::InputFloat("Render Hz", &m_TargetRenderHz, 1.0f, 10.0f, "%.1f")) {
             // Allow 0 to indicate "unlimited" (no software frame cap)
-            m_TargetRenderHz = std::clamp(m_TargetRenderHz, 0.0f, 240.0f);
+            m_TargetRenderHz = std::clamp(m_TargetRenderHz, 0.0f, 5000.0f);
             m_RuntimeSettingsChanged = true;
         }
         if (ImGui::InputFloat("Simulation Hz", &m_TargetSimulationHz, 10.0f, 100.0f, "%.1f")) {
@@ -1401,94 +1401,207 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
 
         Registry& registry = scene.GetRegistry();
 
-        ImGui::TextDisabled("Cloth Systems");
-        ImGui::Separator();
-        if (ImGui::BeginMenu("Cloth Grids")) {
-            bool hasCloth = false;
+        bool hasAnyCloth = false;
+        bool hasAnyFlock = false;
+        const Entity entityCount = registry.GetEntityCount();
+        for (Entity e = 0; e < entityCount; ++e) {
+            if (!hasAnyCloth && registry.HasComponent<ClothComponent>(e)) hasAnyCloth = true;
+            if (!hasAnyFlock && registry.HasComponent<FlockManagerComponent>(e)) hasAnyFlock = true;
+            if (hasAnyCloth && hasAnyFlock) break; // Optimization: stop scanning if we found both
+        }
 
-            for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-                if (!registry.HasComponent<ClothComponent>(e)) continue;
-                hasCloth = true;
+        // ==========================================
+        // CLOTH SYSTEMS MENU (Conditional)
+        // ==========================================
+        if (hasAnyCloth) {
+            ImGui::TextDisabled("Cloth Systems");
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Cloth Grids")) {
+                for (Entity e = 0; e < entityCount; ++e) {
+                    if (!registry.HasComponent<ClothComponent>(e)) continue;
 
-                auto& comp = registry.GetComponent<ClothComponent>(e);
-                std::string clothName = registry.HasComponent<NameComponent>(e) ?
-                    registry.GetComponent<NameComponent>(e).name : "Cloth " + std::to_string(e);
+                    auto& comp = registry.GetComponent<ClothComponent>(e);
+                    std::string clothName = registry.HasComponent<NameComponent>(e) ?
+                        registry.GetComponent<NameComponent>(e).name : "Cloth " + std::to_string(e);
+                    std::string menuLabel = clothName + "###ClothMenu_" + std::to_string(e);
 
-                std::string menuLabel = clothName + "###ClothMenu_" + std::to_string(e);
+                    if (ImGui::BeginMenu(menuLabel.c_str())) {
+                        ImGui::PushID(static_cast<int>(e));
+                        ImGui::TextDisabled("Grid Details");
+                        ImGui::Separator();
+                        ImGui::Text("Grid Size: %d x %d", comp.width, comp.height);
+                        ImGui::Text("Spacing: %.2f", comp.spacing);
+                        ImGui::Text("Particles: %zu", comp.particles.size());
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("Physical Properties");
+                        ImGui::Separator();
 
-                if (ImGui::BeginMenu(menuLabel.c_str())) {
-                    ImGui::PushID(static_cast<int>(e));
-
-                    ImGui::TextDisabled("Grid Details");
-                    ImGui::Separator();
-                    ImGui::Text("Grid Size: %d x %d", comp.width, comp.height);
-                    ImGui::Text("Spacing: %.2f", comp.spacing);
-                    ImGui::Text("Particles: %zu", comp.particles.size());
-
-                    ImGui::Spacing();
-                    ImGui::TextDisabled("Physical Properties");
-                    ImGui::Separator();
-
-                    float currentMass = 0.5f;
-                    float currentStiffness = 50.0f;
-                    float currentDamping = 1.5f;
-
-                    for (Entity p : comp.particles) {
-                        if (registry.HasComponent<PhysicsComponent>(p)) {
-                            auto& pc = registry.GetComponent<PhysicsComponent>(p);
-                            if (!pc.isStatic) {
-                                currentMass = pc.mass;
+                        float currentMass = 0.5f;
+                        float currentStiffness = 50.0f;
+                        float currentDamping = 1.5f;
+                        for (Entity p : comp.particles) {
+                            if (registry.HasComponent<PhysicsComponent>(p)) {
+                                auto& pc = registry.GetComponent<PhysicsComponent>(p);
+                                if (!pc.isStatic) currentMass = pc.mass;
+                            }
+                            if (registry.HasComponent<SpringComponent>(p)) {
+                                auto& sc = registry.GetComponent<SpringComponent>(p);
+                                currentStiffness = sc.stiffness;
+                                currentDamping = sc.damping;
+                                break;
                             }
                         }
-                        if (registry.HasComponent<SpringComponent>(p)) {
-                            auto& sc = registry.GetComponent<SpringComponent>(p);
-                            currentStiffness = sc.stiffness;
-                            currentDamping = sc.damping;
-                            break;
-                        }
-                    }
 
-                    bool updatePhysics = false;
-                    bool updateSprings = false;
+                        bool updatePhysics = false;
+                        bool updateSprings = false;
+                        if (ImGui::DragFloat("Particle Mass", &currentMass, 0.05f, 0.01f, 100.0f)) updatePhysics = true;
+                        if (ImGui::DragFloat("Spring Stiffness", &currentStiffness, 1.0f, 0.0f, 1000.0f)) updateSprings = true;
+                        if (ImGui::DragFloat("Spring Damping", &currentDamping, 0.1f, 0.0f, 100.0f)) updateSprings = true;
 
-                    if (ImGui::DragFloat("Particle Mass", &currentMass, 0.05f, 0.01f, 100.0f)) updatePhysics = true;
-                    if (ImGui::DragFloat("Spring Stiffness", &currentStiffness, 1.0f, 0.0f, 1000.0f)) updateSprings = true;
-                    if (ImGui::DragFloat("Spring Damping", &currentDamping, 0.1f, 0.0f, 100.0f)) updateSprings = true;
-
-                    if (updatePhysics || updateSprings) {
-                        for (Entity p : comp.particles) {
-                            if (updatePhysics && registry.HasComponent<PhysicsComponent>(p)) {
-                                auto& pc = registry.GetComponent<PhysicsComponent>(p);
-                                if (!pc.isStatic) {
-                                    pc.SetMass(currentMass);
+                        if (updatePhysics || updateSprings) {
+                            for (Entity p : comp.particles) {
+                                if (updatePhysics && registry.HasComponent<PhysicsComponent>(p)) {
+                                    auto& pc = registry.GetComponent<PhysicsComponent>(p);
+                                    if (!pc.isStatic) pc.SetMass(currentMass);
+                                }
+                                if (updateSprings && registry.HasComponent<SpringComponent>(p)) {
+                                    auto& sc = registry.GetComponent<SpringComponent>(p);
+                                    sc.stiffness = currentStiffness;
+                                    sc.damping = currentDamping;
                                 }
                             }
-                            if (updateSprings && registry.HasComponent<SpringComponent>(p)) {
-                                auto& sc = registry.GetComponent<SpringComponent>(p);
-                                sc.stiffness = currentStiffness;
-                                sc.damping = currentDamping;
+                        }
+                        ImGui::Separator();
+                        if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
+                            m_PropertyWindows.push_back({ m_NextPropertyWindowId++, e, false, true, true });
+                        }
+                        ImGui::PopID();
+                        ImGui::EndMenu();
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::Spacing();
+        }
+
+        // ==========================================
+        // FLOCK SYSTEMS MENU (Conditional)
+        // ==========================================
+        if (hasAnyFlock) {
+            ImGui::TextDisabled("Flock Systems");
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Flock Managers")) {
+                for (Entity e = 0; e < entityCount; ++e) {
+                    if (!registry.HasComponent<FlockManagerComponent>(e)) continue;
+
+                    auto& flock = registry.GetComponent<FlockManagerComponent>(e);
+                    std::string flockName = registry.HasComponent<NameComponent>(e) ?
+                        registry.GetComponent<NameComponent>(e).name : "Flock " + std::to_string(e);
+                    std::string menuLabel = flockName + "###FlockMenu_" + std::to_string(e);
+
+                    if (ImGui::BeginMenu(menuLabel.c_str())) {
+                        ImGui::PushID(static_cast<int>(e));
+
+                        // --- 1. Global Visual Swapper ---
+                        ImGui::TextDisabled("Global Boid Visuals");
+                        ImGui::Separator();
+
+                        /*static std::string selectedModel = "";
+                        static std::string selectedTexture = "";
+
+                        if (ImGui::BeginCombo("Model", selectedModel.empty() ? "Select..." : selectedModel.c_str())) {
+                            for (const auto& mod : m_AvailableModels) {
+                                if (ImGui::Selectable(mod.c_str(), selectedModel == mod)) selectedModel = mod;
+                            }
+                            ImGui::EndCombo();
+                        }
+
+                        if (ImGui::BeginCombo("Texture", selectedTexture.empty() ? "Select..." : selectedTexture.c_str())) {
+                            for (const auto& tex : m_AvailableTextures) {
+                                if (ImGui::Selectable(tex.c_str(), selectedTexture == tex)) selectedTexture = tex;
+                            }
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::Spacing();
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                        if (ImGui::Button("Apply Visuals to Entire Flock", ImVec2(-1, 0))) {
+                            for (Entity b = 0; b < entityCount; ++b) {
+                                if (registry.HasComponent<BoidComponent>(b) && registry.HasComponent<RenderComponent>(b)) {
+                                    auto& render = registry.GetComponent<RenderComponent>(b);
+                                    if (!selectedModel.empty()) {
+                                        GeometryChangeRequest req;
+                                        req.entity = b;
+                                        req.type = "Model File";
+                                        req.path = selectedModel;
+                                        m_GeometryRequests.push_back(req);
+                                    }
+                                    if (!selectedTexture.empty()) {
+                                        render.texturePath = selectedTexture;
+                                    }
+                                }
                             }
                         }
-                    }
+                        ImGui::PopStyleColor();
+                        ImGui::Spacing();*/
 
-                    ImGui::Separator();
-                    if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
-                        m_PropertyWindows.push_back({ m_NextPropertyWindowId++, e, false, true, true });
-                    }
+                        // --- 2. Live Behavior Sliders ---
+                        ImGui::TextDisabled("Flock Behavior");
+                        ImGui::Separator();
+                        
+                        ImGui::InputInt("Boid Count", &flock.count);
+                        if (flock.count < 0) flock.count = 0;
+                        if (flock.count > 5000) flock.count = 5000; // Sanity limit
 
-                    ImGui::PopID();
-                    ImGui::EndMenu();
+                        if (ImGui::Button("Apply Flock Size (Respawns)", ImVec2(-1, 0))) {
+                            m_FlockUpdateRequested = true;
+                            m_RequestedFlockEntity = e;
+                        }
+                        ImGui::Spacing();
+
+                        ImGui::SliderFloat("Separation Weight", &flock.separationWeight, 0.0f, 5.0f);
+                        ImGui::SliderFloat("Alignment Weight", &flock.alignmentWeight, 0.0f, 5.0f);
+                        ImGui::SliderFloat("Cohesion Weight", &flock.cohesionWeight, 0.0f, 5.0f);
+                        ImGui::SliderFloat("Perception Radius", &flock.perceptionRadius, 0.1f, 10.0f);
+                        ImGui::SliderFloat("Max Speed", &flock.maxSpeed, 0.01f, 1.0f);
+                        ImGui::SliderFloat("Max Steering Force", &flock.maxForce, 0.001f, 0.2f);
+
+                        // --- 3. Live Scale Slider ---
+                        ImGui::TextDisabled("Flock Scale");
+                        ImGui::Separator();
+
+                        // Defaulting to 1.0f, but you can adjust the range (0.01f to 10.0f)
+                        static float globalBoidScale = 1.0f;
+
+                        if (ImGui::DragFloat("Global Boid Scale", &globalBoidScale, 0.05f, 0.01f, 10.0f)) {
+                            for (Entity b = 0; b < entityCount; ++b) {
+                                // Find all boids that have a Transform
+                                if (registry.HasComponent<BoidComponent>(b) && registry.HasComponent<TransformComponent>(b)) {
+                                    auto& transform = registry.GetComponent<TransformComponent>(b);
+
+                                    // Apply the new uniform scale
+                                    transform.scale = glm::vec3(globalBoidScale);
+
+                                    // CRITICAL: Tell the ECS to rebuild the transformation matrix
+                                    transform.UpdateMatrix();
+                                }
+                            }
+                        }
+
+                        ImGui::Separator();
+                        if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {
+                            m_PropertyWindows.push_back({ m_NextPropertyWindowId++, e, false, true, true });
+                        }
+
+                        ImGui::PopID();
+                        ImGui::EndMenu();
+                    }
                 }
+                ImGui::EndMenu();
             }
-
-            if (!hasCloth) {
-                ImGui::MenuItem("No cloth grids in scene", nullptr, false, false);
-            }
-
-            ImGui::EndMenu();
+            ImGui::Spacing();
         }
-        
-        ImGui::Spacing();
+
         ImGui::TextDisabled("Entities");
         ImGui::Separator();
         const auto& entities = scene.GetRenderableEntities();

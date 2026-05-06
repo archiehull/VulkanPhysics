@@ -5,11 +5,15 @@
 void ParticleUpdateSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
 
-    // 1. Update ECS-driven particle effects (like the moving Dust Cloud)
-    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-        if (!registry.HasComponent<DustCloudComponent>(e)) continue;
+    auto dustArray = registry.GetComponentArray<DustCloudComponent>();
+    const size_t dustCount = dustArray->GetSize();
 
-        auto& dust = registry.GetComponent<DustCloudComponent>(e);
+    // 1. Update ECS-driven particle effects (like the moving Dust Cloud)
+    for (size_t idx = 0; idx < dustCount; ++idx) {
+        Entity e = dustArray->GetEntityAtIndex(idx);
+        if (e == MAX_ENTITIES) continue;
+
+        auto& dust = dustArray->GetData(e);
 
         if (dust.isActive) {
             dust.position += dust.direction * dust.speed * deltaTime;
@@ -27,11 +31,16 @@ void ParticleUpdateSystem::Update(Scene& scene, float deltaTime) {
     }
 
     // --- NEW: Sync Attached Custom Emitters ---
-    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-        if (!registry.HasComponent<AttachedEmitterComponent>(e) || !registry.HasComponent<TransformComponent>(e)) continue;
+    auto attachedArray = registry.GetComponentArray<AttachedEmitterComponent>();
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    const size_t attachedCount = attachedArray->GetSize();
 
-        auto& attached = registry.GetComponent<AttachedEmitterComponent>(e);
-        auto& transform = registry.GetComponent<TransformComponent>(e);
+    for (size_t idx = 0; idx < attachedCount; ++idx) {
+        Entity e = attachedArray->GetEntityAtIndex(idx);
+        if (e == MAX_ENTITIES || !transformArray->HasData(e)) continue;
+
+        auto& attached = attachedArray->GetData(e);
+        auto& transform = transformArray->GetData(e);
 
         // Iterate backwards or use an iterator so we can safely delete expired emitters
         for (auto it = attached.emitters.begin(); it != attached.emitters.end(); ) {
@@ -55,8 +64,9 @@ void ParticleUpdateSystem::Update(Scene& scene, float deltaTime) {
 
             // Lock the emitter position to the object's transform
             props.position = glm::vec3(transform.matrix[3]);
-            if (registry.HasComponent<ColliderComponent>(e)) {
-                props.position.y += registry.GetComponent<ColliderComponent>(e).height * 0.5f;
+            auto colliderArray = registry.GetComponentArray<ColliderComponent>();
+            if (colliderArray->HasData(e)) {
+                props.position.y += colliderArray->GetData(e).height * 0.5f;
             }
 
             if (activeEm.emitterId == -1) {

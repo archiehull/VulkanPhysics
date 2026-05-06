@@ -68,6 +68,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
     CustomParticleConfig* currentParticle = nullptr;
     LayerRegionConfig* currentLayerRegion = nullptr;
     AppConfig::MaterialConfig* currentMaterial = nullptr;
+    FlockConfig* currentFlock = nullptr;
     ConfigSection currentSection = ConfigSection::None;
 
     while (std::getline(file, line)) {
@@ -109,6 +110,9 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             currentObject = &config.sceneObjects.back();
             currentTexture = nullptr;
             currentParticle = nullptr;
+            currentLayerRegion = nullptr;
+            currentMaterial = nullptr;
+            currentFlock = nullptr;
         }
         else if (key == "EndObject") {
             currentObject = nullptr;
@@ -120,6 +124,9 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             currentTexture = &config.proceduralTextures.back();
             currentObject = nullptr;
             currentParticle = nullptr;
+            currentLayerRegion = nullptr;
+            currentMaterial = nullptr;
+            currentFlock = nullptr;
         }
         else if (key == "EndTexture") {
             currentTexture = nullptr;
@@ -134,6 +141,9 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             currentParticle = &config.customParticles.back();
             currentObject = nullptr;
             currentTexture = nullptr;
+            currentLayerRegion = nullptr;
+            currentMaterial = nullptr;
+            currentFlock = nullptr;
         }
         else if (key == "EndParticle") {
             currentParticle = nullptr;
@@ -147,6 +157,8 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             currentObject = nullptr;
             currentTexture = nullptr;
             currentParticle = nullptr;
+            currentMaterial = nullptr;
+            currentFlock = nullptr;
         }
         else if (key == "Material") {
             AppConfig::MaterialConfig newMat;
@@ -157,6 +169,7 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
             currentTexture = nullptr;
             currentParticle = nullptr;
             currentLayerRegion = nullptr;
+            currentFlock = nullptr;
         }
         else if (key == "EndMaterial") {
             currentMaterial = nullptr;
@@ -170,6 +183,21 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
         }
         else if (key == "EndLayerRegion") {
             currentLayerRegion = nullptr;
+        }
+        else if (key == "Flock") {
+            FlockConfig newFlock;
+            ss >> newFlock.name;
+            config.flock = newFlock;
+            config.hasFlock = true;
+            currentFlock = &config.flock;
+            currentObject = nullptr;
+            currentTexture = nullptr;
+            currentParticle = nullptr;
+            currentLayerRegion = nullptr;
+            currentMaterial = nullptr;
+        }
+        else if (key == "EndFlock") {
+            currentFlock = nullptr;
         }
 
         // --- Particle Fields ---
@@ -197,6 +225,24 @@ void ConfigLoader::ParseFile(AppConfig& config, const std::string& filepath) {
                 ss >> boolStr;
                 currentTexture->isVertical = (boolStr == "true" || boolStr == "1");
             }
+        }
+        // --- Flock Fields ---
+        else if (currentFlock) {
+            if (key == "Count") ss >> currentFlock->count;
+            else if (key == "SeparationWeight") ss >> currentFlock->separationWeight;
+            else if (key == "AlignmentWeight") ss >> currentFlock->alignmentWeight;
+            else if (key == "CohesionWeight") ss >> currentFlock->cohesionWeight;
+            else if (key == "PerceptionRadius") ss >> currentFlock->perceptionRadius;
+            else if (key == "MaxSpeed") ss >> currentFlock->maxSpeed;
+            else if (key == "MaxForce") ss >> currentFlock->maxForce;
+            else if (key == "BoundsMin") ss >> currentFlock->boundsMin.x >> currentFlock->boundsMin.y >> currentFlock->boundsMin.z;
+            else if (key == "BoundsMax") ss >> currentFlock->boundsMax.x >> currentFlock->boundsMax.y >> currentFlock->boundsMax.z;
+            else if (key == "SpawnCenter") ss >> currentFlock->spawnCenter.x >> currentFlock->spawnCenter.y >> currentFlock->spawnCenter.z;
+            else if (key == "SpawnExtents") ss >> currentFlock->spawnExtents.x >> currentFlock->spawnExtents.y >> currentFlock->spawnExtents.z;
+            else if (key == "RenderType") ss >> currentFlock->renderType;
+            else if (key == "RenderScale") ss >> currentFlock->renderScale.x >> currentFlock->renderScale.y >> currentFlock->renderScale.z;
+            else if (key == "Model") ss >> currentFlock->modelPath;
+            else if (key == "Texture") ss >> currentFlock->texturePath;
         }
         // --- Object Fields ---
         else if (currentObject) {

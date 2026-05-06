@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include "../util/AnimationMath.h"
 #include <chrono>
+#include "../systems/FlockSystem.h"
 
 namespace {
 float ComputeFlickerPresetValue(int preset, float t, float phase) {
@@ -208,8 +209,10 @@ void Scene::SpawnPhysicsBall(const glm::vec3& pos, const glm::vec3& velocity) {
 void Scene::ResetSpawnerSpawnedObjects() {
     std::vector<Entity> entitiesToDelete;
 
-    for (Entity e = 0; e < m_Registry.GetEntityCount(); ++e) {
-        if (m_Registry.HasComponent<SpawnedFromSpawnerComponent>(e)) {
+    auto spawnedArray = m_Registry.GetComponentArray<SpawnedFromSpawnerComponent>();
+    for (size_t i = 0; i < spawnedArray->GetSize(); ++i) {
+        Entity e = spawnedArray->GetEntityAtIndex(i);
+        if (e != MAX_ENTITIES) {
             entitiesToDelete.push_back(e);
         }
     }
@@ -218,9 +221,11 @@ void Scene::ResetSpawnerSpawnedObjects() {
         DeleteEntity(e);
     }
 
-    for (Entity e = 0; e < m_Registry.GetEntityCount(); ++e) {
-        if (m_Registry.HasComponent<ObjectSpawnerComponent>(e)) {
-            auto& spawner = m_Registry.GetComponent<ObjectSpawnerComponent>(e);
+    auto spawnerArray = m_Registry.GetComponentArray<ObjectSpawnerComponent>();
+    for (size_t i = 0; i < spawnerArray->GetSize(); ++i) {
+        Entity e = spawnerArray->GetEntityAtIndex(i);
+        if (e != MAX_ENTITIES) {
+            auto& spawner = spawnerArray->GetData(e);
             spawner.spawnTimer = 0.0f;
             spawner.runElapsedSeconds = 0.0f;
             spawner.spawnedThisRun = 0;
@@ -546,6 +551,7 @@ void Scene::Initialize() {
     m_Systems.push_back(std::make_unique<ClothSystem>());
     m_Systems.push_back(std::make_unique<ObjectSpawnerSystem>());
     m_Systems.push_back(std::make_unique<SmokeGrenadeSystem>());
+    m_Systems.push_back(std::make_unique<FlockSystem>());
 }
 
 void Scene::RegisterProceduralObject(const std::string& modelPath, const std::string& texturePath, float frequency, const glm::vec3& minScale, const glm::vec3& maxScale, const glm::vec3& baseRotation, bool isFlammable) {
@@ -1745,14 +1751,26 @@ std::vector<Light> Scene::GetLights() const {
 }
 
 void Scene::Clear() {
+    if (kSceneDebug) {
+        std::cout << "[Scene] Clearing scene. Current entities: " << m_Registry.GetEntityCount() << std::endl;
+        std::cout << "  Renderables tracked: " << m_RenderableEntities.size() << std::endl;
+        std::cout << "  Particle systems: " << particleSystems.size() << std::endl;
+    }
+
     // 1. Collect all shared geometry for deferred cleanup
+    int deferredCount = 0;
     for (Entity e : m_RenderableEntities) {
         if (m_Registry.IsAlive(e) && m_Registry.HasComponent<RenderComponent>(e)) {
             auto& renderComp = m_Registry.GetComponent<RenderComponent>(e);
             if (renderComp.geometry && renderComp.geometry.use_count() == 1) {
                 m_DeferredGeometryCleanup.push_back(std::move(renderComp.geometry));
+                deferredCount++;
             }
         }
+    }
+
+    if (kSceneDebug && deferredCount > 0) {
+        std::cout << "  Deferred cleanup for " << deferredCount << " unique geometries." << std::endl;
     }
 
     // 2. High-speed Registry Clear
@@ -1772,6 +1790,10 @@ void Scene::Clear() {
 
     m_EnvironmentEntity = MAX_ENTITIES;
     m_ElapsedTime = 0.0f;
+
+    if (kSceneDebug) {
+        std::cout << "[Scene] Clear COMPLETE." << std::endl;
+    }
 }
 
 void Scene::FlushDeferredGeometryCleanup() {

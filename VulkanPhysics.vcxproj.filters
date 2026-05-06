@@ -207,6 +207,9 @@
     <ClCompile Include="src\network\NetworkManager.cpp">
       <Filter>Source Files\src\network</Filter>
     </ClCompile>
+    <ClCompile Include="src\systems\FlockSystem.cpp">
+      <Filter>Source Files\src\systems</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Window.h">
@@ -370,6 +373,9 @@
     </ClInclude>
     <ClInclude Include="src\network\NetworkManager.h">
       <Filter>Source Files\src\network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\systems\FlockSystem.h">
+      <Filter>Source Files\src\systems</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

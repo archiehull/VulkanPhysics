@@ -7,20 +7,27 @@
 void CameraSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
 
-    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-        if (!registry.HasComponent<CameraComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
+    auto camArray = registry.GetComponentArray<CameraComponent>();
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+    auto orbitArray = registry.GetComponentArray<OrbitComponent>();
+    auto regionArray = registry.GetComponentArray<LayerRegionComponent>();
+
+    const size_t camCount = camArray->GetSize();
+    for (size_t idx = 0; idx < camCount; ++idx) {
+        Entity e = camArray->GetEntityAtIndex(idx);
+        if (e == MAX_ENTITIES || !transformArray->HasData(e)) {
             continue;
         }
 
-        auto& cam = registry.GetComponent<CameraComponent>(e);
-        auto& transform = registry.GetComponent<TransformComponent>(e);
+        auto& cam = camArray->GetData(e);
+        auto& transform = transformArray->GetData(e);
 
         // FIX: Read directly from the position vector, not the matrix!
         const glm::vec3 pos = transform.position;
 
         // 1. Calculate View Matrix
-        if (registry.HasComponent<OrbitComponent>(e) && registry.GetComponent<OrbitComponent>(e).isOrbiting) {
-            const auto& orbit = registry.GetComponent<OrbitComponent>(e);
+        if (orbitArray->HasData(e) && orbitArray->GetData(e).isOrbiting) {
+            const auto& orbit = orbitArray->GetData(e);
             cam.viewMatrix = glm::lookAt(pos, orbit.center, glm::vec3(0.0f, 1.0f, 0.0f));
         }
         else {
@@ -39,13 +46,14 @@ void CameraSystem::Update(Scene& scene, float deltaTime) {
 
         int insideMask = 0;
 
-        for (Entity regionEnt = 0; regionEnt < registry.GetEntityCount(); ++regionEnt) {
-            if (!registry.HasComponent<LayerRegionComponent>(regionEnt) || !registry.HasComponent<TransformComponent>(regionEnt)) {
+        for (size_t rIdx = 0; rIdx < regionArray->GetSize(); ++rIdx) {
+            Entity regionEnt = regionArray->GetEntityAtIndex(rIdx);
+            if (regionEnt == MAX_ENTITIES || !transformArray->HasData(regionEnt)) {
                 continue;
             }
 
-            auto& region = registry.GetComponent<LayerRegionComponent>(regionEnt);
-            auto& regTransform = registry.GetComponent<TransformComponent>(regionEnt);
+            auto& region = regionArray->GetData(regionEnt);
+            auto& regTransform = transformArray->GetData(regionEnt);
             const glm::vec3 regionPos = regTransform.position;
 
             bool isInsideRegion = false;

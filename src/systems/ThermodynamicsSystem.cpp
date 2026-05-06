@@ -17,16 +17,20 @@ void ThermodynamicsSystem::Update(Scene& scene, float deltaTime) {
     static std::mt19937 gen(rd());
     std::uniform_real_distribution<float> chance(0.0f, 1.0f);
 
-    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-        if (!registry.HasComponent<ThermoComponent>(e) ||
-            !registry.HasComponent<TransformComponent>(e)) {
+    auto thermoArray = registry.GetComponentArray<ThermoComponent>();
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+
+    const size_t thermoCount = thermoArray->GetSize();
+    for (size_t idx = 0; idx < thermoCount; ++idx) {
+        Entity e = thermoArray->GetEntityAtIndex(idx);
+        if (e == MAX_ENTITIES || !transformArray->HasData(e)) {
             continue;
         }
 
-        auto& thermo = registry.GetComponent<ThermoComponent>(e);
+        auto& thermo = thermoArray->GetData(e);
         if (!thermo.isFlammable) continue;
 
-        auto& transform = registry.GetComponent<TransformComponent>(e);
+        auto& transform = transformArray->GetData(e);
 
         // Safely extract render component ONLY if it exists
         RenderComponent* render = registry.HasComponent<RenderComponent>(e)

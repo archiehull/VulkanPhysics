@@ -68,6 +68,7 @@ public:
 private:
     void InitVulkan();
     void SetupScene();
+    void UpdateFlock(Entity managerEntity);
     void MainLoop();
     void Cleanup();
     void RecreateSwapChain();

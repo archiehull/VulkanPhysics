@@ -381,10 +381,11 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     // --- NEW: AUTO-SYNC COLLIDERS TO VISUAL SCALE ---
     auto transformArray = registry.GetComponentArray<TransformComponent>();
     auto colliderArray = registry.GetComponentArray<ColliderComponent>();
-    const Entity entityCount = registry.GetEntityCount();
 
-    for (Entity i = 0; i < entityCount; ++i) {
-        if (transformArray->HasData(i) && colliderArray->HasData(i)) {
+    const size_t colliderCount = colliderArray->GetSize();
+    for (size_t idx = 0; idx < colliderCount; ++idx) {
+        Entity i = colliderArray->GetEntityAtIndex(idx);
+        if (i != MAX_ENTITIES && transformArray->HasData(i)) {
             auto& transform = transformArray->GetData(i);
             auto& collider = colliderArray->GetData(i);
 
@@ -425,11 +426,12 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     // Optimization: Build active lists once per Update instead of per sub-step
     std::vector<Entity> activeColliders;
     std::vector<Entity> activeSpheres;
-    activeColliders.reserve(entityCount);
-    activeSpheres.reserve(entityCount);
+    activeColliders.reserve(colliderCount);
+    activeSpheres.reserve(colliderCount);
 
-    for (Entity i = 0; i < entityCount; ++i) {
-        if (transformArray->HasData(i) && colliderArray->HasData(i) && physicsArray->HasData(i)) {
+    for (size_t idx = 0; idx < colliderCount; ++idx) {
+        Entity i = colliderArray->GetEntityAtIndex(idx);
+        if (i != MAX_ENTITIES && transformArray->HasData(i) && physicsArray->HasData(i)) {
             const auto& col = colliderArray->GetData(i);
             if (col.hasCollision && !col.isClothParticle) {
                 activeColliders.push_back(i);
@@ -444,10 +446,10 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     for (int i = 0; i < subSteps; ++i) {
         
         // --- Spring forces: iterate entities with SpringComponent ---
-        for (Entity e = 0; e < entityCount; ++e) {
-            if (!springArray->HasData(e) ||
-                !transformArray->HasData(e) ||
-                !physicsArray->HasData(e)) {
+        const size_t springCount = springArray->GetSize();
+        for (size_t idx = 0; idx < springCount; ++idx) {
+            Entity e = springArray->GetEntityAtIndex(idx);
+            if (e == MAX_ENTITIES || !transformArray->HasData(e) || !physicsArray->HasData(e)) {
                 continue;
             }
 
@@ -481,7 +483,7 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
 
             for (size_t j = 0; j < spring.connectedEntities.size(); ++j) {
                 Entity target = spring.connectedEntities[j];
-                if (target == MAX_ENTITIES || target >= entityCount || !registry.IsAlive(target)) continue;
+                if (target == MAX_ENTITIES || !registry.IsAlive(target)) continue;
                 if (!transformArray->HasData(target)) continue;
 
                 glm::vec3 posB = transformArray->GetData(target).position;
@@ -527,8 +529,10 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
     }
 
     // 3. Update transforms once per frame after all sub-steps
-    for (Entity i = 0; i < entityCount; ++i) {
-        if (transformArray->HasData(i) && physicsArray->HasData(i)) {
+    const size_t physicsCountFinal = physicsArray->GetSize();
+    for (size_t iIdx = 0; iIdx < physicsCountFinal; ++iIdx) {
+        Entity i = physicsArray->GetEntityAtIndex(iIdx);
+        if (i != MAX_ENTITIES && transformArray->HasData(i)) {
             auto& transform = transformArray->GetData(i);
             auto& physics = physicsArray->GetData(i);
             if (!physics.isStatic) {
@@ -546,17 +550,30 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
         int remoteCount = 0;
         int staticCount = 0;
         auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
-        auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
-        for (Entity e = 0; e < entityCount; ++e) {
-            if (!registry.IsAlive(e)) continue;
-            if (physicsArray->HasData(e) && physicsArray->GetData(e).isStatic) {
+        auto physicsArrayFinal = registry.GetComponentArray<PhysicsComponent>();
+        
+        const size_t ownershipCount = ownershipArray->GetSize();
+        for (size_t eIdx = 0; eIdx < ownershipCount; ++eIdx) {
+            Entity e = ownershipArray->GetEntityAtIndex(eIdx);
+            if (e == MAX_ENTITIES) continue;
+
+            if (physicsArrayFinal->HasData(e) && physicsArrayFinal->GetData(e).isStatic) {
                 staticCount++;
-            } else if (ownershipArray->HasData(e)) {
+            } else {
                 if (static_cast<int>(ownershipArray->GetData(e).GetOwnerIndex()) == localPeerId) {
                     localCount++;
                 } else {
                     remoteCount++;
                 }
+            }
+        }
+
+        // Also count statics that might not have ownership components
+        const size_t physicsCountAll = physicsArrayFinal->GetSize();
+        for (size_t pIdx = 0; pIdx < physicsCountAll; ++pIdx) {
+            Entity p = physicsArrayFinal->GetEntityAtIndex(pIdx);
+            if (p != MAX_ENTITIES && physicsArrayFinal->GetData(p).isStatic && !ownershipArray->HasData(p)) {
+                staticCount++;
             }
         }
         // std::cout << "[PhysicsSystem] Frame " << s_physicsFrameCount << " Distribution: Local=" << localCount 
@@ -571,16 +588,19 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
     auto colliderArray = registry.GetComponentArray<ColliderComponent>();
     auto ownershipArray = registry.GetComponentArray<OwnershipComponent>();
 
-    for (Entity i = 0; i < registry.GetEntityCount(); ++i) {
-        if (transformArray->HasData(i) && physicsArray->HasData(i)) {
-            if (ownershipArray->HasData(i)) {
-                auto& ownership = ownershipArray->GetData(i);
-                // Only skip if we have a valid peer ID AND we are not the owner.
-                // If localPeerId is -1, we are in standalone mode or joining, so we simulate everything.
-                if (localPeerId != -1 && static_cast<int>(ownership.GetOwnerIndex()) != localPeerId) {
-                    continue;
-                }
+    const size_t physicsCount = physicsArray->GetSize();
+    for (size_t idx = 0; idx < physicsCount; ++idx) {
+        Entity i = physicsArray->GetEntityAtIndex(idx);
+        if (i == MAX_ENTITIES || !transformArray->HasData(i)) continue;
+
+        if (ownershipArray->HasData(i)) {
+            auto& ownership = ownershipArray->GetData(i);
+            // Only skip if we have a valid peer ID AND we are not the owner.
+            // If localPeerId is -1, we are in standalone mode or joining, so we simulate everything.
+            if (localPeerId != -1 && static_cast<int>(ownership.GetOwnerIndex()) != localPeerId) {
+                continue;
             }
+        }
 
             auto& transform = transformArray->GetData(i);
             auto& physics = physicsArray->GetData(i);
@@ -718,7 +738,6 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
             }
         }
     }
-}
 
 void PhysicsSystem::ApplySpherePlaneCorrection(TransformComponent& sphereTrans, float radius, const Plane& plane) {
     const float dist = plane.GetSignedDistance(sphereTrans.position);
@@ -730,7 +749,6 @@ void PhysicsSystem::ApplySpherePlaneCorrection(TransformComponent& sphereTrans, 
 }
 
 void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt, const std::vector<Entity>& activeColliders, const std::vector<Entity>& activeSpheres, std::unordered_set<Entity>& pendingDelete) {
-    const auto entityCount = registry.GetEntityCount();
     bool useForce = (currentResolutionMethod == ResolutionMethod::Force);
 
     auto transformArray = registry.GetComponentArray<TransformComponent>();
@@ -1071,8 +1089,10 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
     // activeSpheres is now passed from Update()
     auto clothArray = registry.GetComponentArray<ClothComponent>();
 
-    for (Entity c = 0; c < entityCount; ++c) {
-        if (!clothArray->HasData(c)) continue;
+    const size_t clothCount = clothArray->GetSize();
+    for (size_t cIdx = 0; cIdx < clothCount; ++cIdx) {
+        Entity c = clothArray->GetEntityAtIndex(cIdx);
+        if (c == MAX_ENTITIES) continue;
         
         auto& cloth = clothArray->GetData(c);
         if (!cloth.collisionsEnabled || !cloth.dynamicGeometry || !cloth.dynamicGeometry->HasIndices()) continue;

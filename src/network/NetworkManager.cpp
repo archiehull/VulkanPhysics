@@ -1,9 +1,13 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+
+#ifdef APIENTRY
+#undef APIENTRY
+#endif
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
-
 #include "NetworkManager.h"
 #include "NetworkSchema_generated.h" 
 #include "../systems/PhysicsSystem.h"

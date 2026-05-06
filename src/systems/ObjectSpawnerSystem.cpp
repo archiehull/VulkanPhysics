@@ -11,10 +11,10 @@
 
 namespace {
     std::vector<Entity> g_TimedSpawnedEntities;
-    constexpr bool kSpawnerDebug = true;
+    constexpr bool kSpawnerDebug = false;
     // Set to true to see per-shot authority/ownership decisions in the console.
     // Flip back to false once the firing/ownership bugs are resolved.
-    constexpr bool kSpawnerFireDebug = true;
+    constexpr bool kSpawnerFireDebug = false;
 
     char NormalizeSpawnerGroup(const std::string& group) {
         if (group.empty()) return 'A';
@@ -106,10 +106,11 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
             g_TimedSpawnedEntities.end());
     }
 
-    const Entity count = registry.GetEntityCount();
-    for (Entity e = 0; e < count; ++e) {
+    const size_t spawnerCount = spawnerArray->GetSize();
+    for (size_t idx = 0; idx < spawnerCount; ++idx) {
+        Entity e = spawnerArray->GetEntityAtIndex(idx);
 
-        if (!spawnerArray->HasData(e) || !transformArray->HasData(e)) {
+        if (e == MAX_ENTITIES || !transformArray->HasData(e)) {
             continue; 
         }
 
@@ -133,9 +134,10 @@ void ObjectSpawnerSystem::Update(Scene& scene, float deltaTime) {
         if (spawner.attachToTarget) {
             Entity targetEnt = MAX_ENTITIES;
             if (spawner.attachTargetName.empty()) {
-                // If no name specified, default to active camera
-                for (Entity c = 0; c < count; ++c) {
-                    if (registry.HasComponent<CameraComponent>(c) && registry.GetComponent<CameraComponent>(c).isActive) {
+                auto cameraArray = registry.GetComponentArray<CameraComponent>();
+                for (size_t cIdx = 0; cIdx < cameraArray->GetSize(); ++cIdx) {
+                    Entity c = cameraArray->GetEntityAtIndex(cIdx);
+                    if (c != MAX_ENTITIES && cameraArray->GetData(c).isActive) {
                         targetEnt = c;
                         break;
                     }

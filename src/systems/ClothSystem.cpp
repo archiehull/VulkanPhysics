@@ -7,9 +7,10 @@ void ClothSystem::Update(Scene& scene, float deltaTime) {
     auto clothArray = registry.GetComponentArray<ClothComponent>();
     auto transformArray = registry.GetComponentArray<TransformComponent>();
 
-    const Entity entityCount = registry.GetEntityCount();
-    for (Entity e = 0; e < entityCount; ++e) {
-        if (!clothArray->HasData(e)) continue;
+    const size_t clothCount = clothArray->GetSize();
+    for (size_t idx = 0; idx < clothCount; ++idx) {
+        Entity e = clothArray->GetEntityAtIndex(idx);
+        if (e == MAX_ENTITIES) continue;
 
         auto& cloth = clothArray->GetData(e);
         if (!cloth.dynamicGeometry) continue;

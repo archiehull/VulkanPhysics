@@ -233,6 +233,25 @@ struct LayerRegionConfig {
     glm::vec3 position = glm::vec3(0.0f); // Where this region exists in the world
 };
 
+struct FlockConfig {
+    std::string name;
+    int count = 500;
+    float separationWeight = 1.5f;
+    float alignmentWeight = 2.0f;
+    float cohesionWeight = 1.5f;
+    float perceptionRadius = 1.9f;
+    float maxSpeed = 0.125f;
+    float maxForce = 0.03f;
+    glm::vec3 boundsMin = glm::vec3(-7.5f);
+    glm::vec3 boundsMax = glm::vec3(7.5f);
+    glm::vec3 spawnCenter = glm::vec3(0.0f);
+    glm::vec3 spawnExtents = glm::vec3(5.0f);
+    std::string renderType = "Model";
+    glm::vec3 renderScale = glm::vec3(0.2f);
+    std::string modelPath = "models/paperplane.obj";
+    std::string texturePath = "textures/default.jpg";
+};
+
 struct AppConfig {
     int windowWidth = 1000;
     int windowHeight = 750;
@@ -248,6 +267,8 @@ struct AppConfig {
     std::vector<ProceduralTextureConfig> proceduralTextures;
     std::vector<CustomParticleConfig> customParticles;
     std::vector<LayerRegionConfig> layerRegions;
+    bool hasFlock = false;
+    FlockConfig flock;
     // Materials and interactions parsed from .world files (parity with FlatBuffers)
     struct MaterialConfig {
         std::string name;

@@ -468,3 +468,28 @@ struct OwnershipComponent {
         }
     }
     };
+
+// 12. Flocking Components
+struct FlockManagerComponent {
+    int count = 500;
+    float separationWeight = 1.5f;
+    float alignmentWeight = 2.0f;
+    float cohesionWeight = 1.5f;
+    float perceptionRadius = 1.9f;
+    float maxSpeed = 0.125f;
+    float maxForce = 0.03f;
+    glm::vec3 boundsMin = glm::vec3(-7.5f);
+    glm::vec3 boundsMax = glm::vec3(7.5f);
+
+    // Runtime Spawning Support
+    std::string modelPath = "models/bird.obj";
+    std::string texturePath = "textures/bird.jpg";
+    glm::vec3 renderScale = glm::vec3(0.05f);
+    glm::vec3 spawnCenter = glm::vec3(0.0f, 5.0f, 0.0f);
+    glm::vec3 spawnExtents = glm::vec3(5.0f);
+};
+
+struct BoidComponent {
+    // Empty tag component to identify flock members. 
+    // Could hold flock IDs in the future for multiple distinct flocks.
+};

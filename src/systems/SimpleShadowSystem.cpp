@@ -23,15 +23,22 @@ void SimpleShadowSystem::Update(Scene& scene, float deltaTime) {
         if (lightPos.y > -20.0f) sunIsUp = true;
     }
 
-    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-        if (!registry.HasComponent<RenderComponent>(e) || !registry.HasComponent<TransformComponent>(e)) continue;
+    auto renderArray = registry.GetComponentArray<RenderComponent>();
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
 
-        auto& render = registry.GetComponent<RenderComponent>(e);
+    const size_t renderCount = renderArray->GetSize();
+    for (size_t idx = 0; idx < renderCount; ++idx) {
+        Entity e = renderArray->GetEntityAtIndex(idx);
+        if (e == MAX_ENTITIES || !transformArray->HasData(e)) continue;
+
+        auto& render = renderArray->GetData(e);
         if (render.simpleShadowEntity == MAX_ENTITIES) continue;
 
-        auto& shadowRender = registry.GetComponent<RenderComponent>(render.simpleShadowEntity);
-        auto& shadowTransform = registry.GetComponent<TransformComponent>(render.simpleShadowEntity);
-        auto& parentTransform = registry.GetComponent<TransformComponent>(e);
+        if (!renderArray->HasData(render.simpleShadowEntity) || !transformArray->HasData(render.simpleShadowEntity)) continue;
+
+        auto& shadowRender = renderArray->GetData(render.simpleShadowEntity);
+        auto& shadowTransform = transformArray->GetData(render.simpleShadowEntity);
+        auto& parentTransform = transformArray->GetData(e);
 
         if (sunIsUp && render.visible) {
             const glm::vec3 parentPos = glm::vec3(parentTransform.matrix[3]);

@@ -54,6 +54,7 @@
     <ClCompile Include="src\systems\AnimationSystem.cpp" />
     <ClCompile Include="src\systems\CameraSystem.cpp" />
     <ClCompile Include="src\systems\ClothSystem.cpp" />
+    <ClCompile Include="src\systems\FlockSystem.cpp" />
     <ClCompile Include="src\systems\ObjectSpawnerSystem.cpp" />
     <ClCompile Include="src\systems\OrbitSystem.cpp" />
     <ClCompile Include="src\systems\ParticleUpdateSystem.cpp" />
@@ -105,6 +106,7 @@
     <ClInclude Include="src\systems\AnimationSystem.h" />
     <ClInclude Include="src\systems\CameraSystem.h" />
     <ClInclude Include="src\systems\ClothSystem.h" />
+    <ClInclude Include="src\systems\FlockSystem.h" />
     <ClInclude Include="src\systems\ISystem.h" />
     <ClInclude Include="src\systems\ObjectSpawnerSystem.h" />
     <ClInclude Include="src\systems\OrbitSystem.h" />

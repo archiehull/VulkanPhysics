@@ -29,14 +29,14 @@ float GetSegmentDurationTotal(const PathAnimationComponent& path) {
 
 void AnimationSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
-    const Entity entityCount = registry.GetEntityCount();
-
     auto transformArray = registry.GetComponentArray<TransformComponent>();
     auto pathArray = registry.GetComponentArray<PathAnimationComponent>();
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
 
-    for (Entity e = 0; e < entityCount; ++e) {
-        if (!transformArray->HasData(e) || !pathArray->HasData(e)) {
+    const size_t pathCount = pathArray->GetSize();
+    for (size_t idx = 0; idx < pathCount; ++idx) {
+        Entity e = pathArray->GetEntityAtIndex(idx);
+        if (e == MAX_ENTITIES || !transformArray->HasData(e)) {
             continue;
         }
 

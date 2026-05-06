@@ -10,8 +10,10 @@ void SmokeGrenadeSystem::Update(Scene& scene, float deltaTime) {
     
     std::vector<Entity> entitiesToDespawn;
 
-    for (Entity i = 0; i < registry.GetEntityCount(); ++i) {
-        if (grenadeArray->HasData(i)) {
+    const size_t grenadeCount = grenadeArray->GetSize();
+    for (size_t idx = 0; idx < grenadeCount; ++idx) {
+        Entity i = grenadeArray->GetEntityAtIndex(idx);
+        if (i != MAX_ENTITIES) {
             auto& grenade = grenadeArray->GetData(i);
 
             grenade.timer += deltaTime;

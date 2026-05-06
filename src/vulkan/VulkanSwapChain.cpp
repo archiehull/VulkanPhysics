@@ -4,6 +4,12 @@
 #include <algorithm>
 #include <limits>
 #include <array>
+#include <iostream>
+
+namespace {
+    constexpr bool kRuntimeDebug = true; // Enabled for diagnosis
+}
+
 
 VulkanSwapChain::VulkanSwapChain(VkDevice deviceArg, VkPhysicalDevice physicalDeviceArg, VkSurfaceKHR surfaceArg, GLFWwindow* windowArg, bool enableVsyncArg)
     : device(deviceArg),
@@ -144,22 +150,37 @@ VkSurfaceFormatKHR VulkanSwapChain::chooseSwapSurfaceFormat(const std::vector<Vk
 }
 
 VkPresentModeKHR VulkanSwapChain::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) const {
+    if (kRuntimeDebug) {
+        std::cout << "[VulkanSwapChain] Choosing Present Mode. Available modes: ";
+        for (auto mode : availablePresentModes) {
+            if (mode == VK_PRESENT_MODE_IMMEDIATE_KHR) std::cout << "IMMEDIATE ";
+            else if (mode == VK_PRESENT_MODE_MAILBOX_KHR) std::cout << "MAILBOX ";
+            else if (mode == VK_PRESENT_MODE_FIFO_KHR) std::cout << "FIFO ";
+            else if (mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR) std::cout << "FIFO_RELAXED ";
+        }
+        std::cout << std::endl;
+    }
+
     if (enableVsync) {
+        if (kRuntimeDebug) std::cout << "[VulkanSwapChain] VSync Enabled -> Selecting FIFO" << std::endl;
         return VK_PRESENT_MODE_FIFO_KHR;
     }
 
     for (const auto& availablePresentMode : availablePresentModes) {
         if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            if (kRuntimeDebug) std::cout << "[VulkanSwapChain] VSync Disabled -> Selecting MAILBOX (Triple Buffering)" << std::endl;
             return availablePresentMode;
         }
     }
 
     for (const auto& availablePresentMode : availablePresentModes) {
         if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+            if (kRuntimeDebug) std::cout << "[VulkanSwapChain] VSync Disabled -> Selecting IMMEDIATE (Uncapped)" << std::endl;
             return availablePresentMode;
         }
     }
 
+    if (kRuntimeDebug) std::cout << "[VulkanSwapChain] VSync Disabled but no uncapped modes found -> Falling back to FIFO" << std::endl;
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 

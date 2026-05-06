@@ -21,11 +21,14 @@ void WeatherSystem::PickNextWeatherDuration(EnvironmentComponent& env) {
 void WeatherSystem::Update(Scene& scene, float deltaTime) {
     auto& registry = scene.GetRegistry();
 
-    // Find the environment singleton
-    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-        if (!registry.HasComponent<EnvironmentComponent>(e)) continue;
+    auto envArray = registry.GetComponentArray<EnvironmentComponent>();
+    const size_t envCount = envArray->GetSize();
 
-        auto& env = registry.GetComponent<EnvironmentComponent>(e);
+    for (size_t idx = 0; idx < envCount; ++idx) {
+        Entity e = envArray->GetEntityAtIndex(idx);
+        if (e == MAX_ENTITIES) continue;
+
+        auto& env = envArray->GetData(e);
 
         // --- 1. Rain & Dust Timers ---
         if (env.isPrecipitating) {

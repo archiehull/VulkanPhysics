@@ -313,6 +313,15 @@ public:
         return false;
     }
 
+    bool ConsumeFlockUpdateRequest(Entity& outManagerEntity) {
+        if (m_FlockUpdateRequested) {
+            outManagerEntity = m_RequestedFlockEntity;
+            m_FlockUpdateRequested = false;
+            return true;
+        }
+        return false;
+    }
+
     std::vector<ECSSyncRequest> ConsumeECSSyncRequests() {
         auto reqs = m_ECSSyncRequests;
         m_ECSSyncRequests.clear();
@@ -424,6 +433,8 @@ private:
     int m_MaxReplayFrames = 0;
     bool m_GenerateLookaheadRequested = false;
     float m_LookaheadTimeframe = 5.0f;
+    bool m_FlockUpdateRequested = false;
+    Entity m_RequestedFlockEntity = MAX_ENTITIES;
     bool m_ReplayFreeRoam = true;
 
     // Replay Playback State

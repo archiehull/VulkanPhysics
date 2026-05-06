@@ -173,8 +173,8 @@ public:
         if (peerId < 0 || peerId > 3) return;
         std::lock_guard<std::mutex> lock(entityMutex);
         
-        partitionMin = 10000 + (peerId * 5000);
-        partitionMax = partitionMin + 4999;
+        partitionMin = peerId * 10000;
+        partitionMax = partitionMin + 9999;
         
         // Fast-forward our local ID generator to our new block
         if (localAllocId < partitionMin) {

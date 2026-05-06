@@ -2,9 +2,14 @@
 #include "VulkanBuffer.h"
 #include <stdexcept>
 #include <cstring>
+#include <atomic>
+#include <iostream>
+
+static std::atomic<int> g_ActiveBufferCount{ 0 };
 
 VulkanBuffer::VulkanBuffer(VkDevice deviceArg, VkPhysicalDevice physicalDeviceArg)
     : device(deviceArg), physicalDevice(physicalDeviceArg) {
+    g_ActiveBufferCount++;
 }
 
 VulkanBuffer::~VulkanBuffer() {
@@ -13,13 +18,19 @@ VulkanBuffer::~VulkanBuffer() {
     }
     catch (...) {
     }
+    g_ActiveBufferCount--;
 }
 
 void VulkanBuffer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
     VkMemoryPropertyFlags properties) {
+    
+    if (size == 0) {
+        std::cerr << "[VulkanBuffer] WARNING: CreateBuffer called with size 0! Usage: " << usage << std::endl;
+    }
+
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
+    bufferInfo.size = (size == 0) ? 1 : size; // Fallback to 1 byte
     bufferInfo.usage = usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -41,7 +52,17 @@ void VulkanBuffer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
     );
 
     if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        std::cerr << "[VulkanBuffer] CRITICAL: vkAllocateMemory FAILED!" << std::endl;
+        std::cerr << "  Requested Size: " << size << " bytes" << std::endl;
+        std::cerr << "  Actual Alloc Size: " << allocInfo.allocationSize << " bytes" << std::endl;
+        std::cerr << "  Memory Type Index: " << allocInfo.memoryTypeIndex << std::endl;
+        std::cerr << "  Usage Flags: " << usage << std::endl;
+        std::cerr << "  Active Buffers: " << g_ActiveBufferCount.load() << std::endl;
         throw std::runtime_error("failed to allocate buffer memory!");
+    }
+
+    if (g_ActiveBufferCount.load() % 100 == 0 || size > 1024 * 1024) {
+         std::cout << "[VulkanBuffer] Allocated " << size << " bytes (Usage: " << usage << ", Total Active: " << g_ActiveBufferCount.load() << ")" << std::endl;
     }
 
     vkBindBufferMemory(device, buffer, bufferMemory, 0);

@@ -24,6 +24,7 @@
 #include <chrono>
 #include <vector>
 #include <utility>
+#include <random>
 
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "ws2_32.lib")
@@ -45,7 +46,7 @@
 namespace {
     constexpr bool kSceneDebug = false;
     constexpr bool kPerfDebug = false;
-    constexpr bool kRuntimeDebug = false;
+    constexpr bool kRuntimeDebug = true;
     constexpr bool kReplayDebug = false;
     constexpr float kRuntimeLogIntervalSeconds = 1.0f;
     constexpr float kPerfLogIntervalSeconds = 1.0f;
@@ -715,7 +716,7 @@ void Application::InitVulkan() {
 
     // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/worlds/", "cloth_test");
+    editorUI->Initialize("src/worlds/", "flocking"); // STARTUP_SCENE
     editorUI->SetPerformanceSettings(config.vsync, config.maxFps);
     // Use 0.0f to represent "uncapped" (no software FPS cap). Previously code defaulted to 60.
     m_TargetRenderFrequency = static_cast<float>((config.maxFps > 0) ? config.maxFps : 0);
@@ -1529,10 +1530,160 @@ void Application::SetupScene() {
         scene->GenerateProceduralObjects(config.proceduralObjectCount, terrainRadius - 20.0f, terrainY, heightScale, noiseFreq);
     }
     
-    // Spawn Cloth Demo
-    // ClothFactory::CreateClothGrid(*scene, vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), glm::vec3(0.0f, 30.0f, 0.0f), 15, 15, 1.0f, 0.5f, 15.0f, 0.5f);
+    // --- Flocking Generation ---
+    if (config.hasFlock) {
+        auto& reg = scene->GetRegistry();
 
+        // 1. Create the invisible Manager Entity
+        Entity managerEnt = reg.CreateEntity();
+        reg.AddComponent<NameComponent>(managerEnt, { config.flock.name + "_Manager" });
+
+        FlockManagerComponent fmc;
+        fmc.count = config.flock.count;
+        fmc.separationWeight = config.flock.separationWeight;
+        fmc.alignmentWeight = config.flock.alignmentWeight;
+        fmc.cohesionWeight = config.flock.cohesionWeight;
+        fmc.perceptionRadius = config.flock.perceptionRadius;
+        fmc.maxSpeed = config.flock.maxSpeed;
+        fmc.maxForce = config.flock.maxForce;
+        fmc.boundsMin = config.flock.boundsMin;
+        fmc.boundsMax = config.flock.boundsMax;
+        fmc.modelPath = config.flock.modelPath;
+        fmc.texturePath = config.flock.texturePath;
+        fmc.renderScale = config.flock.renderScale;
+        fmc.spawnCenter = config.flock.spawnCenter;
+        fmc.spawnExtents = config.flock.spawnExtents;
+        reg.AddComponent<FlockManagerComponent>(managerEnt, fmc);
+
+        // ==========================================
+        // NEW: Load the geometry EXACTLY ONCE here!
+        // ==========================================
+        std::shared_ptr<Geometry> boidGeometry;
+        if (config.flock.renderType == "Model") {
+            std::string ext = config.flock.modelPath.substr(config.flock.modelPath.find_last_of(".") + 1);
+            if (ext == "sjg") {
+                boidGeometry = SJGLoader::Load(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), config.flock.modelPath);
+            }
+            else {
+                boidGeometry = OBJLoader::Load(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), config.flock.modelPath);
+            }
+        }
+        else {
+            // Fallback to sphere
+            boidGeometry = GeometryGenerator::CreateSphere(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 12, 12, 0.5f);
+        }
+
+        // 2. Spawn the Birds
+        std::mt19937 rng(std::random_device{}());
+        std::uniform_real_distribution<float> randX(fmc.boundsMin.x, fmc.boundsMax.x);
+        std::uniform_real_distribution<float> randY(fmc.boundsMin.y, fmc.boundsMax.y);
+        std::uniform_real_distribution<float> randZ(fmc.boundsMin.z, fmc.boundsMax.z);
+        std::uniform_real_distribution<float> randVel(-1.0f, 1.0f);
+
+        for (int i = 0; i < fmc.count; ++i) {
+            std::string boidName = "Bird_" + std::to_string(i);
+
+            // Random start position within extents
+            glm::vec3 startPos = config.flock.spawnCenter + glm::vec3(
+                randVel(rng) * config.flock.spawnExtents.x,
+                randVel(rng) * config.flock.spawnExtents.y,
+                randVel(rng) * config.flock.spawnExtents.z
+            );
+
+            // NEW: Assign the shared geometry to the new entity
+            Entity boidEnt = scene->AddObjectExplicit(MAX_ENTITIES, boidName, boidGeometry, startPos, config.flock.texturePath, false);
+
+            if (boidEnt != MAX_ENTITIES) {
+                // Apply the flock scale and matrix (AddObjectExplicit defaults to scale 1.0)
+                auto& tr = reg.GetComponent<TransformComponent>(boidEnt);
+                tr.scale = config.flock.renderScale;
+                tr.UpdateMatrix();
+
+                // Tag it as a Boid
+                reg.AddComponent<BoidComponent>(boidEnt, BoidComponent{});
+
+                // Provide a kinematic physics component so standard gravity/collisions ignore it, 
+                // but our FlockSystem can read/write its velocity
+                if (!reg.HasComponent<PhysicsComponent>(boidEnt)) {
+                    reg.AddComponent<PhysicsComponent>(boidEnt, PhysicsComponent{});
+                }
+                auto& phys = reg.GetComponent<PhysicsComponent>(boidEnt);
+                phys.isStatic = true;
+                phys.velocity = glm::vec3(randVel(rng), randVel(rng), randVel(rng));
+            }
+        }
+    }
     // scene->PrintDebugInfo();
+}
+
+void Application::UpdateFlock(Entity managerEntity) {
+    vkDeviceWaitIdle(vulkanDevice->GetDevice());
+    std::unique_lock<std::shared_mutex> lock(m_RegistryMutex);
+    auto& reg = scene->GetRegistry();
+    if (!reg.HasComponent<FlockManagerComponent>(managerEntity)) return;
+
+    auto& fmc = reg.GetComponent<FlockManagerComponent>(managerEntity);
+
+    // 1. Delete existing boids
+    std::vector<Entity> boidsToDelete;
+    for (Entity e = 0; e < reg.GetEntityCount(); ++e) {
+        if (reg.IsAlive(e) && reg.HasComponent<BoidComponent>(e)) {
+            boidsToDelete.push_back(e);
+        }
+    }
+    for (Entity e : boidsToDelete) {
+        scene->DeleteEntity(e);
+    }
+
+    // 2. Load geometry
+    std::shared_ptr<Geometry> boidGeometry;
+    try {
+        std::string ext = fmc.modelPath.substr(fmc.modelPath.find_last_of(".") + 1);
+        if (ext == "sjg") {
+            boidGeometry = SJGLoader::Load(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), fmc.modelPath);
+        }
+        else {
+            boidGeometry = OBJLoader::Load(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), fmc.modelPath);
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Failed to load boid geometry during flock update: " << e.what() << std::endl;
+        // Fallback to sphere
+        boidGeometry = GeometryGenerator::CreateSphere(vulkanDevice->GetDevice(), vulkanDevice->GetPhysicalDevice(), 12, 12, 0.5f);
+    }
+
+    // 3. Spawn the Birds
+    std::mt19937 rng(std::random_device{}());
+    std::uniform_real_distribution<float> randVel(-1.0f, 1.0f);
+
+    for (int i = 0; i < fmc.count; ++i) {
+        std::string boidName = "Bird_" + std::to_string(i);
+
+        glm::vec3 startPos = fmc.spawnCenter + glm::vec3(
+            randVel(rng) * fmc.spawnExtents.x,
+            randVel(rng) * fmc.spawnExtents.y,
+            randVel(rng) * fmc.spawnExtents.z
+        );
+
+        Entity boidEnt = scene->AddObjectExplicit(MAX_ENTITIES, boidName, boidGeometry, startPos, fmc.texturePath, false);
+
+        if (boidEnt != MAX_ENTITIES) {
+            auto& tr = reg.GetComponent<TransformComponent>(boidEnt);
+            tr.scale = fmc.renderScale;
+            tr.UpdateMatrix();
+
+            reg.AddComponent<BoidComponent>(boidEnt, BoidComponent{});
+
+            if (!reg.HasComponent<PhysicsComponent>(boidEnt)) {
+                reg.AddComponent<PhysicsComponent>(boidEnt, PhysicsComponent{});
+            }
+            auto& phys = reg.GetComponent<PhysicsComponent>(boidEnt);
+            phys.isStatic = true;
+            phys.velocity = glm::vec3(randVel(rng), randVel(rng), randVel(rng));
+        }
+    }
+    
+    std::cout << "[Flock] Updated flock size to " << fmc.count << " birds." << std::endl;
 }
 
 void Application::RecreateSwapChain() {
@@ -1977,17 +2128,22 @@ void Application::MainLoop() {
             }
             editorUI->SetRuntimeSettings(m_TargetRenderFrequency.load(), m_TargetSimFrequency.load());
 
-            if (config.vsync != requestedVsync) {
-                pendingVSync = requestedVsync;
-                hasPendingVSyncApply = true;
+            if (kRuntimeDebug) {
+                std::cout << "[Application] Performance Settings Applied: VSync=" << (requestedVsync ? "ON" : "OFF") 
+                          << ", MaxFPS=" << requestedMaxFps 
+                          << " (TargetHz=" << m_TargetRenderFrequency.load() << ")" << std::endl;
             }
+
+            pendingVSync = requestedVsync;
+            hasPendingVSyncApply = true;
+
         }
 
         float requestedRenderHz = m_TargetRenderFrequency.load();
         float requestedSimulationHz = m_TargetSimFrequency.load();
         if (editorUI->ConsumeRuntimeSettingsRequest(requestedRenderHz, requestedSimulationHz)) {
             // Allow 0.0f for render target to represent "uncapped" (no software frame pacing)
-            m_TargetRenderFrequency = ClampHz(requestedRenderHz, 0.0f, 240.0f);
+            m_TargetRenderFrequency = ClampHz(requestedRenderHz, 0.0f, 5000.0f);
             m_TargetSimFrequency = ClampHz(requestedSimulationHz, 10.0f, 2000.0f);
             config.maxFps = static_cast<int>(std::round(m_TargetRenderFrequency.load()));
             editorUI->SetRuntimeSettings(m_TargetRenderFrequency.load(), m_TargetSimFrequency.load());
@@ -2018,6 +2174,11 @@ void Application::MainLoop() {
                 sleepNormalThreshold,
                 sleepTangentialThresholdEnabled,
                 sleepTangentialThreshold);
+        }
+
+        Entity requestedFlockManager = MAX_ENTITIES;
+        if (editorUI->ConsumeFlockUpdateRequest(requestedFlockManager)) {
+            UpdateFlock(requestedFlockManager);
         }
 
         auto netReq = editorUI->ConsumeNetworkSettingsRequest();

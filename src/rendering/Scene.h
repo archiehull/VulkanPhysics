@@ -27,11 +27,11 @@ struct TerrainConfig {
 struct ProceduralObjectConfig {
     std::string modelPath;
     std::string texturePath;
-    float frequency;
-    glm::vec3 minScale;
-    glm::vec3 maxScale;
-    glm::vec3 baseRotation;
-    bool isFlammable;
+    float frequency = 1.0f;
+    glm::vec3 minScale = glm::vec3(1.0f);
+    glm::vec3 maxScale = glm::vec3(1.0f);
+    glm::vec3 baseRotation = glm::vec3(0.0f);
+    bool isFlammable = false;
 };
 
 class Scene {
@@ -219,6 +219,8 @@ public:
     void SetHasConnectedPeers(bool has) { m_HasConnectedPeers = has; }
 
 private:
+	bool kSceneDebug = false; // Set to true to enable debug logging for scene operations
+
     void FlushDeferredGeometryCleanup();
     void UpdateSpringVisuals();
     void ClearSpringVisuals();

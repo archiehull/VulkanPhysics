@@ -1,0 +1,58 @@
+[Settings]
+WindowSize 800 600
+VSync false
+MaxFPS 144
+
+[Scene]
+Camera FlockCam FreeRoam Camera1 0.0 10.0 25.0
+
+
+Object WarmSun
+    Type Sphere
+    Params 0.5
+    Position 20.0 40.0 30.0
+    # Warm sunlight (High Red/Green, lower Blue), Type 0 = Sun
+    Light true 1.0 0.85 0.6 1.8 0
+    # RenderProps: <ShadingMode> <CastShadows> <ReceiveShadows> <Visible> <LayerMask>
+    RenderProps 1 false false false 3
+    PhysicsProps false false true
+EndObject
+
+Object OrangeFillLight
+    Type Sphere
+    Params 0.5
+    Position -15.0 5.0 -10.0
+    # Deep orange point light for contrast, Type 2 = Point Light
+    Light true 1.0 0.5 0.2 0.6 2
+    RenderProps 1 false false false 3
+    PhysicsProps false false true
+EndObject
+
+Flock DefaultFlock
+	Count 750
+	SeparationWeight 1.5
+	AlignmentWeight 2.0
+	CohesionWeight 1.5
+	PerceptionRadius 1.9
+	MaxSpeed 0.125
+	MaxForce 0.03
+	BoundsMin -12.5 -12.5 -12.5
+	BoundsMax 12.5 12.5 12.5
+	SpawnCenter 0.0 0.0 0.0
+	SpawnExtents 5.0 5.0 5.0
+	RenderType Model
+	RenderScale 0.8 0.8 0.8
+	Model models/paperplane.obj
+	Texture tex_light_grey_gradient
+
+EndFlock
+
+
+
+ProceduralTexture tex_light_grey_gradient
+    Type Gradient
+    Color1 0.9 0.9 0.9 1.0
+    Color2 0.6 0.6 0.6 1.0
+    Size 512
+    Vertical true
+EndTexture

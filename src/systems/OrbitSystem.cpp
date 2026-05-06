@@ -5,14 +5,19 @@
 void OrbitSystem::Update(Scene& scene, float deltaTime) {
     Registry& registry = scene.GetRegistry();
 
-    for (Entity e = 0; e < registry.GetEntityCount(); ++e) {
-        if (!registry.HasComponent<OrbitComponent>(e) || !registry.HasComponent<TransformComponent>(e)) {
+    auto orbitArray = registry.GetComponentArray<OrbitComponent>();
+    auto transformArray = registry.GetComponentArray<TransformComponent>();
+
+    const size_t orbitCount = orbitArray->GetSize();
+    for (size_t idx = 0; idx < orbitCount; ++idx) {
+        Entity e = orbitArray->GetEntityAtIndex(idx);
+        if (e == MAX_ENTITIES || !transformArray->HasData(e)) {
             continue;
         }
 
-        auto& orbit = registry.GetComponent<OrbitComponent>(e);
+        auto& orbit = orbitArray->GetData(e);
         if (orbit.isOrbiting) {
-            auto& transform = registry.GetComponent<TransformComponent>(e);
+            auto& transform = transformArray->GetData(e);
 
             orbit.currentAngle += orbit.speed * deltaTime;
             const glm::quat rotation = glm::angleAxis(orbit.currentAngle, orbit.axis);

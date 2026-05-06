@@ -33,6 +33,7 @@ C:\Users\Ell\Documents\repos\VulkanPhysics\src\rendering\Texture.cpp;C:\Users\El
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\AnimationSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\AnimationSystem.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\CameraSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\CameraSystem.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\ClothSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\ClothSystem.obj
+C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\FlockSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\FlockSystem.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\ObjectSpawnerSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\ObjectSpawnerSystem.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\OrbitSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\OrbitSystem.obj
 C:\Users\Ell\Documents\repos\VulkanPhysics\src\systems\ParticleUpdateSystem.cpp;C:\Users\Ell\Documents\repos\VulkanPhysics\VulkanPhysics\x64\Debug\ParticleUpdateSystem.obj
