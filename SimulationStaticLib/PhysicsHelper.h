@@ -17,7 +17,8 @@ struct MovingBox {
     glm::mat3 inverseInertiaTensor = glm::mat3(1.0f);
 
     MovingBox(const AABB& b, const glm::vec3& vel, float invM, float rest)
-        : box(b), velocity(vel), invMass(invM), restitution(rest) {}
+        : box(b), velocity(vel), forceAccumulator(0.0f), invMass(invM), restitution(rest) {
+    }
 };
 
 struct MovingSphere {
@@ -122,3 +123,13 @@ void ResolveSphereInsideCylinder(
     float restitution,
     float friction,
     const glm::vec3& cylAngularVelocity = glm::vec3(0.0f));
+
+// --- NEW SEGMENT HELPERS AND COLLISIONS ---
+void ClosestPtSegmentSegment(
+    const glm::vec3& p1, const glm::vec3& q1,
+    const glm::vec3& p2, const glm::vec3& q2,
+    glm::vec3& c1, glm::vec3& c2);
+
+bool ResolveCapsuleCapsuleCollision(MovingCapsule& a, MovingCapsule& b);
+bool ResolveBoxCapsuleCollision(MovingBox& box, MovingCapsule& cap);
+bool ResolveSphereCapsuleCollision(MovingSphere& sphere, MovingCapsule& cap);

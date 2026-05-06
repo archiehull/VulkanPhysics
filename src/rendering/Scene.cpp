@@ -706,25 +706,32 @@ Entity Scene::AddCylinder(const std::string& name, int slices, const glm::vec3& 
     return entity;
 }
 
-Entity Scene::AddCapsule(const std::string& name, float radius, float height, int radialSegments, int rings, 
-                         const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
-    // Generate a capsule with the requested proportions
+Entity Scene::AddCapsule(const std::string& name, float radius, float height, int radialSegments, int rings,
+    const glm::vec3& position, const glm::vec3& scale, const std::string& texturePath) {
     auto geo = GeometryGenerator::CreateCapsule(device, physicalDevice, radius, height, radialSegments, rings);
     Entity entity = AddObjectInternal(name, std::move(geo), position, texturePath, false);
-    m_Registry.GetComponent<RenderComponent>(entity).geometryName = "capsule";
 
-    auto& transform = m_Registry.GetComponent<TransformComponent>(entity);
+    auto& registry = GetRegistry();
+    auto& transform = registry.GetComponent<TransformComponent>(entity);
     transform.scale = scale;
     transform.UpdateMatrix();
 
-    // Ensure it has a collider by default matching the geometry
-    if (!m_Registry.HasComponent<ColliderComponent>(entity)) {
-        m_Registry.AddComponent<ColliderComponent>(entity, ColliderComponent{});
+    if (!registry.HasComponent<ColliderComponent>(entity)) {
+        registry.AddComponent<ColliderComponent>(entity, ColliderComponent{});
     }
-    auto& col = m_Registry.GetComponent<ColliderComponent>(entity);
-    col.type = 2; // Capsule
+
+    auto& col = registry.GetComponent<ColliderComponent>(entity);
+    col.type = 2; // Capsule[cite: 7]
     col.radius = radius;
     col.height = height;
+    col.autoScale = false; // CRITICAL: Stop PhysicsSystem from resetting these[cite: 7]
+
+    // NEW: Initialize orientation for static capsules so physics matches the rotation[cite: 7]
+    if (!registry.HasComponent<PhysicsComponent>(entity)) {
+        registry.AddComponent<PhysicsComponent>(entity, PhysicsComponent{});
+    }
+    auto& phys = registry.GetComponent<PhysicsComponent>(entity);
+    phys.orientation = glm::mat3_cast(glm::quat(glm::radians(transform.rotation))); // Sync initial rotation[cite: 7]
 
     return entity;
 }

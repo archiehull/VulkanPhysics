@@ -8,6 +8,7 @@
 #include <cmath>
 #include <unordered_set>
 #include <vector>
+#include <glm/gtc/quaternion.hpp>
 
 int PhysicsSystem::localPeerId = -1;
 bool PhysicsSystem::activePeers[4] = { true, false, false, false };
@@ -379,10 +380,32 @@ void PhysicsSystem::Update(Scene& scene, float deltaTime) {
          
     if (simulationPaused) return;
 
-    // --- NEW: AUTO-SYNC COLLIDERS TO VISUAL SCALE ---
+    static std::unordered_set<Entity> initializedEntities;
+
     auto transformArray = registry.GetComponentArray<TransformComponent>();
-    auto colliderArray = registry.GetComponentArray<ColliderComponent>();
     auto physicsArray = registry.GetComponentArray<PhysicsComponent>();
+
+    const size_t physCount = physicsArray->GetSize();
+    for (size_t idx = 0; idx < physCount; ++idx) {
+        Entity i = physicsArray->GetEntityAtIndex(idx);
+        if (i != MAX_ENTITIES && transformArray->HasData(i)) {
+            // If we haven't initialized this entity's physics rotation yet...
+            if (initializedEntities.find(i) == initializedEntities.end()) {
+                auto& transform = transformArray->GetData(i);
+                auto& physics = physicsArray->GetData(i);
+
+                // Sync the physics orientation to the visual starting rotation
+                glm::quat q = glm::quat(glm::radians(transform.rotation));
+                physics.orientation = glm::mat3_cast(q);
+
+                initializedEntities.insert(i);
+            }
+        }
+    }
+    // ==========================================
+
+    // --- NEW: AUTO-SYNC COLLIDERS TO VISUAL SCALE ---
+    auto colliderArray = registry.GetComponentArray<ColliderComponent>();
 
     const size_t colliderCount = colliderArray->GetSize();
     for (size_t idx = 0; idx < colliderCount; ++idx) {
@@ -630,7 +653,7 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                     up = physics.orientation * up;
                     // For a true capsule, total height H includes the spherical caps.
                     // The distance between the sphere centers is H - 2r.
-                    float halfSegmentLen = std::max(0.0f, (colHeight - 2.0f * colRadius) * 0.5f);
+                    float halfSegmentLen = std::max(0.0f, (colHeight * 0.5f) - colRadius);
                     glm::vec3 p1 = transform.position - up * halfSegmentLen;
                     glm::vec3 p2 = transform.position + up * halfSegmentLen;
                     Capsule cap(p1, p2, colRadius);
@@ -679,6 +702,7 @@ void PhysicsSystem::Integrate(Registry& registry, float dt) {
                     physics.angularVelocity = helperBody.angularVelocity;
                     physics.orientation = helperBody.orientation;
                     physics.torqueAccumulator = helperBody.torqueAccumulator;
+
                 } else {
                     MovingSphere helperBody(transform.position, colRadius, physics.velocity, physics.inverseMass, physics.restitution);
                     helperBody.forceAccumulator = physics.forceAccumulator;
@@ -1207,19 +1231,21 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 if (capA.Intersects(planeB)) {
                     queueDespawnerDeletion(i, j, p1, p2);
                     const float contactFriction = ComputeContactFriction(p1.friction, p2.friction, PhysicsSystem::contactFrictionScale);
-
                     ResolveCapsulePlaneCollision(capsuleA, planeB, p2.restitution, contactFriction);
 
                     if (!p1.isStatic) {
+                        // APPLY REPLACEMENT HERE:
                         p1.velocity = capsuleA.velocity;
                         p1.angularVelocity = capsuleA.angularVelocity;
-                        
+
                         float d1 = planeB.GetSignedDistance(p1_local);
                         float d2 = planeB.GetSignedDistance(p2_local);
-                        float minDist = std::min(d1, d2);
-                        float overlap = c1.radius - minDist;
+                        float deepestDist = std::min(d1, d2);
+                        float overlap = c1.radius - deepestDist;
+
                         if (overlap > 0.0f) {
-                            t1.position += planeB.GetNormal() * overlap;
+                            const float correctionPercent = 0.5f;
+                            t1.position += planeB.GetNormal() * (overlap * correctionPercent);
                             t1.UpdateMatrix();
                         }
                         ApplySleepThreshold(p1, planeB);
@@ -1245,19 +1271,21 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 if (capB.Intersects(planeA)) {
                     queueDespawnerDeletion(i, j, p1, p2);
                     const float contactFriction = ComputeContactFriction(p1.friction, p2.friction, PhysicsSystem::contactFrictionScale);
-
                     ResolveCapsulePlaneCollision(capsuleB, planeA, p1.restitution, contactFriction);
 
                     if (!p2.isStatic) {
+                        // APPLY REPLACEMENT HERE (Adjusted for entity 2):
                         p2.velocity = capsuleB.velocity;
                         p2.angularVelocity = capsuleB.angularVelocity;
 
-                        float d1 = planeA.GetSignedDistance(p1_local);
+                        float d1 = planeA.GetSignedDistance(p1_local); // p1_local/p2_local are defined earlier in this block
                         float d2 = planeA.GetSignedDistance(p2_local);
-                        float minDist = std::min(d1, d2);
-                        float overlap = c2.radius - minDist;
+                        float deepestDist = std::min(d1, d2);
+                        float overlap = c2.radius - deepestDist;
+
                         if (overlap > 0.0f) {
-                            t2.position += planeA.GetNormal() * overlap;
+                            const float correctionPercent = 0.5f;
+                            t2.position += planeA.GetNormal() * (overlap * correctionPercent);
                             t2.UpdateMatrix();
                         }
                         ApplySleepThreshold(p2, planeA);
@@ -1293,6 +1321,8 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
 
                 if (contactCount > 0 &&
                     IsSphereInsideFinitePlaneBounds(t2, c2, t1.position, glm::length(h))) {
+
+                    queueDespawnerDeletion(i, j, p1, p2);
 
                     glm::vec3 contactPoint = contactSum / float(contactCount);
                     glm::vec3 r = contactPoint - t1.position;
@@ -1369,6 +1399,8 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                 if (contactCount > 0 &&
                     IsSphereInsideFinitePlaneBounds(t1, c1, t2.position, glm::length(h))) {
 
+                    queueDespawnerDeletion(i, j, p1, p2);
+
                     glm::vec3 contactPoint = contactSum / float(contactCount);
                     glm::vec3 r = contactPoint - t2.position;
                     glm::vec3 contactVel = p2.velocity + glm::cross(p2.angularVelocity, r);
@@ -1414,6 +1446,179 @@ void PhysicsSystem::ResolveCollisions(Scene& scene, Registry& registry, float dt
                     }
                 }
             }
+            // Capsule vs Capsule
+            else if (c1.type == 2 && c2.type == 2) {
+                glm::vec3 upA = p1.orientation * glm::vec3(0, 1, 0);
+                float halfLenA = std::max(0.0f, (c1.height - 2.0f * c1.radius) * 0.5f);
+                glm::vec3 p1A = t1.position - upA * halfLenA;
+                glm::vec3 p2A = t1.position + upA * halfLenA;
+                Capsule capA(p1A, p2A, c1.radius);
+                MovingCapsule mCapA(capA, p1.velocity, p1.inverseMass, p1.restitution);
+                mCapA.angularVelocity = p1.angularVelocity;
+                mCapA.inverseInertiaTensor = p1.inverseInertiaTensor;
+                mCapA.orientation = p1.orientation;
+
+                glm::vec3 upB = p2.orientation * glm::vec3(0, 1, 0);
+                float halfLenB = std::max(0.0f, (c2.height - 2.0f * c2.radius) * 0.5f);
+                glm::vec3 p1B = t2.position - upB * halfLenB;
+                glm::vec3 p2B = t2.position + upB * halfLenB;
+                Capsule capB(p1B, p2B, c2.radius);
+                MovingCapsule mCapB(capB, p2.velocity, p2.inverseMass, p2.restitution);
+                mCapB.angularVelocity = p2.angularVelocity;
+                mCapB.inverseInertiaTensor = p2.inverseInertiaTensor;
+                mCapB.orientation = p2.orientation;
+
+                if (ResolveCapsuleCapsuleCollision(mCapA, mCapB)) {
+                    queueDespawnerDeletion(i, j, p1, p2);
+                }
+                if (!p1.isStatic) {
+                    p1.velocity = mCapA.velocity;
+                    p1.angularVelocity = mCapA.angularVelocity;
+                    t1.position = (mCapA.capsule.Position() + mCapA.capsule.m_p2) * 0.5f;
+                    t1.UpdateMatrix();
+                }
+                if (!p2.isStatic) {
+                    p2.velocity = mCapB.velocity;
+                    p2.angularVelocity = mCapB.angularVelocity;
+                    t2.position = (mCapB.capsule.Position() + mCapB.capsule.m_p2) * 0.5f;
+                    t2.UpdateMatrix();
+                }
+                }
+                // Box vs Capsule
+            else if (c1.type == 3 && c2.type == 2 && c1.collisionSide != CollisionSide::INSIDE) {
+                    AABB aabbA(t1.position, c1.halfExtents);
+                    MovingBox boxA(aabbA, p1.velocity, p1.inverseMass, p1.restitution);
+                    boxA.angularVelocity = p1.angularVelocity;
+                    boxA.inverseInertiaTensor = p1.inverseInertiaTensor;
+                    boxA.orientation = p1.orientation;
+
+                    glm::vec3 upB = p2.orientation * glm::vec3(0, 1, 0);
+                    float halfLenB = std::max(0.0f, (c2.height - 2.0f * c2.radius) * 0.5f);
+                    glm::vec3 p1B = t2.position - upB * halfLenB;
+                    glm::vec3 p2B = t2.position + upB * halfLenB;
+                    Capsule capB(p1B, p2B, c2.radius);
+                    MovingCapsule mCapB(capB, p2.velocity, p2.inverseMass, p2.restitution);
+                    mCapB.angularVelocity = p2.angularVelocity;
+                    mCapB.inverseInertiaTensor = p2.inverseInertiaTensor;
+                    mCapB.orientation = p2.orientation;
+
+                    if (ResolveBoxCapsuleCollision(boxA, mCapB)) {
+                        queueDespawnerDeletion(i, j, p1, p2); 
+                    }
+                    if (!p1.isStatic) {
+                        p1.velocity = boxA.velocity;
+                        p1.angularVelocity = boxA.angularVelocity;
+                        t1.position = boxA.box.Position();
+                        t1.UpdateMatrix();
+                    }
+                    if (!p2.isStatic) {
+                        p2.velocity = mCapB.velocity;
+                        p2.angularVelocity = mCapB.angularVelocity;
+                        t2.position = (mCapB.capsule.Position() + mCapB.capsule.m_p2) * 0.5f;
+                        t2.UpdateMatrix();
+                    }
+                }
+                    // Capsule vs Box
+            else if (c1.type == 2 && c2.type == 3 && c2.collisionSide != CollisionSide::INSIDE) {
+                        glm::vec3 upA = p1.orientation * glm::vec3(0, 1, 0);
+                        float halfLenA = std::max(0.0f, (c1.height - 2.0f * c1.radius) * 0.5f);
+                        glm::vec3 p1A = t1.position - upA * halfLenA;
+                        glm::vec3 p2A = t1.position + upA * halfLenA;
+                        Capsule capA(p1A, p2A, c1.radius);
+                        MovingCapsule mCapA(capA, p1.velocity, p1.inverseMass, p1.restitution);
+                        mCapA.angularVelocity = p1.angularVelocity;
+                        mCapA.inverseInertiaTensor = p1.inverseInertiaTensor;
+                        mCapA.orientation = p1.orientation;
+
+                        AABB aabbB(t2.position, c2.halfExtents);
+                        MovingBox boxB(aabbB, p2.velocity, p2.inverseMass, p2.restitution);
+                        boxB.angularVelocity = p2.angularVelocity;
+                        boxB.inverseInertiaTensor = p2.inverseInertiaTensor;
+                        boxB.orientation = p2.orientation;
+
+                        if (ResolveBoxCapsuleCollision(boxB, mCapA)) {
+                            queueDespawnerDeletion(i, j, p1, p2);
+                        }
+                        if (!p1.isStatic) {
+                            p1.velocity = mCapA.velocity;
+                            p1.angularVelocity = mCapA.angularVelocity;
+                            t1.position = (mCapA.capsule.Position() + mCapA.capsule.m_p2) * 0.5f;
+                            t1.UpdateMatrix();
+                        }
+                        if (!p2.isStatic) {
+                            p2.velocity = boxB.velocity;
+                            p2.angularVelocity = boxB.angularVelocity;
+                            t2.position = boxB.box.Position();
+                            t2.UpdateMatrix();
+                        }
+                    }
+                    // Sphere vs Capsule (OUTSIDE)
+            else if (c1.type == 0 && c2.type == 2 && c2.collisionSide != CollisionSide::INSIDE) {
+                MovingSphere mSphere(t1.position, c1.radius, p1.velocity, p1.inverseMass, p1.restitution);
+                mSphere.angularVelocity = p1.angularVelocity;
+                mSphere.inverseInertiaTensor = p1.inverseInertiaTensor;
+                mSphere.orientation = p1.orientation;
+
+                glm::vec3 upB = p2.orientation * glm::vec3(0, 1, 0);
+                float halfLenB = std::max(0.0f, (c2.height - 2.0f * c2.radius) * 0.5f);
+                glm::vec3 p1B = t2.position - upB * halfLenB;
+                glm::vec3 p2B = t2.position + upB * halfLenB;
+                Capsule capB(p1B, p2B, c2.radius);
+                MovingCapsule mCapB(capB, p2.velocity, p2.inverseMass, p2.restitution);
+                mCapB.angularVelocity = p2.angularVelocity;
+                mCapB.inverseInertiaTensor = p2.inverseInertiaTensor;
+                mCapB.orientation = p2.orientation;
+
+                queueDespawnerDeletion(i, j, p1, p2);
+                ResolveSphereCapsuleCollision(mSphere, mCapB);
+
+                if (!p1.isStatic) {
+                    p1.velocity = mSphere.velocity;
+                    p1.angularVelocity = mSphere.angularVelocity;
+                    t1.position = mSphere.sphere.Position();
+                    t1.UpdateMatrix();
+                }
+                if (!p2.isStatic) {
+                    p2.velocity = mCapB.velocity;
+                    p2.angularVelocity = mCapB.angularVelocity;
+                    t2.position = (mCapB.capsule.Position() + mCapB.capsule.m_p2) * 0.5f;
+                    t2.UpdateMatrix();
+                }
+            }
+            // Capsule vs Sphere (OUTSIDE)
+            else if (c1.type == 2 && c2.type == 0 && c1.collisionSide != CollisionSide::INSIDE) {
+                glm::vec3 upA = p1.orientation * glm::vec3(0, 1, 0);
+                float halfLenA = std::max(0.0f, (c1.height - 2.0f * c1.radius) * 0.5f);
+                glm::vec3 p1A = t1.position - upA * halfLenA;
+                glm::vec3 p2A = t1.position + upA * halfLenA;
+                Capsule capA(p1A, p2A, c1.radius);
+                MovingCapsule mCapA(capA, p1.velocity, p1.inverseMass, p1.restitution);
+                mCapA.angularVelocity = p1.angularVelocity;
+                mCapA.inverseInertiaTensor = p1.inverseInertiaTensor;
+                mCapA.orientation = p1.orientation;
+
+                MovingSphere mSphere(t2.position, c2.radius, p2.velocity, p2.inverseMass, p2.restitution);
+                mSphere.angularVelocity = p2.angularVelocity;
+                mSphere.inverseInertiaTensor = p2.inverseInertiaTensor;
+                mSphere.orientation = p2.orientation;
+
+                queueDespawnerDeletion(i, j, p1, p2);
+                ResolveSphereCapsuleCollision(mSphere, mCapA);
+
+                if (!p1.isStatic) {
+                    p1.velocity = mCapA.velocity;
+                    p1.angularVelocity = mCapA.angularVelocity;
+                    t1.position = (mCapA.capsule.Position() + mCapA.capsule.m_p2) * 0.5f;
+                    t1.UpdateMatrix();
+                }
+                if (!p2.isStatic) {
+                    p2.velocity = mSphere.velocity;
+                    p2.angularVelocity = mSphere.angularVelocity;
+                    t2.position = mSphere.sphere.Position();
+                    t2.UpdateMatrix();
+                }
+                }
+
         }
     }
 

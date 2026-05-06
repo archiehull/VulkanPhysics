@@ -529,17 +529,22 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     if (geometryType == "Smoke Grenade" || geometryType == "Capsule") {
         collider.type = 2; // Capsule
         if (geometryType == "Smoke Grenade") {
-            collider.radius = 0.4f * std::max(0.05f, spawner.spawnScale.x);
-            collider.height = 1.2f * std::max(0.05f, spawner.spawnScale.y);
-        } else {
-            collider.radius = std::max(effectiveSpawnScale.x, effectiveSpawnScale.z) * 0.5f;
-            collider.height = effectiveSpawnScale.y;
+            // MATCH THE EXACT DIMENSIONS FROM AddCapsule()
+            collider.radius = 0.15f * std::max({ effectiveSpawnScale.x, effectiveSpawnScale.z });
+            collider.height = 0.75f * effectiveSpawnScale.y;
         }
-    } else if (geometryType == "Cube") {
+        else {
+            // Matches the generic Capsule proportions
+            collider.radius = 0.2f * std::max({ effectiveSpawnScale.x, effectiveSpawnScale.z });
+            collider.height = 1.0f * effectiveSpawnScale.y;
+        }
+    }
+    else if (geometryType == "Cube") {
         collider.type = 3; // Box/AABB
         collider.halfExtents = effectiveSpawnScale * 0.5f;
         collider.radius = std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f;
-    } else {
+    }
+    else {
         collider.type = 0; // Sphere
         collider.radius = std::max(0.1f, std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f);
     }

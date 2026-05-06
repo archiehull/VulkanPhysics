@@ -704,3 +704,377 @@ void ResolveSphereInsideCylinder(MovingSphere& sphere, const glm::vec3& cylCente
         }
     }
 }
+
+void ClosestPtSegmentSegment(
+	const glm::vec3& p1, const glm::vec3& q1,
+	const glm::vec3& p2, const glm::vec3& q2,
+	glm::vec3& c1, glm::vec3& c2)
+{
+	glm::vec3 d1 = q1 - p1;
+	glm::vec3 d2 = q2 - p2;
+	glm::vec3 r = p1 - p2;
+	float a = glm::dot(d1, d1);
+	float e = glm::dot(d2, d2);
+	float f = glm::dot(d2, r);
+
+	const float EPSILON = 1e-6f;
+	float s = 0.0f, t = 0.0f;
+
+	if (a <= EPSILON && e <= EPSILON) {
+		s = t = 0.0f;
+		c1 = p1; c2 = p2;
+		return;
+	}
+	if (a <= EPSILON) {
+		s = 0.0f;
+		t = glm::clamp(f / e, 0.0f, 1.0f);
+	}
+	else {
+		float c = glm::dot(d1, r);
+		if (e <= EPSILON) {
+			t = 0.0f;
+			s = glm::clamp(-c / a, 0.0f, 1.0f);
+		}
+		else {
+			float b = glm::dot(d1, d2);
+			float denom = a * e - b * b;
+			if (denom != 0.0f) {
+				s = glm::clamp((b * f - c * e) / denom, 0.0f, 1.0f);
+			}
+			else {
+				s = 0.0f;
+			}
+			t = (b * s + f) / e;
+			if (t < 0.0f) {
+				t = 0.0f;
+				s = glm::clamp(-c / a, 0.0f, 1.0f);
+			}
+			else if (t > 1.0f) {
+				t = 1.0f;
+				s = glm::clamp((b - c) / a, 0.0f, 1.0f);
+			}
+		}
+	}
+	c1 = p1 + d1 * s;
+	c2 = p2 + d2 * t;
+}
+
+bool ResolveCapsuleCapsuleCollision(MovingCapsule& a, MovingCapsule& b) {
+	// 1. The Capsule primitive stores the exact segment endpoints
+	glm::vec3 p1A = a.capsule.Position();
+	glm::vec3 p2A = a.capsule.m_p2;
+
+	glm::vec3 p1B = b.capsule.Position();
+	glm::vec3 p2B = b.capsule.m_p2;
+
+	// 2. Find closest points on both segments
+	glm::vec3 cA, cB;
+	ClosestPtSegmentSegment(p1A, p2A, p1B, p2B, cA, cB);
+
+	// 3. Check for collision
+	glm::vec3 delta = cB - cA;
+	float distSq = glm::dot(delta, delta);
+	float rSum = a.capsule.m_radius + b.capsule.m_radius;
+
+	if (distSq > rSum * rSum || distSq < 1e-8f) return false;
+
+	float dist = std::sqrt(distSq);
+	glm::vec3 hitNormal = delta / dist;
+	float penetration = rSum - dist;
+
+	// 4. Calculate contact points and velocities
+	glm::vec3 contactPoint = cA + hitNormal * a.capsule.m_radius;
+	glm::vec3 comA = (p1A + p2A) * 0.5f;
+	glm::vec3 comB = (p1B + p2B) * 0.5f;
+	glm::vec3 rA_vec = contactPoint - comA;
+	glm::vec3 rB_vec = contactPoint - comB;
+
+	glm::vec3 vAc = a.velocity + glm::cross(a.angularVelocity, rA_vec);
+	glm::vec3 vBc = b.velocity + glm::cross(b.angularVelocity, rB_vec);
+	glm::vec3 relativeVelocity = vBc - vAc;
+
+	float velAlongNormal = glm::dot(relativeVelocity, hitNormal);
+	if (velAlongNormal >= 0.0f) return false;
+
+	// 5. Apply Impulse
+	float totalInvMass = a.invMass + b.invMass;
+	if (totalInvMass <= 0.0f) return false;
+
+	glm::mat3 invInertiaWorldA = a.orientation * a.inverseInertiaTensor * glm::transpose(a.orientation);
+	glm::mat3 invInertiaWorldB = b.orientation * b.inverseInertiaTensor * glm::transpose(b.orientation);
+
+	glm::vec3 rACrossN = glm::cross(rA_vec, hitNormal);
+	glm::vec3 rBCrossN = glm::cross(rB_vec, hitNormal);
+
+	float angDenomA = glm::dot(hitNormal, glm::cross(invInertiaWorldA * rACrossN, rA_vec));
+	float angDenomB = glm::dot(hitNormal, glm::cross(invInertiaWorldB * rBCrossN, rB_vec));
+	float denom = std::max(totalInvMass + angDenomA + angDenomB, 1e-6f);
+
+	float e = std::min(a.restitution, b.restitution);
+	float j = -(1.0f + e) * velAlongNormal / denom;
+
+	glm::vec3 impulse = j * hitNormal;
+	a.velocity -= a.invMass * impulse;
+	b.velocity += b.invMass * impulse;
+	a.angularVelocity -= invInertiaWorldA * glm::cross(rA_vec, impulse);
+	b.angularVelocity += invInertiaWorldB * glm::cross(rB_vec, impulse);
+
+	// Friction
+	glm::vec3 tangent = relativeVelocity - (hitNormal * velAlongNormal);
+	float tangentLen = glm::length(tangent);
+	if (tangentLen > 1e-6f) {
+		glm::vec3 t = tangent / tangentLen;
+		glm::vec3 rACrossT = glm::cross(rA_vec, t);
+		glm::vec3 rBCrossT = glm::cross(rB_vec, t);
+		float tDenomA = glm::dot(t, glm::cross(invInertiaWorldA * rACrossT, rA_vec));
+		float tDenomB = glm::dot(t, glm::cross(invInertiaWorldB * rBCrossT, rB_vec));
+		float tDenom = std::max(totalInvMass + tDenomA + tDenomB, 1e-6f);
+
+		float jt = -tangentLen / tDenom;
+		float maxFriction = std::abs(j) * 0.5f;
+		jt = glm::clamp(jt, -maxFriction, maxFriction);
+
+		glm::vec3 frictionImpulse = jt * t;
+		a.velocity -= a.invMass * frictionImpulse;
+		b.velocity += b.invMass * frictionImpulse;
+		a.angularVelocity -= invInertiaWorldA * glm::cross(rA_vec, frictionImpulse);
+		b.angularVelocity += invInertiaWorldB * glm::cross(rB_vec, frictionImpulse);
+	}
+
+	// 6. Positional Correction
+	const float percent = 0.2f;
+	const float slop = 0.01f;
+	float correctionMag = std::max(penetration - slop, 0.0f) / totalInvMass * percent;
+	glm::vec3 correction = correctionMag * hitNormal;
+
+	glm::vec3 corrA = -a.invMass * correction;
+	glm::vec3 corrB = b.invMass * correction;
+	a.capsule.SetPosition(a.capsule.Position() + corrA);
+	a.capsule.m_p2 += corrA;
+	b.capsule.SetPosition(b.capsule.Position() + corrB);
+	b.capsule.m_p2 += corrB;
+
+	return true;
+}
+
+bool ResolveBoxCapsuleCollision(MovingBox& box, MovingCapsule& cap) {
+	// 1. Get capsule segment in WORLD space directly from the primitive
+	glm::vec3 p1World = cap.capsule.Position();
+	glm::vec3 p2World = cap.capsule.m_p2;
+
+	// 2. Convert segment to BOX LOCAL space
+	glm::mat3 invBoxRot = glm::transpose(box.orientation);
+	glm::vec3 boxCenter = box.box.Position();
+	glm::vec3 p1Local = invBoxRot * (p1World - boxCenter);
+	glm::vec3 p2Local = invBoxRot * (p2World - boxCenter);
+
+	// 3. Find closest point between segment and box AABB in local space
+	glm::vec3 samplePoints[3] = { p1Local, p2Local, (p1Local + p2Local) * 0.5f };
+
+	float minPenetration = std::numeric_limits<float>::max();
+	glm::vec3 bestLocalContact(0.0f);
+	glm::vec3 bestLocalNormal(0.0f);
+	bool hit = false;
+
+	glm::vec3 extents = box.box.m_halfExtents;
+
+	for (int i = 0; i < 3; ++i) {
+		glm::vec3 pt = samplePoints[i];
+		glm::vec3 closestPt = glm::clamp(pt, -extents, extents);
+		glm::vec3 delta = pt - closestPt;
+
+		float distSq = glm::dot(delta, delta);
+		if (distSq < cap.capsule.m_radius * cap.capsule.m_radius) {
+			float dist = std::sqrt(distSq);
+			float penetration = cap.capsule.m_radius - dist;
+
+			if (penetration < minPenetration) {
+				minPenetration = penetration;
+				bestLocalContact = closestPt;
+				if (distSq < 1e-6f) {
+					glm::vec3 absPt = glm::abs(pt);
+					glm::vec3 distToFace = extents - absPt;
+					if (distToFace.x < distToFace.y && distToFace.x < distToFace.z) {
+						bestLocalNormal = glm::vec3(pt.x > 0 ? 1 : -1, 0, 0);
+					}
+					else if (distToFace.y < distToFace.z) {
+						bestLocalNormal = glm::vec3(0, pt.y > 0 ? 1 : -1, 0);
+					}
+					else {
+						bestLocalNormal = glm::vec3(0, 0, pt.z > 0 ? 1 : -1);
+					}
+				}
+				else {
+					bestLocalNormal = delta / dist;
+				}
+				hit = true;
+			}
+		}
+	}
+
+	if (!hit) return false;
+
+	// 4. Convert back to world space
+	glm::vec3 hitNormal = box.orientation * bestLocalNormal; // Points from Box -> Capsule
+	glm::vec3 contactPoint = boxCenter + (box.orientation * bestLocalContact);
+
+	// 5. Apply standard impulse resolution
+	glm::vec3 comCap = (p1World + p2World) * 0.5f;
+	glm::vec3 rBox = contactPoint - boxCenter;
+	glm::vec3 rCap = contactPoint - comCap;
+
+	glm::vec3 vBoxC = box.velocity + glm::cross(box.angularVelocity, rBox);
+	glm::vec3 vCapC = cap.velocity + glm::cross(cap.angularVelocity, rCap);
+	glm::vec3 relativeVelocity = vCapC - vBoxC;
+
+	float velAlongNormal = glm::dot(relativeVelocity, hitNormal);
+	if (velAlongNormal >= 0.0f) return false;
+
+	float totalInvMass = box.invMass + cap.invMass;
+	if (totalInvMass <= 0.0f) return false;
+
+	glm::mat3 invInertiaWorldBox = box.orientation * box.inverseInertiaTensor * glm::transpose(box.orientation);
+	glm::mat3 invInertiaWorldCap = cap.orientation * cap.inverseInertiaTensor * glm::transpose(cap.orientation);
+
+	float angDenomBox = glm::dot(hitNormal, glm::cross(invInertiaWorldBox * glm::cross(rBox, hitNormal), rBox));
+	float angDenomCap = glm::dot(hitNormal, glm::cross(invInertiaWorldCap * glm::cross(rCap, hitNormal), rCap));
+	float denom = std::max(totalInvMass + angDenomBox + angDenomCap, 1e-6f);
+
+	float e = std::min(box.restitution, cap.restitution);
+	float j = -(1.0f + e) * velAlongNormal / denom;
+
+	glm::vec3 impulse = j * hitNormal;
+	box.velocity -= box.invMass * impulse;
+	cap.velocity += cap.invMass * impulse;
+	box.angularVelocity -= invInertiaWorldBox * glm::cross(rBox, impulse);
+	cap.angularVelocity += invInertiaWorldCap * glm::cross(rCap, impulse);
+
+	// Friction
+	glm::vec3 tangent = relativeVelocity - (hitNormal * velAlongNormal);
+	float tangentLen = glm::length(tangent);
+	if (tangentLen > 1e-6f) {
+		glm::vec3 t = tangent / tangentLen;
+		glm::vec3 rBoxCrossT = glm::cross(rBox, t);
+		glm::vec3 rCapCrossT = glm::cross(rCap, t);
+		float tangDenomBox = glm::dot(t, glm::cross(invInertiaWorldBox * rBoxCrossT, rBox));
+		float tangDenomCap = glm::dot(t, glm::cross(invInertiaWorldCap * rCapCrossT, rCap));
+		float tDenom = std::max(totalInvMass + tangDenomBox + tangDenomCap, 1e-6f);
+
+		float jt = -tangentLen / tDenom;
+		float maxFriction = std::abs(j) * 0.5f;
+		jt = glm::clamp(jt, -maxFriction, maxFriction);
+
+		glm::vec3 frictionImpulse = jt * t;
+		box.velocity -= box.invMass * frictionImpulse;
+		cap.velocity += cap.invMass * frictionImpulse;
+		box.angularVelocity -= invInertiaWorldBox * glm::cross(rBox, frictionImpulse);
+		cap.angularVelocity += invInertiaWorldCap * glm::cross(rCap, frictionImpulse);
+	}
+
+	// Positional correction
+	float correctionMag = std::max(minPenetration - 0.01f, 0.0f) / totalInvMass * 0.2f;
+	glm::vec3 correction = correctionMag * hitNormal;
+
+	box.box.SetPosition(boxCenter - box.invMass * correction);
+	glm::vec3 corrCap = cap.invMass * correction;
+	cap.capsule.SetPosition(cap.capsule.Position() + corrCap);
+	cap.capsule.m_p2 += corrCap;
+
+	return true;
+}
+
+bool ResolveSphereCapsuleCollision(MovingSphere& sphere, MovingCapsule& cap) {
+	glm::vec3 p1 = cap.capsule.Position();
+	glm::vec3 p2 = cap.capsule.m_p2;
+	glm::vec3 sCenter = sphere.sphere.Position();
+
+	glm::vec3 ab = p2 - p1;
+	float denom = glm::dot(ab, ab);
+	float t = 0.0f;
+	if (denom > 1e-6f) {
+		t = glm::dot(sCenter - p1, ab) / denom;
+		t = glm::clamp(t, 0.0f, 1.0f);
+	}
+	glm::vec3 closestPt = p1 + t * ab;
+
+	glm::vec3 delta = sCenter - closestPt;
+	float distSq = glm::dot(delta, delta);
+	float rSum = sphere.sphere.m_radius + cap.capsule.m_radius;
+
+	// FIX: return false instead of return
+	if (distSq > rSum * rSum || distSq < 1e-8f) return false;
+
+	float dist = std::sqrt(distSq);
+	glm::vec3 hitNormal = delta / dist;
+	float penetration = rSum - dist;
+
+	glm::vec3 contactPoint = closestPt + hitNormal * cap.capsule.m_radius;
+	glm::vec3 rS = contactPoint - sCenter;
+	glm::vec3 comCap = (p1 + p2) * 0.5f;
+	glm::vec3 rC = contactPoint - comCap;
+
+	glm::vec3 vSc = sphere.velocity + glm::cross(sphere.angularVelocity, rS);
+	glm::vec3 vCc = cap.velocity + glm::cross(cap.angularVelocity, rC);
+	glm::vec3 relativeVelocity = vSc - vCc;
+
+	float velAlongNormal = glm::dot(relativeVelocity, hitNormal);
+	// FIX: return false instead of return
+	if (velAlongNormal >= 0.0f) return false;
+
+	float totalInvMass = sphere.invMass + cap.invMass;
+	// FIX: return false instead of return
+	if (totalInvMass <= 0.0f) return false;
+
+	glm::mat3 invInertiaWorldS = sphere.orientation * sphere.inverseInertiaTensor * glm::transpose(sphere.orientation);
+	glm::mat3 invInertiaWorldC = cap.orientation * cap.inverseInertiaTensor * glm::transpose(cap.orientation);
+
+	glm::vec3 rSCrossN = glm::cross(rS, hitNormal);
+	glm::vec3 rCCrossN = glm::cross(rC, hitNormal);
+
+	float angDenomS = glm::dot(hitNormal, glm::cross(invInertiaWorldS * rSCrossN, rS));
+	float angDenomC = glm::dot(hitNormal, glm::cross(invInertiaWorldC * rCCrossN, rC));
+	float resDenom = std::max(totalInvMass + angDenomS + angDenomC, 1e-6f);
+
+	float e = std::min(sphere.restitution, cap.restitution);
+	float j = -(1.0f + e) * velAlongNormal / resDenom;
+
+	glm::vec3 impulse = j * hitNormal;
+	sphere.velocity += sphere.invMass * impulse;
+	cap.velocity -= cap.invMass * impulse;
+	sphere.angularVelocity += invInertiaWorldS * glm::cross(rS, impulse);
+	cap.angularVelocity -= invInertiaWorldC * glm::cross(rC, impulse);
+
+	glm::vec3 tangent = relativeVelocity - (hitNormal * velAlongNormal);
+	float tangentLen = glm::length(tangent);
+	if (tangentLen > 1e-6f) {
+		glm::vec3 t_dir = tangent / tangentLen;
+		glm::vec3 rSCrossT = glm::cross(rS, t_dir);
+		glm::vec3 rCCrossT = glm::cross(rC, t_dir);
+		float tDenomS = glm::dot(t_dir, glm::cross(invInertiaWorldS * rSCrossT, rS));
+		float tDenomC = glm::dot(t_dir, glm::cross(invInertiaWorldC * rCCrossT, rC));
+		float tDenom = std::max(totalInvMass + tDenomS + tDenomC, 1e-6f);
+
+		float jt = -tangentLen / tDenom;
+		float maxFriction = std::abs(j) * 0.5f;
+		jt = glm::clamp(jt, -maxFriction, maxFriction);
+
+		glm::vec3 frictionImpulse = jt * t_dir;
+		sphere.velocity += sphere.invMass * frictionImpulse;
+		cap.velocity -= cap.invMass * frictionImpulse;
+		sphere.angularVelocity += invInertiaWorldS * glm::cross(rS, frictionImpulse);
+		cap.angularVelocity -= invInertiaWorldC * glm::cross(rC, frictionImpulse);
+	}
+
+	const float percent = 0.2f;
+	const float slop = 0.01f;
+	float correctionMag = std::max(penetration - slop, 0.0f) / totalInvMass * percent;
+	glm::vec3 correction = correctionMag * hitNormal;
+
+	sphere.sphere.SetPosition(sCenter + sphere.invMass * correction);
+	glm::vec3 corrC = -cap.invMass * correction;
+	cap.capsule.SetPosition(p1 + corrC);
+	cap.capsule.m_p2 = p2 + corrC;
+
+	// FIX: Return true to confirm collision for the despawner
+	return true;
+}
