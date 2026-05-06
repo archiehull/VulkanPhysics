@@ -532,10 +532,13 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
             collider.radius = 0.4f * std::max(0.05f, spawner.spawnScale.x);
             collider.height = 1.2f * std::max(0.05f, spawner.spawnScale.y);
         } else {
-            // For general capsules, use the calculated effective scale
             collider.radius = std::max(effectiveSpawnScale.x, effectiveSpawnScale.z) * 0.5f;
             collider.height = effectiveSpawnScale.y;
         }
+    } else if (geometryType == "Cube") {
+        collider.type = 3; // Box/AABB
+        collider.halfExtents = effectiveSpawnScale * 0.5f;
+        collider.radius = std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f;
     } else {
         collider.type = 0; // Sphere
         collider.radius = std::max(0.1f, std::max({ effectiveSpawnScale.x, effectiveSpawnScale.y, effectiveSpawnScale.z }) * 0.5f);
@@ -545,6 +548,12 @@ void ObjectSpawnerSystem::SpawnObjectFromSpawner(Scene& scene, Entity spawnerEnt
     auto& phys = registry.GetComponent<PhysicsComponent>(spawnedEntity);
     phys.isStatic = false;
     phys.SetMass(std::max(0.01f, spawner.spawnMass));
+    phys.restitution = spawner.spawnRestitution;
+    phys.friction = spawner.spawnFriction;
+
+    if (geometryType == "Cube") {
+        phys.SetBoxInertia(effectiveSpawnScale * 0.5f);
+    }
 
     glm::vec3 velocity = spawner.spawnVelocity;
     if (spawner.attachToTarget) {

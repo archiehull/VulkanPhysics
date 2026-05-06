@@ -2,7 +2,23 @@
 #include "Sphere.h"
 #include "Capsule.h"
 #include "Plane.h"
+#include "AABB.h"
 #include <glm/gtc/matrix_transform.hpp>
+
+struct MovingBox {
+    AABB box;
+    glm::vec3 velocity;
+    glm::vec3 forceAccumulator;
+    float invMass;
+    float restitution;
+
+    glm::mat3 orientation = glm::mat3(1.0f);
+    glm::vec3 angularVelocity = glm::vec3(0.0f);
+    glm::mat3 inverseInertiaTensor = glm::mat3(1.0f);
+
+    MovingBox(const AABB& b, const glm::vec3& vel, float invM, float rest)
+        : box(b), velocity(vel), invMass(invM), restitution(rest) {}
+};
 
 struct MovingSphere {
     Sphere sphere;
@@ -40,6 +56,8 @@ struct MovingCapsule {
 
     MovingCapsule(const Capsule& cap, const glm::vec3& vel, float invM = 1.0f, float rest = 1.0f);
 };
+
+void ResolveBoxBoxCollision(MovingBox& a, MovingBox& b);
 
 void ResolveElasticCollision(MovingSphere& a, MovingSphere& b, bool useForce = false, float dt = 0.0f, float friction = 0.5f);
 

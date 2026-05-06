@@ -519,11 +519,12 @@ void EditorUI::DrawNetworkWindow() {
 
             char ipBuf[64];
             strncpy_s(ipBuf, m_PendingNetworkSettings.peerIps[i].c_str(), sizeof(ipBuf));
+            ImGui::SetNextItemWidth(140.0f);
             if (ImGui::InputText("IP", ipBuf, sizeof(ipBuf))) {
                 m_PendingNetworkSettings.peerIps[i] = ipBuf;
             }
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(80.0f);
+            ImGui::SetNextItemWidth(100.0f);
             ImGui::InputInt("Port", &m_PendingNetworkSettings.peerPorts[i]);
             ImGui::PopID();
         }

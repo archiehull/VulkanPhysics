@@ -211,6 +211,29 @@ struct PhysicsComponent {
             inverseInertiaTensor = glm::mat3(1.0f / i);
         }
     }
+
+    // Helper to initialize inertia for a solid box: I = (1/12) * m * (a^2 + b^2) per axis
+    void SetBoxInertia(const glm::vec3& halfExtents) {
+        if (isStatic || mass <= 0.0f) {
+            inertiaTensor = glm::mat3(0.0f);
+            inverseInertiaTensor = glm::mat3(0.0f);
+            return;
+        }
+        float w = 2.0f * halfExtents.x;
+        float h = 2.0f * halfExtents.y;
+        float d = 2.0f * halfExtents.z;
+        float Ixx = (1.0f / 12.0f) * mass * (h * h + d * d);
+        float Iyy = (1.0f / 12.0f) * mass * (w * w + d * d);
+        float Izz = (1.0f / 12.0f) * mass * (w * w + h * h);
+        inertiaTensor = glm::mat3(0.0f);
+        inertiaTensor[0][0] = Ixx;
+        inertiaTensor[1][1] = Iyy;
+        inertiaTensor[2][2] = Izz;
+        inverseInertiaTensor = glm::mat3(0.0f);
+        inverseInertiaTensor[0][0] = 1.0f / Ixx;
+        inverseInertiaTensor[1][1] = 1.0f / Iyy;
+        inverseInertiaTensor[2][2] = 1.0f / Izz;
+    }
 };
 
 struct SpringComponent {
@@ -382,6 +405,8 @@ struct ObjectSpawnerComponent {
     glm::vec3 scaleMax = glm::vec3(1.0f);
 
     float spawnMass = 1.0f;
+    float spawnRestitution = 0.4f;
+    float spawnFriction = 0.5f;
     float spawnLifespanSeconds = -1.0f; // -1 = no auto-despawn timer
     int spawnedCount = 0;
 

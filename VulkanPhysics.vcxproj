@@ -219,6 +219,9 @@
       <Project>{001aac37-b9e7-4f2a-bffa-b605eec1b298}</Project>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="src\shaders\flock.comp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>

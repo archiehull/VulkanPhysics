@@ -410,4 +410,9 @@
       <Filter>Source Files\src\shader</Filter>
     </CustomBuild>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="src\shaders\flock.comp">
+      <Filter>Source Files\src\shader</Filter>
+    </None>
+  </ItemGroup>
 </Project>

@@ -45,6 +45,196 @@ MovingCapsule::MovingCapsule(const Capsule& cap, const glm::vec3& vel, float inv
 	}
 }
 
+void ResolveBoxBoxCollision(MovingBox& a, MovingBox& b) {
+	glm::vec3 posA = a.box.Position();
+	glm::vec3 posB = b.box.Position();
+	glm::vec3 T = posB - posA;
+
+	// Local axes (columns of the orientation matrix)
+	glm::vec3 A[3] = { a.orientation[0], a.orientation[1], a.orientation[2] };
+	glm::vec3 B[3] = { b.orientation[0], b.orientation[1], b.orientation[2] };
+	glm::vec3 EA = a.box.m_halfExtents;
+	glm::vec3 EB = b.box.m_halfExtents;
+
+	// Compute the rotation matrix expressing B in A's coordinate frame
+	glm::mat3 R, AbsR;
+	const float EPSILON = 1e-6f;
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 3; j++) {
+			R[i][j] = glm::dot(A[i], B[j]);
+			AbsR[i][j] = std::abs(R[i][j]) + EPSILON; // Epsilon prevents division by zero with parallel axes
+		}
+	}
+
+	float minPenetration = std::numeric_limits<float>::max();
+	glm::vec3 hitNormal(0.0f);
+
+	// Helper lambda to test an axis
+	auto TestAxis = [&](const glm::vec3& axis, float rA, float rB, float dist) -> bool {
+		float axisLengthSq = glm::dot(axis, axis);
+		if (axisLengthSq < 1e-8f) return true; // Ignore parallel edge degenerate axes
+
+		float p = rA + rB - std::abs(dist);
+		if (p < 0.0f) return false; // Separating axis found! No collision.
+
+		// Normalize penetration depth using the axis length
+		p /= std::sqrt(axisLengthSq);
+		if (p < minPenetration) {
+			minPenetration = p;
+			hitNormal = axis / std::sqrt(axisLengthSq);
+			// Ensure normal always points from A to B
+			if (glm::dot(hitNormal, T) < 0.0f) hitNormal = -hitNormal;
+		}
+		return true;
+		};
+
+	// 1. Test the 3 face normals of Box A
+	float rA = EA.x;
+	float rB = EB.x * AbsR[0][0] + EB.y * AbsR[0][1] + EB.z * AbsR[0][2];
+	if (!TestAxis(A[0], rA, rB, glm::dot(T, A[0]))) return;
+
+	rA = EA.y;
+	rB = EB.x * AbsR[1][0] + EB.y * AbsR[1][1] + EB.z * AbsR[1][2];
+	if (!TestAxis(A[1], rA, rB, glm::dot(T, A[1]))) return;
+
+	rA = EA.z;
+	rB = EB.x * AbsR[2][0] + EB.y * AbsR[2][1] + EB.z * AbsR[2][2];
+	if (!TestAxis(A[2], rA, rB, glm::dot(T, A[2]))) return;
+
+	// 2. Test the 3 face normals of Box B
+	rA = EA.x * AbsR[0][0] + EA.y * AbsR[1][0] + EA.z * AbsR[2][0];
+	rB = EB.x;
+	if (!TestAxis(B[0], rA, rB, glm::dot(T, B[0]))) return;
+
+	rA = EA.x * AbsR[0][1] + EA.y * AbsR[1][1] + EA.z * AbsR[2][1];
+	rB = EB.y;
+	if (!TestAxis(B[1], rA, rB, glm::dot(T, B[1]))) return;
+
+	rA = EA.x * AbsR[0][2] + EA.y * AbsR[1][2] + EA.z * AbsR[2][2];
+	rB = EB.z;
+	if (!TestAxis(B[2], rA, rB, glm::dot(T, B[2]))) return;
+
+	// 3. Test the 9 edge cross-products
+	rA = EA.y * AbsR[2][0] + EA.z * AbsR[1][0];
+	rB = EB.y * AbsR[0][2] + EB.z * AbsR[0][1];
+	if (!TestAxis(glm::cross(A[0], B[0]), rA, rB, T.z * R[1][0] - T.y * R[2][0])) return;
+
+	rA = EA.y * AbsR[2][1] + EA.z * AbsR[1][1];
+	rB = EB.x * AbsR[0][2] + EB.z * AbsR[0][0];
+	if (!TestAxis(glm::cross(A[0], B[1]), rA, rB, T.z * R[1][1] - T.y * R[2][1])) return;
+
+	rA = EA.y * AbsR[2][2] + EA.z * AbsR[1][2];
+	rB = EB.x * AbsR[0][1] + EB.y * AbsR[0][0];
+	if (!TestAxis(glm::cross(A[0], B[2]), rA, rB, T.z * R[1][2] - T.y * R[2][2])) return;
+
+	rA = EA.x * AbsR[2][0] + EA.z * AbsR[0][0];
+	rB = EB.y * AbsR[1][2] + EB.z * AbsR[1][1];
+	if (!TestAxis(glm::cross(A[1], B[0]), rA, rB, T.x * R[2][0] - T.z * R[0][0])) return;
+
+	rA = EA.x * AbsR[2][1] + EA.z * AbsR[0][1];
+	rB = EB.x * AbsR[1][2] + EB.z * AbsR[1][0];
+	if (!TestAxis(glm::cross(A[1], B[1]), rA, rB, T.x * R[2][1] - T.z * R[0][1])) return;
+
+	rA = EA.x * AbsR[2][2] + EA.z * AbsR[0][2];
+	rB = EB.x * AbsR[1][1] + EB.y * AbsR[1][0];
+	if (!TestAxis(glm::cross(A[1], B[2]), rA, rB, T.x * R[2][2] - T.z * R[0][2])) return;
+
+	rA = EA.x * AbsR[1][0] + EA.y * AbsR[0][0];
+	rB = EB.y * AbsR[2][2] + EB.z * AbsR[2][1];
+	if (!TestAxis(glm::cross(A[2], B[0]), rA, rB, T.y * R[0][0] - T.x * R[1][0])) return;
+
+	rA = EA.x * AbsR[1][1] + EA.y * AbsR[0][1];
+	rB = EB.x * AbsR[2][2] + EB.z * AbsR[2][0];
+	if (!TestAxis(glm::cross(A[2], B[1]), rA, rB, T.y * R[0][1] - T.x * R[1][1])) return;
+
+	rA = EA.x * AbsR[1][2] + EA.y * AbsR[0][2];
+	rB = EB.x * AbsR[2][1] + EB.y * AbsR[2][0];
+	if (!TestAxis(glm::cross(A[2], B[2]), rA, rB, T.y * R[0][2] - T.x * R[1][2])) return;
+
+	// === COLLISION DETECTED ===
+
+	// Find the Support Point (approximate contact point)
+	glm::vec3 contactPoint = posB;
+	for (int i = 0; i < 3; ++i) {
+		float sign = (glm::dot(B[i], -hitNormal) > 0.0f) ? 1.0f : -1.0f;
+		contactPoint += B[i] * EB[i] * sign;
+	}
+
+	glm::vec3 rA_vec = contactPoint - posA;
+	glm::vec3 rB_vec = contactPoint - posB;
+
+	glm::vec3 vAc = a.velocity + glm::cross(a.angularVelocity, rA_vec);
+	glm::vec3 vBc = b.velocity + glm::cross(b.angularVelocity, rB_vec);
+	glm::vec3 relativeVelocity = vBc - vAc;
+
+	float velAlongNormal = glm::dot(relativeVelocity, hitNormal);
+	if (velAlongNormal >= 0.0f) return;
+
+	float totalInvMass = a.invMass + b.invMass;
+	if (totalInvMass <= 0.0f) return;
+
+	// FIX: Convert Inverse Inertia Tensors to World Space
+	glm::mat3 invInertiaWorldA = a.orientation * a.inverseInertiaTensor * glm::transpose(a.orientation);
+	glm::mat3 invInertiaWorldB = b.orientation * b.inverseInertiaTensor * glm::transpose(b.orientation);
+
+	// Compute Impulse
+	glm::vec3 rACrossN = glm::cross(rA_vec, hitNormal);
+	glm::vec3 rBCrossN = glm::cross(rB_vec, hitNormal);
+
+	// FIX: Use World Space Inertia
+	float angDenomA = glm::dot(hitNormal, glm::cross(invInertiaWorldA * rACrossN, rA_vec));
+	float angDenomB = glm::dot(hitNormal, glm::cross(invInertiaWorldB * rBCrossN, rB_vec));
+	float denom = std::max(totalInvMass + angDenomA + angDenomB, 1e-6f);
+
+	float e = std::min(a.restitution, b.restitution);
+	float j = -(1.0f + e) * velAlongNormal / denom;
+
+	glm::vec3 impulse = j * hitNormal;
+
+	a.velocity -= a.invMass * impulse;
+	b.velocity += b.invMass * impulse;
+
+	// FIX: Use World Space Inertia for application
+	a.angularVelocity -= invInertiaWorldA * glm::cross(rA_vec, impulse);
+	b.angularVelocity += invInertiaWorldB * glm::cross(rB_vec, impulse);
+
+	// Compute Friction Impulse
+	glm::vec3 tangent = relativeVelocity - (hitNormal * velAlongNormal);
+	float tangentLen = glm::length(tangent);
+	if (tangentLen > 1e-6f) {
+		glm::vec3 t = tangent / tangentLen;
+		glm::vec3 rACrossT = glm::cross(rA_vec, t);
+		glm::vec3 rBCrossT = glm::cross(rB_vec, t);
+
+		// FIX: Use World Space Inertia
+		float tangDenomA = glm::dot(t, glm::cross(invInertiaWorldA * rACrossT, rA_vec));
+		float tangDenomB = glm::dot(t, glm::cross(invInertiaWorldB * rBCrossT, rB_vec));
+		float tDenom = std::max(totalInvMass + tangDenomA + tangDenomB, 1e-6f);
+
+		float jt = -tangentLen / tDenom;
+		float friction = ComputeContactFriction(0.5f, 0.5f, 1.0f);
+		float maxFriction = std::abs(j) * friction;
+		jt = glm::clamp(jt, -maxFriction, maxFriction);
+
+		glm::vec3 frictionImpulse = jt * t;
+		a.velocity -= a.invMass * frictionImpulse;
+		b.velocity += b.invMass * frictionImpulse;
+
+		// FIX: Use World Space Inertia
+		a.angularVelocity -= invInertiaWorldA * glm::cross(rA_vec, frictionImpulse);
+		b.angularVelocity += invInertiaWorldB * glm::cross(rB_vec, frictionImpulse);
+	}
+
+	// Positional correction
+	const float percent = 0.2f;
+	const float slop = 0.01f;
+	float correctionMag = std::max(minPenetration - slop, 0.0f) / totalInvMass * percent;
+	glm::vec3 correction = correctionMag * hitNormal;
+
+	a.box.SetPosition(posA - a.invMass * correction);
+	b.box.SetPosition(posB + b.invMass * correction);
+}
+
 void ResolveElasticCollision(MovingSphere& a, MovingSphere& b, bool useForce, float dt, float friction)
 {
 	glm::vec3 delta = b.sphere.Position() - a.sphere.Position();

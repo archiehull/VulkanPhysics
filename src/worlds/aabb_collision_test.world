@@ -1,0 +1,172 @@
+[Settings]
+WindowSize 1280 720
+TimeParams 60.0 4
+SeasonTemps 20.0 5.0 10.0
+
+[Scene]
+# --- PROCEDURAL TEXTURES ---
+ProceduralTexture tex_floor
+    Type Checker
+    Color1 0.15 0.15 0.15 1.0
+    Color2 0.35 0.35 0.35 1.0
+    Size 512
+    CellSize 64
+EndTexture
+
+ProceduralTexture tex_red
+    Type Solid
+    Color1 0.9 0.2 0.2 1.0
+EndTexture
+
+ProceduralTexture tex_blue
+    Type Solid
+    Color1 0.2 0.4 0.9 1.0
+EndTexture
+
+ProceduralTexture tex_green
+    Type Solid
+    Color1 0.2 0.8 0.3 1.0
+EndTexture
+
+ProceduralTexture tex_yellow
+    Type Solid
+    Color1 0.95 0.85 0.1 1.0
+EndTexture
+
+ProceduralTexture tex_white
+    Type Solid
+    Color1 0.9 0.9 0.9 1.0
+EndTexture
+
+# --- CAMERAS ---
+Camera MainCamera FreeRoam Camera1 0.0 12.0 30.0 -15.0 0.0
+Camera TopView FreeRoam Camera2 0.0 40.0 0.0 -90.0 0.0
+Camera SideView FreeRoam Camera3 35.0 10.0 0.0 0.0 -90.0
+
+# --- LIGHTING ---
+Object MainSun
+    Type Sphere
+    Params 0.5
+    Position 10.0 50.0 30.0
+    Light true 1.0 0.97 0.93 1.3 0
+    RenderProps 1 false false false 3
+    PhysicsProps false false true
+EndObject
+
+# --- STATIC FLOOR ---
+Object FloorPlane
+    Type Grid
+    Params 10 10 1.0
+    Texture tex_floor
+    Position 0.0 0.0 0.0
+    Rotation 0.0 0.0 0.0
+    Scale 6.0 6.0 6.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true true
+    ColliderProps 1 0.0 1.0 0.0 30.0 30.0
+EndObject
+
+# --- CAMERA CUBE SHOOTER ---
+Object PlayerGun
+    Type Spawner
+    Position 0.0 0.0 0.0
+    SpawnerEnabled false
+    TriggerOnStartup false
+    SpawnerGroup A
+    SpawnInterval 0.1
+    SpawnerMaxSpawns -1
+    SpawnGeometry Cube
+    SpawnTexture tex_yellow
+    SpawnScale 1.0 1.0 1.0
+    SpawnVelocity 0.0 0.0 35.0
+    SpawnAngularVelocity 5.0 5.0 5.0
+    SpawnMass 3.0
+    SpawnerAttachToTarget true
+    SpawnerTargetName MainCamera
+EndObject
+
+# --- MOVING BOXES (AABB vs AABB collision test) ---
+
+# Two boxes dropping toward each other on the X axis — head-on collision
+Object BoxA
+    Type Cube
+    Texture tex_red
+    Position -4.0 8.0 0.0
+    Scale 2.0 2.0 2.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 2.0 0.7 0.3
+    ColliderProps 3 1.0
+EndObject
+
+Object BoxB
+    Type Cube
+    Texture tex_blue
+    Position 4.0 8.0 0.0
+    Scale 2.0 2.0 2.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 2.0 0.7 0.3
+    ColliderProps 3 1.0
+EndObject
+
+# A box dropping onto a static box — stacking test
+Object BoxC_Static
+    Type Cube
+    Texture tex_white
+    Position 0.0 1.0 5.0
+    Scale 2.5 2.0 2.5
+    RenderProps 1 true true true 3
+    PhysicsProps false true true
+    ColliderProps 3 1.25
+EndObject
+
+Object BoxD_Falling
+    Type Cube
+    Texture tex_green
+    Position 0.0 10.0 5.0
+    Scale 2.0 2.0 2.0
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 1.5 0.5 0.3
+    ColliderProps 3 1.0
+EndObject
+
+# Offset drop — box lands on the corner of the static box, slides off
+Object BoxE_OffCenter
+    Type Cube
+    Texture tex_yellow
+    Position 1.5 14.0 5.0
+    Scale 1.5 1.5 1.5
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 1.0 0.6 0.2
+    ColliderProps 3 0.75
+EndObject
+
+# Three-way pile — three boxes dropped into the same column
+Object BoxF
+    Type Cube
+    Texture tex_red
+    Position -8.0 6.0 -5.0
+    Scale 1.8 1.8 1.8
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 1.0 0.65 0.3
+    ColliderProps 3 0.9
+EndObject
+
+Object BoxG
+    Type Cube
+    Texture tex_blue
+    Position -8.0 10.0 -5.0
+    Scale 1.8 1.8 1.8
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 1.0 0.65 0.3
+    ColliderProps 3 0.9
+EndObject
+
+Object BoxH
+    Type Cube
+    Texture tex_green
+    Position -8.0 14.0 -5.0
+    Scale 1.8 1.8 1.8
+    RenderProps 1 true true true 3
+    PhysicsProps false true false 1.0 0.65 0.3
+    ColliderProps 3 0.9
+EndObject
