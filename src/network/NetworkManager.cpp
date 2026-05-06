@@ -721,6 +721,17 @@ void NetworkManager::SendUDP(const std::vector<uint8_t>& d) {
     std::lock_guard<std::mutex> lock(m_peerMutex);
     for (auto& p : m_peers) {
         if (p.isConnected && p.id != m_localPeerId.load()) {
+
+            // --- PACKET LOSS SIMULATION LOGIC ---
+            if (m_simulatedPacketLoss > 0.0f) {
+                // Generate a random float between 0.0 and 1.0
+                float dropRoll = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+
+                // If the roll is lower than our loss percentage, silently drop the packet!
+                if (dropRoll < m_simulatedPacketLoss) {
+                    continue; // Skip the sendto() for this peer
+                }
+            }
             sendto(m_udpSocket, (char*)d.data(), (int)d.size(), 0, (sockaddr*)&p.udpAddr, sizeof(p.udpAddr));
         }
     }
