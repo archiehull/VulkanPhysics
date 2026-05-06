@@ -12,7 +12,7 @@
 #include <mutex>
 
 using Entity = uint32_t;
-const Entity MAX_ENTITIES = 30000;
+const Entity MAX_ENTITIES = 50000;
 
 class IComponentArray {
 public:

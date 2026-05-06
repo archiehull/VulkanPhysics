@@ -509,6 +509,7 @@ void EditorUI::DrawNetworkWindow() {
         int roleIdx = m_PendingNetworkSettings.localPeerId + 1;
         if (ImGui::Combo("Force Local ID", &roleIdx, peerRoles, 5)) {
             m_PendingNetworkSettings.localPeerId = roleIdx - 1;
+
         }
 
         ImGui::Spacing();

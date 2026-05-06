@@ -1292,6 +1292,10 @@ void NetworkManager::SetLocalPeerId(int id) {
 void NetworkManager::ReconfigurePeer(int peerId, const std::string& ip, uint16_t port) {
     std::lock_guard<std::mutex> lock(m_peerMutex);
     if (peerId >= 0 && peerId < 4) {
+        if (m_peers[peerId].ip == ip && m_peers[peerId].port == port) {
+            return;
+        }
+
         // If changing an active peer, disconnect them first
         if (m_peers[peerId].isConnected && m_peers[peerId].tcpSocket != INVALID_SOCKET) {
             closesocket(m_peers[peerId].tcpSocket);

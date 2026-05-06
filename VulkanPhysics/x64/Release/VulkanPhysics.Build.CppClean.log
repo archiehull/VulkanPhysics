@@ -52,6 +52,8 @@ c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\weathersyst
 c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\timesystem.obj
 c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\thermodynamicssystem.obj
 c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\simpleshadowsystem.obj
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\networkmanager.obj
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\flocksystem.obj
 c:\users\ell\documents\repos\vulkanphysics\src\shaders\frag.spv
 c:\users\ell\documents\repos\vulkanphysics\src\shaders\vert.spv
 c:\users\ell\documents\repos\vulkanphysics\src\shaders\shadow_frag.spv
@@ -60,8 +62,18 @@ c:\users\ell\documents\repos\vulkanphysics\src\shaders\skybox_frag.spv
 c:\users\ell\documents\repos\vulkanphysics\src\shaders\skybox_vert.spv
 c:\users\ell\documents\repos\vulkanphysics\src\shaders\particle_frag.spv
 c:\users\ell\documents\repos\vulkanphysics\src\shaders\particle_vert.spv
+c:\users\ell\documents\repos\vulkanphysics\x64\release\vulkanphysics.exe
+c:\users\ell\documents\repos\vulkanphysics\x64\release\vulkanphysics.pdb
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.ipdb
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.iobj
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\cl.command.1.tlog
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\cl.items.tlog
 c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\cl.read.1.tlog
 c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\cl.write.1.tlog
 c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\custombuild.command.1.tlog
 c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\custombuild.read.1.tlog
 c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\custombuild.write.1.tlog
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\link.command.1.tlog
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\link.read.1.tlog
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\link.secondary.1.tlog
+c:\users\ell\documents\repos\vulkanphysics\vulkanphysics\x64\release\vulkanphysics.tlog\link.write.1.tlog

@@ -716,7 +716,7 @@ void Application::InitVulkan() {
 
     // 1. Initialize UI and find the "init" index
     editorUI = std::make_unique<EditorUI>();
-    editorUI->Initialize("src/worlds/", "flocking"); // STARTUP_SCENE
+    editorUI->Initialize("src/worlds/", "cloth_test"); // STARTUP_SCENE
     editorUI->SetPerformanceSettings(config.vsync, config.maxFps);
     // Use 0.0f to represent "uncapped" (no software FPS cap). Previously code defaulted to 60.
     m_TargetRenderFrequency = static_cast<float>((config.maxFps > 0) ? config.maxFps : 0);
@@ -2193,8 +2193,8 @@ void Application::MainLoop() {
                 m_networkManager->ReconfigurePeer(i, netReq.peerIps[i], static_cast<uint16_t>(netReq.peerPorts[i]));
             }
 
-            // 3. Update Local ID (if manually overridden)
-            if (netReq.localPeerId != m_networkManager->GetLocalPeerId()) {
+            // 3. Update Local ID (ONLY if manually overridden)
+            if (netReq.idOverrideRequested && netReq.localPeerId != m_networkManager->GetLocalPeerId()) {
                 m_networkManager->SetLocalPeerId(netReq.localPeerId);
             }
 

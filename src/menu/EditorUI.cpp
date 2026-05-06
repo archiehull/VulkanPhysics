@@ -31,6 +31,7 @@ NetworkSettingsRequest EditorUI::ConsumeNetworkSettingsRequest() {
     NetworkSettingsRequest req = m_PendingNetworkSettings;
     // Reset the flag so we don't apply it every single frame
     m_PendingNetworkSettings.applyRequested = false;
+    m_PendingNetworkSettings.idOverrideRequested = false;
     return req;
 }
 

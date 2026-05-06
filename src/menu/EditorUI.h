@@ -11,6 +11,7 @@ struct NetworkSettingsRequest {
     std::array<std::string, 4> peerIps = { "127.0.0.1", "127.0.0.1", "127.0.0.1", "127.0.0.1" };
     std::array<int, 4> peerPorts = { 27015, 27016, 27017, 27018 };
     int localPeerId = -1; // -1 means auto-assign
+    bool idOverrideRequested = false;
     float latencyMs = 0.0f;
     float packetLoss = 0.0f;
     bool applyRequested = false;
