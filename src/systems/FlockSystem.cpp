@@ -9,6 +9,7 @@
 #include <numeric>
 #include <execution> // For std::execution::par (multithreading)
 #include <chrono>    // For performance benchmarking
+#include <glm/gtc/quaternion.hpp>
 
 glm::vec3 FlockSystem::Limit(const glm::vec3& v, float max) const {
     float lengthSq = glm::length2(v);
@@ -221,7 +222,8 @@ void FlockSystem::Update(Scene& scene, float deltaTime) {
 
             if (distSq > 0.0f && distSq < perceptionRadiusSq) {
                 float dist = std::sqrt(distSq);
-                separation += diff / dist;
+                //separation += diff / dist;
+                separation += (diff / dist) / dist;
                 alignment += otherPhysics.velocity;
                 cohesion += otherTransform.position;
                 neighbors++;
@@ -280,12 +282,25 @@ void FlockSystem::Update(Scene& scene, float deltaTime) {
         transform.position = updates[i].newPosition;
         physics.velocity = updates[i].newVelocity;
 
-        // Auto-orient the bird geometry to face the direction of flight
+        // Auto-orient the bird geometry to face the direction of flight smoothly
         if (glm::length2(physics.velocity) > 0.0001f) {
             glm::vec3 dir = glm::normalize(physics.velocity);
-            float yaw = std::atan2(dir.x, dir.z);
-            float pitch = -std::asin(glm::clamp(dir.y, -1.0f, 1.0f));
-            transform.rotation = glm::degrees(glm::vec3(pitch, yaw + glm::pi<float>(), 0.0f));
+
+            // Calculate Target Rotation (Notice the + glm::pi<float>() is back!)
+            float targetYaw = std::atan2(dir.x, dir.z) + glm::pi<float>();
+            float targetPitch = -std::asin(glm::clamp(dir.y, -1.0f, 1.0f));
+
+            // Convert to quaternions using radians
+            glm::vec3 targetRotationEuler = glm::vec3(targetPitch, targetYaw, 0.0f);
+
+            glm::quat currentRot = glm::quat(glm::radians(transform.rotation));
+            glm::quat targetRot = glm::quat(targetRotationEuler);
+
+            // Smoothly interpolate (SLERP) towards the target rotation
+            glm::quat smoothedRot = glm::slerp(currentRot, targetRot, 8.0f * deltaTime);
+
+            // Convert back to degrees for the TransformComponent
+            transform.rotation = glm::degrees(glm::eulerAngles(smoothedRot));
         }
 
         transform.UpdateMatrix();
