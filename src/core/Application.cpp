@@ -46,7 +46,7 @@
 namespace {
     constexpr bool kSceneDebug = false;
     constexpr bool kPerfDebug = false;
-    constexpr bool kRuntimeDebug = true;
+    constexpr bool kRuntimeDebug = false;
     constexpr bool kReplayDebug = false;
     constexpr float kRuntimeLogIntervalSeconds = 1.0f;
     constexpr float kPerfLogIntervalSeconds = 1.0f;

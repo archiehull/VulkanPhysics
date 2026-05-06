@@ -265,6 +265,155 @@ if (m_ShowRuntimeWindow) {
 
 }
 
+void EditorUI::DrawFlockBenchmarkWindow(Scene& scene) {
+    if (!m_ShowFlockBenchmarkWindow) return;
+
+    ImGui::SetNextWindowSize(ImVec2(550, 420), ImGuiCond_FirstUseEver); // Slightly taller for the new buttons
+    if (ImGui::Begin("Spatial Partitioning Benchmark", &m_ShowFlockBenchmarkWindow)) {
+        auto& registry = scene.GetRegistry();
+        if (m_BenchmarkFlockEntity == MAX_ENTITIES || !registry.HasComponent<FlockManagerComponent>(m_BenchmarkFlockEntity)) {
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "Error: Invalid Flock Manager Entity.");
+            ImGui::End();
+            return;
+        }
+
+        auto& flock = registry.GetComponent<FlockManagerComponent>(m_BenchmarkFlockEntity);
+
+        ImGui::TextDisabled("Boid Count: %d | Perception Radius: %.2f", flock.count, flock.perceptionRadius);
+        ImGui::Separator();
+
+        // --- NEW: Quick Preset Buttons ---
+        ImGui::Spacing();
+        ImGui::Text("Quick Set Flock Size (Causes Respawn):");
+
+        const int presets[] = { 500, 1000, 2500, 5000, 7500 };
+        float buttonWidth = (ImGui::GetContentRegionAvail().x - (ImGui::GetStyle().ItemSpacing.x * 4.0f)) / 5.0f;
+
+        for (int i = 0; i < 5; ++i) {
+            if (i > 0) ImGui::SameLine();
+
+            // Highlight the currently selected preset size
+            bool isCurrent = (flock.count == presets[i]);
+            if (isCurrent) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+            }
+
+            if (ImGui::Button(std::to_string(presets[i]).c_str(), ImVec2(buttonWidth, 0))) {
+                flock.count = presets[i];
+                // Tell the Application to respawn the flock with the new count
+                m_FlockUpdateRequested = true;
+                m_RequestedFlockEntity = m_BenchmarkFlockEntity;
+            }
+
+            if (isCurrent) ImGui::PopStyleColor(3);
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        // ---------------------------------
+
+        if (ImGui::Button("Run Benchmark (Test All Algorithms)", ImVec2(-1, 40))) {
+            flock.runBenchmarkRequested = true;
+            flock.benchmarkResults.isRunning = true;
+            flock.benchmarkResults.hasData = false;
+        }
+
+        if (flock.benchmarkResults.isRunning) {
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Running heavy benchmark... please wait.");
+        }
+        else if (flock.benchmarkResults.hasData) {
+            ImGui::Spacing();
+            ImGui::TextDisabled("Execution Times (Milliseconds)");
+
+            if (ImGui::BeginTable("BenchTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                ImGui::TableSetupColumn("Algorithm");
+                ImGui::TableSetupColumn("Build Time");
+                ImGui::TableSetupColumn("Query Time");
+                ImGui::TableSetupColumn("Total Time");
+                ImGui::TableHeadersRow();
+
+                auto printRow = [](const char* name, float build, float query) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn(); ImGui::Text("%s", name);
+                    ImGui::TableNextColumn(); ImGui::Text("%.3f", build);
+                    ImGui::TableNextColumn(); ImGui::Text("%.3f", query);
+                    ImGui::TableNextColumn();
+                    float total = build + query;
+                    if (total > 0.0001f) {
+                        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%.3f", total);
+                    }
+                    else {
+                        ImGui::TextDisabled("N/A");
+                    }
+                    };
+
+                printRow("Naive O(N^2)", flock.benchmarkResults.naiveBuildMs, flock.benchmarkResults.naiveQueryMs);
+                printRow("Uniform Grid", flock.benchmarkResults.gridBuildMs, flock.benchmarkResults.gridQueryMs);
+                printRow("Octree", flock.benchmarkResults.octreeBuildMs, flock.benchmarkResults.octreeQueryMs);
+
+                ImGui::EndTable();
+            }
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("Relative Performance Scale:");
+
+            // Find the maximum time to scale the progress bars
+            //float totalNaive = flock.benchmarkResults.naiveBuildMs + flock.benchmarkResults.naiveQueryMs;
+            //float totalGrid = flock.benchmarkResults.gridBuildMs + flock.benchmarkResults.gridQueryMs;
+            //float totalOctree = flock.benchmarkResults.octreeBuildMs + flock.benchmarkResults.octreeQueryMs;
+            //float maxT = std::max({ totalNaive, totalGrid, totalOctree });
+
+            //if (maxT > 0.0f) {
+            //    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+            //    ImGui::ProgressBar(totalNaive / maxT, ImVec2(-1, 0), "Naive");
+            //    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f, 0.8f, 0.2f, 1.0f));
+            //    ImGui::ProgressBar(totalGrid / maxT, ImVec2(-1, 0), "Uniform Grid");
+            //    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+            //    ImGui::ProgressBar(totalOctree / maxT, ImVec2(-1, 0), "Octree");
+            //    ImGui::PopStyleColor(3);
+            //}
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("Frame Budget Scale (16.6ms = 60 FPS):");
+
+            float totalNaive = flock.benchmarkResults.naiveBuildMs + flock.benchmarkResults.naiveQueryMs;
+            float totalGrid = flock.benchmarkResults.gridBuildMs + flock.benchmarkResults.gridQueryMs;
+            float totalOctree = flock.benchmarkResults.octreeBuildMs + flock.benchmarkResults.octreeQueryMs;
+
+            // Target 60 FPS budget for absolute scaling
+            const float frameBudget = 16.666f;
+
+            // Helper lambda to draw formatted bars
+            auto drawBar = [&](float time, const char* name, ImVec4 color) {
+                // Cap fraction at 1.0 so ImGui doesn't draw the bar outside the window bounds
+                float fraction = std::min(time / frameBudget, 1.0f);
+
+                char overlay[64];
+                if (time > frameBudget) {
+                    snprintf(overlay, sizeof(overlay), "%s: %.2f ms (OVER BUDGET!)", name, time);
+                }
+                else {
+                    snprintf(overlay, sizeof(overlay), "%s: %.2f ms", name, time);
+                }
+
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
+                ImGui::ProgressBar(fraction, ImVec2(-1, 0), overlay);
+                ImGui::PopStyleColor();
+                };
+
+            // Draw the bars using the helper
+            drawBar(totalNaive, "Naive", ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+            drawBar(totalGrid, "Uniform Grid", ImVec4(0.2f, 0.8f, 0.2f, 1.0f));
+            drawBar(totalOctree, "Octree", ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+        }
+    }
+    ImGui::End();
+}
+
 void EditorUI::DrawNetworkWindow() {
     if (!m_ShowNetworkWindow) return;
 

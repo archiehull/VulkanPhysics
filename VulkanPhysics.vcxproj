@@ -114,6 +114,8 @@
     <ClInclude Include="src\systems\PhysicsSystem.h" />
     <ClInclude Include="src\systems\SmokeGrenadeSystem.h" />
     <ClInclude Include="src\systems\SimpleShadowSystem.h" />
+    <ClInclude Include="src\systems\SpatialGrid.h" />
+    <ClInclude Include="src\systems\SpatialOctree.h" />
     <ClInclude Include="src\systems\ThermodynamicsSystem.h" />
     <ClInclude Include="src\systems\TimeSystem.h" />
     <ClInclude Include="src\systems\WeatherSystem.h" />

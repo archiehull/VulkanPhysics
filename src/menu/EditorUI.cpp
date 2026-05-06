@@ -129,6 +129,8 @@ std::string EditorUI::Draw(float deltaTime, float currentTemp, const std::string
 
     DrawNetworkWindow();
 
+	DrawFlockBenchmarkWindow(scene);
+
     if (m_IsReplaying) {
         DrawReplayEditor(scene);
 

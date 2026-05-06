@@ -340,6 +340,11 @@ public:
     float GetReplayFrameDuration() const { return m_StepSize; }
 
 private:
+    bool m_ShowFlockBenchmarkWindow = false;
+    Entity m_BenchmarkFlockEntity = MAX_ENTITIES;
+
+    void DrawFlockBenchmarkWindow(Scene& scene);
+
     std::vector<ECSSyncRequest> m_ECSSyncRequests;
 
     bool m_ShowNetworkWindow = false;

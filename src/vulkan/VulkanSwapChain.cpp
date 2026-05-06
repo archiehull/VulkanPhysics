@@ -7,7 +7,7 @@
 #include <iostream>
 
 namespace {
-    constexpr bool kRuntimeDebug = true; // Enabled for diagnosis
+    constexpr bool kRuntimeDebug = false; // Enabled for diagnosis
 }
 
 

@@ -1587,6 +1587,62 @@ void EditorUI::DrawObjectsMenu(Scene& scene, Entity activeOrbitTarget, Entity& e
                                 }
                             }
                         }
+                        ImGui::TextDisabled("Spatial Partitioning Algorithm");
+                        ImGui::Separator();
+                        ImGui::Spacing();
+
+                        // Calculate width to fit 3 buttons perfectly in the current window/menu width
+                        float buttonWidth = (ImGui::GetContentRegionAvail().x - (ImGui::GetStyle().ItemSpacing.x * 2.0f)) / 3.0f;
+
+                        // Helper lambda to draw a toggle button
+                        auto drawToggleButton = [&](const char* label, SpatialPartitionType targetType) {
+                            bool isActive = (flock.partitionType == targetType);
+
+                            if (isActive) {
+                                // Active Button: Highlight Green
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+                            }
+                            else {
+                                // Inactive Button: Standard Dark Grey
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
+                            }
+
+                            if (ImGui::Button(label, ImVec2(buttonWidth, 25.0f))) {
+                                flock.partitionType = targetType;
+                            }
+
+                            ImGui::PopStyleColor(3);
+                            };
+
+                        // Draw the three buttons in a single row
+                        drawToggleButton("Naive", SpatialPartitionType::Naive);
+                        ImGui::SameLine();
+                        drawToggleButton("Uniform Grid", SpatialPartitionType::UniformGrid);
+                        ImGui::SameLine();
+                        drawToggleButton("Octree", SpatialPartitionType::Octree);
+
+                        ImGui::Spacing();
+
+                        ImGui::Spacing();
+                        ImGui::Text("Performance Metrics:");
+                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Build Time: %.3f ms", flock.lastBuildTimeMs);
+                        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Query Time: %.3f ms", flock.lastQueryTimeMs);
+
+                        float memKb = flock.memoryUsedBytes / 1024.0f;
+                        ImGui::TextDisabled("Extra Memory: %.2f KB", memKb);
+
+                        ImGui::Separator();
+                        ImGui::Spacing();
+                        // Add the benchmark pop-out button here:
+                        if (ImGui::Button("Open Benchmark Tool", ImVec2(-1, 0))) {
+                            m_ShowFlockBenchmarkWindow = true;
+                            m_BenchmarkFlockEntity = e;
+                        }
+
 
                         ImGui::Separator();
                         if (ImGui::Button("Pop-out to New Window", ImVec2(-1, 0))) {

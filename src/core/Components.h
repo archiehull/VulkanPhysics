@@ -469,6 +469,23 @@ struct OwnershipComponent {
     }
     };
 
+enum class SpatialPartitionType {
+    Naive = 0,
+    UniformGrid = 1,
+    Octree = 2
+};
+
+struct FlockBenchmarkResults {
+    float naiveBuildMs = 0.0f;
+    float naiveQueryMs = 0.0f;
+    float gridBuildMs = 0.0f;
+    float gridQueryMs = 0.0f;
+    float octreeBuildMs = 0.0f;
+    float octreeQueryMs = 0.0f;
+    bool hasData = false;
+    bool isRunning = false;
+};
+
 // 12. Flocking Components
 struct FlockManagerComponent {
     int count = 500;
@@ -481,9 +498,19 @@ struct FlockManagerComponent {
     glm::vec3 boundsMin = glm::vec3(-7.5f);
     glm::vec3 boundsMax = glm::vec3(7.5f);
 
+    SpatialPartitionType partitionType = SpatialPartitionType::UniformGrid;
+
+    // Benchmarking Stats (Updated by FlockSystem)
+    float lastBuildTimeMs = 0.0f;
+    float lastQueryTimeMs = 0.0f;
+    size_t memoryUsedBytes = 0;
+
+    bool runBenchmarkRequested = false;
+    FlockBenchmarkResults benchmarkResults;
+
     // Runtime Spawning Support
-    std::string modelPath = "models/bird.obj";
-    std::string texturePath = "textures/bird.jpg";
+    std::string modelPath = "models/plane.obj";
+    std::string texturePath = "textures/sun.png";
     glm::vec3 renderScale = glm::vec3(0.05f);
     glm::vec3 spawnCenter = glm::vec3(0.0f, 5.0f, 0.0f);
     glm::vec3 spawnExtents = glm::vec3(5.0f);
