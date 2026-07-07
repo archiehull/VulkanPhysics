@@ -12,6 +12,7 @@
 #include <cmath>
 #include <unordered_map>
 #include <exception>
+#include <glm/gtc/quaternion.hpp>
 
 static bool s_verbose_fb_loader = false;
 static bool s_debug_fb_loader = false;
@@ -301,6 +302,8 @@ static void ParseObject(Scene& scene, const Simulation::Object* fbObj, const std
         transComp.rotation = rotEuler;
         transComp.scale = scale;
         transComp.UpdateMatrix();
+        auto& physComp = scene.GetRegistry().GetComponent<PhysicsComponent>(entity);
+        physComp.orientation = glm::mat3_cast(glm::quat(glm::radians(transComp.rotation)));
     } catch (...) {
         if (s_verbose_fb_loader) {
             std::cerr << "[FlatBufferSceneLoader] Error setting TransformComponent for entity created from object '" << name << "'" << std::endl;

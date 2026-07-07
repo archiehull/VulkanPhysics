@@ -1,6 +1,5 @@
-﻿  NetworkManager.cpp
-  Generating code
-  Previous IPDB and IOBJ mismatch, fall back to full compilation.
+﻿  Generating code
+  Previous IPDB was built with incompatible compiler, fall back to full compilation.
   All 16175 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
   Finished generating code
   VulkanPhysics.vcxproj -> C:\Users\Ell\Documents\repos\VulkanPhysics\x64\Release\VulkanPhysics.exe
